@@ -155,6 +155,21 @@ To use it:
 
 The nginx config is templated at `deploy/nginx/conf.d/chesspuzzle.template` and
 is expanded at container start to produce the active nginx config.
+
+Quick production setup checklist
+-------------------------------
+- Copy the example secrets file and edit or generate real values:
+  ```bash
+  cp deploy/secrets.env.example deploy/secrets.env
+  # OR use the interactive generator shipped with the repo:
+  deploy/generate_secrets.sh /home/deploy/chesspuzzle/secrets.env
+  ```
+- Ensure `secrets.env` is readable only by the deploy user (chmod 600) and not committed.
+- Prepare host volumes (see `scripts/prepare_host_volume.sh`) and ensure ownership matches container UID.
+- Obtain initial certificates (see above) then start the stack:
+  ```bash
+  docker compose -f docker-compose.prod.yml up -d
+  ```
   ```
 
 Notes and considerations
