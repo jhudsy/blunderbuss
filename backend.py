@@ -318,10 +318,10 @@ def load_games():
                 is_match = True
             if blunder_side == 'black' and p_black and p_black.lower() == username.lower():
                 is_match = True
-                if is_match:
-                    matched.append(p)
-                else:
-                    logger.debug('Manual load candidate puzzle game_id=%s move=%s: blunder by %s does not match %s prev_san=%s san=%s next_san=%s', p.get('game_id'), p.get('move_number'), blunder_side, username, p.get('prev_san'), p.get('correct_san'), p.get('next_san'))
+            if is_match:
+                matched.append(p)
+            else:
+                logger.debug('Manual load candidate puzzle game_id=%s move=%s: blunder by %s does not match %s san=%s', p.get('game_id'), p.get('move_number'), blunder_side, username, p.get('correct_san'))
 
         to_insert = matched if matched else puzzles
         if not matched:
@@ -331,8 +331,8 @@ def load_games():
         u._import_total = len(to_insert)
         u._import_done = 0
         for p in to_insert:
-            logger.debug('Manual importing puzzle game_id=%s move=%s prev_san=%s san=%s next_san=%s for user=%s', p.get('game_id'), p.get('move_number'), p.get('prev_san'), p.get('correct_san'), p.get('next_san'), username)
-            Puzzle(user=u, game_id=p['game_id'], move_number=p['move_number'], fen=p['fen'], correct_san=p['correct_san'], weight=p.get('initial_weight', 1.0), white=p.get('white'), black=p.get('black'), date=p.get('date'), time_control=p.get('time_control'), time_control_type=p.get('time_control_type'), pre_eval=p.get('pre_eval'), post_eval=p.get('post_eval'), tag=p.get('tag'), severity=p.get('tag'), prev_san=p.get('prev_san'), next_san=p.get('next_san'))
+            logger.debug('Manual importing puzzle game_id=%s move=%s san=%s for user=%s', p.get('game_id'), p.get('move_number'), p.get('correct_san'), username)
+            Puzzle(user=u, game_id=p['game_id'], move_number=p['move_number'], fen=p['fen'], correct_san=p['correct_san'], weight=p.get('initial_weight', 1.0), white=p.get('white'), black=p.get('black'), date=p.get('date'), time_control=p.get('time_control'), time_control_type=p.get('time_control_type'), pre_eval=p.get('pre_eval'), post_eval=p.get('post_eval'), tag=p.get('tag'), severity=p.get('tag'))
             u._import_done += 1
 
     return jsonify({'imported': len(puzzles)})
@@ -381,8 +381,8 @@ def get_puzzle():
                         logger.debug('No seeded puzzles matched username=%s; importing all %d puzzles as fallback', username, len(puzzles))
 
                     for p in to_seed:
-                        logger.debug('Seeding puzzle game_id=%s move=%s prev_san=%s san=%s next_san=%s for user=%s', p.get('game_id'), p.get('move_number'), p.get('prev_san'), p.get('correct_san'), p.get('next_san'), username)
-                        Puzzle(user=u, game_id=p['game_id'], move_number=p['move_number'], fen=p['fen'], correct_san=p['correct_san'], weight=p.get('initial_weight', 1.0), white=p.get('white'), black=p.get('black'), date=p.get('date'), time_control=p.get('time_control'), time_control_type=p.get('time_control_type'), pre_eval=p.get('pre_eval'), post_eval=p.get('post_eval'), tag=p.get('tag'), severity=p.get('tag'), prev_san=p.get('prev_san'), next_san=p.get('next_san'))
+                        logger.debug('Seeding puzzle game_id=%s move=%s san=%s for user=%s', p.get('game_id'), p.get('move_number'), p.get('correct_san'), username)
+                        Puzzle(user=u, game_id=p['game_id'], move_number=p['move_number'], fen=p['fen'], correct_san=p['correct_san'], weight=p.get('initial_weight', 1.0), white=p.get('white'), black=p.get('black'), date=p.get('date'), time_control=p.get('time_control'), time_control_type=p.get('time_control_type'), pre_eval=p.get('pre_eval'), post_eval=p.get('post_eval'), tag=p.get('tag'), severity=p.get('tag'))
                     all_puzzles = list(select(p for p in Puzzle if p.user == u))
             except Exception:
                 # ignore seeding errors; fall through to no puzzles response
@@ -416,7 +416,7 @@ def get_puzzle():
         if not chosen:
             return jsonify({'error': 'no available puzzles'}), 404
         logger.debug('Selected puzzle id=%s for user=%s', getattr(chosen, 'id', None), username)
-    # Do NOT include move details (correct_san, prev_san, next_san, move_number)
+    # Do NOT include move details (correct_san, move_number) or surrounding PGN context
     # in the API response returned to the frontend. Those details are logged
     # server-side for debugging but must not be exposed to clients.
     resp = {
@@ -502,10 +502,24 @@ def settings():
                 except Exception:
                     perf_list = [p.strip().lower() for p in (getattr(u, 'settings_perftypes', '') or '').split(',') if p.strip()]
             cooldown = int(data.get('cooldown', getattr(u, 'cooldown_minutes', 10)))
+            # tags: allow the client to send a list of desired puzzle tags
+            tags_raw = data.get('tags', None)
+            tags_list = None
+            if isinstance(tags_raw, list):
+                tags_list = [str(t).strip() for t in tags_raw if t]
+            elif isinstance(tags_raw, str):
+                tags_list = [t.strip() for t in tags_raw.split(',') if t.strip()]
+            else:
+                try:
+                    import json
+                    tags_list = json.loads(u.settings_tags) if u.settings_tags else []
+                except Exception:
+                    tags_list = [t.strip() for t in (getattr(u, 'settings_tags', '') or '').split(',') if t.strip()]
             u.settings_days = days
             # persist as JSON text so we can return a structured list later
             import json
             u.settings_perftypes = json.dumps(perf_list)
+            u.settings_tags = json.dumps(tags_list)
             u.cooldown_minutes = cooldown
             return jsonify({'status': 'ok'})
         else:
@@ -519,7 +533,16 @@ def settings():
                     perf_list = [p.strip().lower() for p in str(stored).split(',') if p.strip()]
             except Exception:
                 perf_list = [p.strip().lower() for p in str(stored).split(',') if p.strip()]
-            return render_template('settings.html', days=getattr(u, 'settings_days', 30), perf=perf_list, cooldown=getattr(u, 'cooldown_minutes', 10))
+            # load tags similarly
+            tags_stored = getattr(u, 'settings_tags', None) or '[]'
+            try:
+                tags_list = json.loads(tags_stored)
+                if not isinstance(tags_list, list):
+                    tags_list = [t.strip() for t in str(tags_stored).split(',') if t.strip()]
+            except Exception:
+                tags_list = [t.strip() for t in str(tags_stored).split(',') if t.strip()]
+
+            return render_template('settings.html', days=getattr(u, 'settings_days', 30), perf=perf_list, cooldown=getattr(u, 'cooldown_minutes', 10), tags=tags_list)
 
 
 
@@ -583,7 +606,7 @@ def check_puzzle():
         if not p:
             return jsonify({'error': 'puzzle not found'}), 404
 
-        logger.debug('User answering puzzle id=%s user=%s provided_san=%s correct_san=%s prev_san=%s next_san=%s', pid, getattr(p.user, 'username', None), san, p.correct_san, getattr(p, 'prev_san', None), getattr(p, 'next_san', None))
+        logger.debug('User answering puzzle id=%s user=%s provided_san=%s correct_san=%s', pid, getattr(p.user, 'username', None), san, p.correct_san)
         correct = (san.strip() == p.correct_san.strip())
         logger.debug('Answer correctness for puzzle id=%s: %s', pid, correct)
         # determine quality and update SM-2 fields

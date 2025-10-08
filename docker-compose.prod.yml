@@ -1,19 +1,18 @@
-"""
-Production docker-compose file with an nginx reverse proxy and Let's Encrypt (certbot) support.
 
-Usage notes:
-- Populate `.env` with DOMAIN and LETSENCRYPT_EMAIL (and other secrets like SECRET_KEY).
-- First-time cert obtain (run once):
-  docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot \
-    certbot certonly --webroot -w /var/www/certbot \
-    --email "$LETSENCRYPT_EMAIL" --agree-tos --no-eff-email -d "$DOMAIN"
-
-After obtaining certs, start the stack:
-  docker compose -f docker-compose.prod.yml up -d
-
-This file expects `deploy/nginx/conf.d/chesspuzzle.template` to exist and will
-substitute the $DOMAIN environment variable into it at nginx startup.
-"""
+#Production docker-compose file with an nginx reverse proxy and Let's Encrypt (certbot) support.
+#
+#Usage notes:
+#- Populate `.env` with DOMAIN and LETSENCRYPT_EMAIL (and other secrets like SECRET_KEY).
+#- First-time cert obtain (run once):
+#  docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot \
+#    certbot certonly --webroot -w /var/www/certbot \
+#    --email "$LETSENCRYPT_EMAIL" --agree-tos --no-eff-email -d "$DOMAIN"
+#
+#After obtaining certs, start the stack:
+#  docker compose -f docker-compose.prod.yml up -d
+#
+#This file expects `deploy/nginx/conf.d/chesspuzzle.template` to exist and will
+#substitute the $DOMAIN environment variable into it at nginx startup.
 
 version: '3.8'
 

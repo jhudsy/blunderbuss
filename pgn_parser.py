@@ -110,7 +110,7 @@ def extract_puzzles_from_pgn(pgn_text):
         game_id = game.headers.get('GameId', game.headers.get('Site', 'unknown'))
         node = game
         board = game.board()
-        prev_san = None
+    # prev_san/next_san bookkeeping removed; we no longer track surrounding SANs
         while not node.is_end():
             next_node = node.variation(0)
             move = next_node.move
@@ -138,17 +138,7 @@ def extract_puzzles_from_pgn(pgn_text):
                     else:
                         san = board.san(move)
                     # compute next SAN if available
-                    next_san = None
-                    if next_node.variations:
-                        try:
-                            # get the move after the current one
-                            next_next = next_node.variation(0)
-                            if next_next is not None and next_next.move is not None:
-                                tmp = board.copy()
-                                tmp.push(move)
-                                next_san = tmp.san(next_next.move)
-                        except Exception:
-                            next_san = None
+                    # next_san computation removed
 
                     # initial weight: higher if big positive->negative swing
                     swing = pre - post
@@ -170,8 +160,7 @@ def extract_puzzles_from_pgn(pgn_text):
                         'tag': meta.get('tag'),
                         'initial_weight': float(initial_weight),
                         'side': side,
-                        'prev_san': prev_san,
-                        'next_san': next_san
+                        # prev/next SAN removed: no longer stored
                     }
                     # common PGN headers we may want to surface in the UI
                     headers = game.headers
@@ -199,14 +188,10 @@ def extract_puzzles_from_pgn(pgn_text):
                         except Exception:
                             # ignore parsing errors and leave time_control_type absent
                             pass
-                    logger.debug('Found puzzle game_id=%s move=%s pre=%s post=%s tag=%s prev_san=%s san=%s next_san=%s', game_id, board.fullmove_number, pre, post, meta.get('tag'), prev_san, san, next_san)
+                    logger.debug('Found puzzle game_id=%s move=%s pre=%s post=%s tag=%s san=%s', game_id, board.fullmove_number, pre, post, meta.get('tag'), san)
                     games.append(puzzle)
             board.push(move)
-            # update prev_san for the next loop iteration
-            try:
-                prev_san = board.san(move)
-            except Exception:
-                prev_san = None
+            # prev_san bookkeeping removed
             node = next_node
 
     return games

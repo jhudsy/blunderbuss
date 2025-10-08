@@ -52,6 +52,9 @@ class User(db.Entity):
     consecutive_correct = Optional(int, default=0)
     settings_days = Optional(int, default=30)
     settings_perftypes = Optional(str, default='["blitz","rapid"]')
+    # Which puzzle tags the user wants to see. Stored as a JSON array of
+    # strings; defaults to showing all types. Examples: ["Blunder","Mistake"]
+    settings_tags = Optional(str, default='["Blunder","Mistake","Inaccuracy"]')
     streak_days = Optional(int, default=0)
     _import_total = Optional(int, default=0)
     _import_done = Optional(int, default=0)
@@ -129,6 +132,23 @@ class User(db.Entity):
             return [p.strip().lower() for p in str(raw).split(',') if p.strip()]
         return []
 
+    @property
+    def tag_filters(self):
+        """Return settings_tags as a normalized list of lowercase strings.
+
+        This makes comparisons with Puzzle.tag robust to casing differences.
+        """
+        import json
+        raw = getattr(self, 'settings_tags', None) or '[]'
+        try:
+            vals = json.loads(raw)
+            if isinstance(vals, list):
+                return [str(x).strip().lower() for x in vals if x]
+        except Exception:
+            # fallback: accept CSV-style
+            return [p.strip().lower() for p in str(raw).split(',') if p.strip()]
+        return []
+
     @perf_types.setter
     def perf_types(self, v):
         import json
@@ -163,8 +183,8 @@ class Puzzle(db.Entity):
     # severity records the human/eval classification (e.g. 'Blunder', 'Mistake', 'Inaccuracy')
     severity = Optional(str)
     # SAN context for debugging / UI
-    prev_san = Optional(str, nullable=True)
-    next_san = Optional(str, nullable=True)
+    # prev_san and next_san were removed — they were debugging helpers and
+    # are intentionally omitted from the schema to reduce stored PGN context.
     # optional PGN header metadata for UI
     white = Optional(str)
     black = Optional(str)

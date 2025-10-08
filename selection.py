@@ -37,6 +37,13 @@ def select_puzzle(user, all_puzzles, due_only=True, cooldown_minutes=10):
         due = [p for p in all_puzzles if (p.next_review is None or p.next_review <= now)]
     else:
         due = list(all_puzzles)
+    # filter by user's selected tags (if any)
+    try:
+        tag_filters = getattr(user, 'tag_filters', [])
+    except Exception:
+        tag_filters = []
+    if tag_filters:
+        due = [p for p in due if getattr(p, 'tag', None) and str(getattr(p, 'tag')).strip().lower() in tag_filters]
 
     due = filter_recent(due, cooldown_minutes=cooldown_minutes)
     chosen = choose_weighted(due)

@@ -100,7 +100,7 @@ def import_games_task(self, username, perftypes, days):
             if not matched:
                 logger.debug('Skipping puzzle game_id=%s move=%s: blunder by %s not current user %s', p.get('game_id'), p.get('move_number'), blunder_side, username)
                 continue
-            logger.debug('Importing puzzle game_id=%s move=%s for user=%s prev_san=%s san=%s next_san=%s', p.get('game_id'), p.get('move_number'), username, p.get('prev_san'), p.get('correct_san'), p.get('next_san'))
+            logger.debug('Importing puzzle game_id=%s move=%s for user=%s san=%s', p.get('game_id'), p.get('move_number'), username, p.get('correct_san'))
             # Ensure we don't insert duplicate puzzles for the same user based on FEN
             fen = p.get('fen')
             if not fen:
@@ -127,8 +127,6 @@ def import_games_task(self, username, perftypes, days):
                 post_eval=p.get('post_eval'),
                 tag=p.get('tag'),
                 severity=p.get('tag'),
-                prev_san=p.get('prev_san'),
-                next_san=p.get('next_san'),
             )
             u._import_done += 1
             imported_count += 1

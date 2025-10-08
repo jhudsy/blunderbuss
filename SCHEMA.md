@@ -29,6 +29,7 @@ Fields:
 - settings_days: int, Optional, default=30 — spaced-repetition window
 - settings_perftypes: str, Optional, default='blitz,rapid' — comma-separated performance types
 - settings_perftypes: str, Optional, default='["blitz","rapid"]' — JSON-encoded list of performance types (e.g., ["classical","rapid","blitz"]). Previously this field stored a CSV string; the repository now stores a JSON array for clarity and easier consumption by APIs.
+ - settings_tags: str, Optional, default='["Blunder","Mistake","Inaccuracy"]' — JSON-encoded list of puzzle tags the user wants to see. Used by the selection logic to filter puzzles by `Puzzle.tag`.
 
 Additional notes:
 - A new `Puzzle.severity` field stores the parsed classification of a puzzle (e.g. 'Blunder', 'Mistake', 'Inaccuracy') extracted from PGN comments. This is populated by the parser when importing PGN.
@@ -71,9 +72,13 @@ Evaluation / metadata:
 - post_eval: float, Optional — eval after move
 - tag: str, Optional — arbitrary tag or label
 
-Context / UI metadata:
-- prev_san: str, Optional, nullable=True — SAN of previous move (kept for UI/debug)
-- next_san: str, Optional, nullable=True — SAN of next move (kept for UI/debug)
+- Context / UI metadata:
+- white: str, Optional — White player's name (PGN header)
+- black: str, Optional — Black player's name
+- date: str, Optional — game date string
+- time_control: str, Optional — PGN time control metadata
+ - time_control: str, Optional — PGN time control metadata
+ - time_control_type: str, Optional — derived classification from `time_control` (one of 'Bullet','Blitz','Rapid','Classical') when the PGN contains an X+Y seconds format. This is computed by the parser and stored on import.
 - white: str, Optional — White player's name (PGN header)
 - black: str, Optional — Black player's name
 - date: str, Optional — game date string
@@ -155,8 +160,6 @@ CREATE TABLE puzzle (
   pre_eval REAL,
   post_eval REAL,
   tag TEXT,
-  prev_san TEXT,
-  next_san TEXT,
   white TEXT,
   black TEXT,
   date TEXT,
