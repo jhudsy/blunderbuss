@@ -1,0 +1,29 @@
+name: Env validation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-env:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Make scripts executable
+        run: |
+          chmod +x scripts/validate_env.sh || true
+      - name: Run env validation (with minimal env)
+        env:
+          FLASK_ENV: production
+          # These are intentionally empty or placeholders in CI; adjust as needed
+          SECRET_KEY: placeholder
+          POSTGRES_HOST: postgres
+          POSTGRES_DB: chesspuzzle
+        run: |
+          scripts/validate_env.sh

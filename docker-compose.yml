@@ -1,0 +1,83 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+  # Start Redis with requirepass only when REDIS_PASSWORD is non-empty.
+  # Use a small shell wrapper because docker-compose cannot conditionally omit
+  # arguments based on environment variables directly.
+  command: ["sh", "-c", "if [ -n \"${REDIS_PASSWORD}\" ]; then exec redis-server --requirepass \"${REDIS_PASSWORD}\"; else exec redis-server; fi"]
+
+  web:
+    build: .
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      # Prefer DATABASE_URL for Postgres deployments. If not set, fall back to sqlite file.
+      - DATABASE_URL=${DATABASE_URL:-}
+      - DATABASE_FILE=/data/db.sqlite
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      # Postgres connection - prefer DATABASE_URL, but also expose individual vars
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-chesspuzzle}
+      # Celery / Redis broker (use REDIS_PASSWORD if set)
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
+    volumes:
+      - chesspuzzle-data:/data
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    depends_on:
+      - redis
+      - postgres
+
+  worker:
+    build: .
+    command: sh -c "celery -A tasks worker --loglevel=info"
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - DATABASE_URL=${DATABASE_URL:-}
+      - DATABASE_FILE=/data/db.sqlite
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-chesspuzzle}
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+    volumes:
+      - chesspuzzle-data:/data
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - postgres
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-chesspuzzle}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-chesspuzzle}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  chesspuzzle-data:
+  redis-data:
+  postgres-data:

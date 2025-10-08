@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Your Badges</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/static/css/badges.css" rel="stylesheet">
+  </head>
+  <body class="p-4">
+    {% include '_ribbon.html' %}
+    <div class="container py-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3">Badge Gallery</h1>
+        <div>
+          <a href="/" class="btn btn-outline-secondary btn-sm">Home</a>
+        </div>
+      </div>
+
+      <div id="badgesList" class="row g-3">
+        Loading badges...
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/static/js/ribbon.js"></script>
+  <script>document.addEventListener('DOMContentLoaded', ()=>{ if (window.initRibbon) initRibbon() })</script>
+    <script>
+      async function loadBadges(){
+        try{
+          const r = await fetch('/api/badges');
+          if (!r.ok){ document.getElementById('badgesList').textContent = 'Failed to load'; return }
+          const j = await r.json();
+          const list = j.badges || [];
+          const container = document.getElementById('badgesList');
+          if (!list.length){ container.innerHTML = '<div class="alert alert-info">No badges yet — solve puzzles to earn badges.</div>'; return }
+          container.innerHTML = '';
+          list.forEach(b => {
+            const col = document.createElement('div'); col.className = 'col-6 col-sm-4 col-md-3';
+            const card = document.createElement('div'); card.className = 'badge-card badge-earned';
+            // annotate tier classes lightly (bronzish/gold) based on badge name keywords
+            if (/1000|500|200/.test(b.name)) card.classList.add('badge-tier-gold')
+            else if (/100|50|20/.test(b.name)) card.classList.add('badge-tier-silver')
+            else card.classList.add('badge-tier-bronze')
+            const link = document.createElement('a'); link.href = '/badges/' + encodeURIComponent(b.name); link.style.textDecoration='none'; link.style.color='inherit'
+            const img = document.createElement('img'); img.src = '/static/img/badges/' + (b.icon || 'default.svg'); img.alt = b.name; img.className='badge-icon';
+            const h = document.createElement('div'); h.className='badge-name text-center'; h.innerText = b.name
+            const d = document.createElement('div'); d.className = 'badge-desc text-center'; d.textContent = b.description || '';
+            link.appendChild(img); link.appendChild(h); link.appendChild(d); card.appendChild(link); col.appendChild(card); container.appendChild(col);
+          })
+        }catch(e){ document.getElementById('badgesList').textContent = 'Error' }
+      }
+      loadBadges();
+    </script>
+  </body>
+</html>

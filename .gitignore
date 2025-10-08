@@ -1,0 +1,71 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage
+.pytest_cache/
+coverage.xml
+htmlcov/
+
+# Django stuff (if used)
+*.log
+local_settings.py
+
+# SQLite DB files
+db.sqlite
+db.sqlite.*
+/data/
+
+# Celery
+celerybeat-schedule
+
+# Environment / secrets
+.env
+.env.*
+secrets/
+
+# Logs
+logs/
+*.log
+
+# Editors and OS files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+thumbs.db
+
+# Docker
+.docker/
+.envrc
+docker-compose.override.yml
+
+# Node
+node_modules/
+
+# Misc
+*.swp
+*~
+
+# Optional: cover local-build artifacts
+coverage/
+
+# Ensure entrypoint or scripts with exec perms are tracked but not temp copies
+*.sh~

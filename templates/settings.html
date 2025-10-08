@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Settings</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  </head>
+  <body class="p-4">
+    {% include '_ribbon.html' %}
+
+    <div class="container py-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3">Settings</h1>
+      </div>
+
+      <form id="settingsForm" class="card p-3" action="/settings" method="post">
+        <input type="hidden" id="perf_initial" value='{{ perf|tojson }}'>
+        <div class="mb-3">
+          <label class="form-label">Days to import</label>
+          <input type="number" name="days" id="days" class="form-control" value="{{ days }}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Time controls</label>
+          <div id="perfCheckboxes" class="form-check">
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="checkbox" id="perf_classical" name="perf" value="classical">
+              <label class="form-check-label" for="perf_classical">Classical</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="checkbox" id="perf_rapid" name="perf" value="rapid">
+              <label class="form-check-label" for="perf_rapid">Rapid</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="checkbox" id="perf_blitz" name="perf" value="blitz">
+              <label class="form-check-label" for="perf_blitz">Blitz</label>
+            </div>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Cooldown between repeats (minutes)</label>
+          <input type="number" name="cooldown" id="cooldown" class="form-control" value="{{ cooldown }}">
+        </div>
+        <button type="button" id="saveBtn" class="btn btn-primary">Save</button>
+      </form>
+    </div>
+
+    <script src="/static/vendor/jquery-3.6.0.min.js"></script>
+    <script src="/static/vendor/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/ribbon.js"></script>
+  <script>
+      // initialize ribbon after DOM load
+      window.addEventListener('DOMContentLoaded', ()=>{ if (window.initRibbon) window.initRibbon();
+  // Pre-check boxes based on server-provided perf (hidden input holds either JSON array or CSV string)
+  const perfInitialEl = document.getElementById('perf_initial');
+  let perfItems = [];
+  if (perfInitialEl && perfInitialEl.value) {
+    try {
+      const parsed = JSON.parse(perfInitialEl.value);
+      if (Array.isArray(parsed)) perfItems = parsed.map(s=>String(s).trim().toLowerCase()).filter(Boolean);
+      else if (typeof parsed === 'string') perfItems = parsed.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+    } catch(e) {
+      // fall back to CSV parsing
+      perfItems = perfInitialEl.value.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+    }
+  }
+  if (perfItems.includes('classical')) document.getElementById('perf_classical').checked = true;
+  if (perfItems.includes('rapid')) document.getElementById('perf_rapid').checked = true;
+  if (perfItems.includes('blitz')) document.getElementById('perf_blitz').checked = true;
+      });
+
+      document.getElementById('saveBtn').addEventListener('click', async ()=>{
+        const days = document.getElementById('days').value;
+        const cooldown = document.getElementById('cooldown').value;
+  const checked = Array.from(document.querySelectorAll('#perfCheckboxes input[type=checkbox]:checked')).map(i=>i.value);
+  const payload = { days: days, perf: checked, cooldown: cooldown };
+        const r = await fetch('/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+        if (r.ok) alert('Saved'); else alert('Failed');
+      })
+    </script>
+  </body>
+</html>

@@ -1,0 +1,139 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Chess Puzzle</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css" />
+  </head>
+  <body class="p-4">
+    <div class="container py-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3">Chess Puzzle</h1>
+        <div>
+          {% if session.username %}
+            <span class="me-2">Signed in: <strong>{{ session.username }}</strong></span>
+            <a href="/logout" class="btn btn-sm btn-outline-secondary">Logout</a>
+          {% else %}
+            <a href="/login" class="btn btn-primary btn-sm">Login (mock)</a>
+            <a href="/login-lichess" class="btn btn-outline-primary btn-sm">Login with Lichess</a>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-4">
+          <div class="card mb-3">
+            <div class="card-body">
+              <h5 class="card-title">Your Stats</h5>
+              <p id="userStats">Loading...</p>
+              <a href="/puzzle" class="btn btn-primary btn-sm">Practice puzzles</a>
+            </div>
+          </div>
+          <div class="mb-3">
+            <a class="btn btn-outline-secondary" href="/leaderboard_page">Leaderboard</a>
+            <a class="btn btn-outline-secondary" href="/settings">Settings</a>
+            <a class="btn btn-outline-secondary" href="/badges">Badges</a>
+          </div>
+        </div>
+        <div class="col-md-8">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title">Quick puzzle</h5>
+              <button id="get-puzzle" class="btn btn-primary">Get puzzle</button>
+              <div id="board" class="mt-3" style="width: 320px"></div>
+              <pre id="puzzle" class="mt-3" style="display:none"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <!-- import UI removed -->
+    <script src="/static/vendor/jquery-3.6.0.min.js"></script>
+    <script>
+      // Ensure both $ and jQuery globals exist for libraries that expect one or the other
+      window.jQuery = window.jQuery || window.$;
+      window.$ = window.$ || window.jQuery;
+    </script>
+    <script src="/static/vendor/chess.min.js"></script>
+    <script src="/static/vendor/chessboard-1.0.0.min.js"></script>
+    <script src="/static/vendor/bootstrap.bundle.min.js" defer></script>
+    <script>
+      // Initialize a quick board for immediate visual feedback (if library available)
+      try {
+        if (window.Chessboard){
+          window._quickBoard = Chessboard('board', {position: 'start', pieceTheme: '/static/img/chesspieces/{piece}.png'})
+        }
+      } catch(e){
+        console.warn('Could not initialize quick board:', e)
+      }
+
+      document.getElementById('get-puzzle')?.addEventListener('click', async ()=>{
+        const btn = document.getElementById('get-puzzle')
+        const origText = btn.innerHTML
+        try {
+          console.debug('Get puzzle clicked')
+          btn.disabled = true
+          btn.innerHTML = 'Loading...'
+          const res = await fetch('/get_puzzle', { credentials: 'same-origin' });
+          if (res.status === 401){
+            window.location = '/login'
+            return
+          }
+          const data = await res.json();
+          if (!res.ok){
+            const err = data && data.error ? data.error : 'Failed to fetch puzzle'
+            console.warn('get_puzzle returned error:', err)
+            alert(err)
+            document.getElementById('userStats').textContent = err
+            return
+          }
+          if (data && data.fen){
+              if (window.Chessboard){
+              if (window._quickBoard) window._quickBoard.position(data.fen)
+              else window._quickBoard = Chessboard('board', {position: data.fen, pieceTheme: '/static/img/chesspieces/{piece}.png'})
+            } else {
+              document.getElementById('puzzle').textContent = JSON.stringify(data, null, 2);
+            }
+          } else {
+            document.getElementById('puzzle').textContent = JSON.stringify(data, null, 2);
+          }
+        } catch(err){
+          console.error('Get puzzle failed', err)
+          alert('Error fetching puzzle: ' + (err && err.message))
+        } finally {
+          btn.disabled = false
+          btn.innerHTML = origText
+        }
+      });
+  // Poll user info
+
+      async function pollUserInfo(){
+        try{
+          console.debug('pollUserInfo: fetching /user_information')
+          const r = await fetch('/user_information', { credentials: 'same-origin' });
+          console.debug('pollUserInfo: response status', r.status)
+          if (!r.ok) {
+            if (r.status === 401) {
+              document.getElementById('userStats').textContent = 'Not signed in'
+            } else {
+              document.getElementById('userStats').textContent = 'Failed to load stats'
+              console.warn('pollUserInfo: non-ok response', r.status)
+            }
+            return
+          }
+          const j = await r.json();
+          console.debug('pollUserInfo: got json', j)
+          document.getElementById('userStats').textContent = `XP: ${j.xp} — Badges: ${j.badges.length || 0} — Streak: ${j.streak} days`
+        }catch(e){
+          console.error('pollUserInfo: error', e)
+          try{ document.getElementById('userStats').textContent = 'Failed to load stats' } catch(_){}
+        }
+      }
+
+  setInterval(pollUserInfo, 5000)
+  pollUserInfo();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Admin - Badges</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  </head>
+  <body class="p-4">
+    <div class="container py-4">
+      <h1 class="h4">Admin: Badges</h1>
+      <form id="badForm">
+        <div class="mb-3"><input class="form-control" id="name" placeholder="Badge name"/></div>
+        <div class="mb-3"><input class="form-control" id="icon" placeholder="icon filename"/></div>
+        <div class="mb-3"><textarea class="form-control" id="desc" placeholder="description"></textarea></div>
+        <button type="button" id="create" class="btn btn-primary">Create</button>
+      </form>
+    </div>
+    <script>
+      document.getElementById('create').addEventListener('click', async ()=>{
+        const payload = { name: document.getElementById('name').value, icon: document.getElementById('icon').value, description: document.getElementById('desc').value };
+        const r = await fetch('/admin/badges', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+        if (r.ok) alert('created'); else alert('failed')
+      })
+    </script>
+  </body>
+</html>

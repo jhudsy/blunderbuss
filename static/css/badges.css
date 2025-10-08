@@ -1,0 +1,12 @@
+:root{--badge-card-bg:#ffffff;--badge-card-border:rgba(0,0,0,0.06);--badge-shadow:0 6px 18px rgba(15,15,15,0.06)}
+.badge-card{border:1px solid var(--badge-card-border);background:var(--badge-card-bg);border-radius:12px;padding:12px;transition:transform 220ms ease, box-shadow 220ms ease}
+.badge-card:hover{transform:translateY(-6px) scale(1.02);box-shadow:var(--badge-shadow)}
+.badge-icon{width:84px;height:84px;display:block;margin:8px auto 6px}
+.badge-name{font-weight:600;margin-bottom:4px}
+.badge-desc{font-size:0.9rem;color:#6c757d}
+.badge-earned{position:relative}
+.badge-tier-bronze{box-shadow:inset 0 -6px 0 rgba(255,159,67,0.12)}
+.badge-tier-silver{box-shadow:inset 0 -6px 0 rgba(196,196,196,0.12)}
+.badge-tier-gold{box-shadow:inset 0 -6px 0 rgba(255,215,0,0.12)}
+/* small helper to keep the toast images aligned */
+.toast-body img{border-radius:4px}

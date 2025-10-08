@@ -1,0 +1,44 @@
+<!-- Shared ribbon partial: shows XP, streak, navigation, and user info -->
+<div class="container-fluid bg-light py-2 mb-3">
+  <style>
+    .ribbon-pulse{animation: ribbonPulse 0.9s ease-in-out;}
+    @keyframes ribbonPulse{0%{transform:scale(1);}50%{transform:scale(1.25);}100%{transform:scale(1);}}
+  </style>
+  <div class="container d-flex justify-content-between align-items-center">
+    <div>
+  <span class="me-3">XP: <strong id="ribbonXP">-</strong></span>
+  <span class="me-3">Days: <strong id="ribbonDaysStreak">-</strong></span>
+  <span class="me-3">Puzzle: <strong id="ribbonPuzzleStreak">-</strong></span>
+    </div>
+    <div>
+      {% set cur = request.path %}
+  {% set puzzle_url = url_for('puzzle_page') %}
+      {% set leaderboard_url = url_for('leaderboard_page') %}
+      {% set settings_url = url_for('settings') %}
+      {% set badges_url = url_for('badge_gallery') %}
+      {% if cur != puzzle_url %}
+        <a class="btn btn-sm btn-outline-secondary me-2" href="{{ puzzle_url }}">Back to Puzzles</a>
+      {% endif %}
+      {% if cur != leaderboard_url %}
+        <a class="btn btn-sm btn-outline-secondary me-2" href="{{ leaderboard_url }}">Leaderboard</a>
+      {% endif %}
+      {% if cur != settings_url %}
+        <a class="btn btn-sm btn-outline-secondary me-2" href="{{ settings_url }}">Settings</a>
+      {% endif %}
+      {% if cur != badges_url %}
+        <a class="btn btn-sm btn-outline-secondary me-2" href="{{ badges_url }}">Badges</a>
+      {% endif %}
+    </div>
+    <div class="d-flex align-items-center">
+      <span id="ribbonUsername">{% if session.username %}{{ session.username }}{% else %}Not signed in{% endif %}</span>
+      <a class="ms-3 me-2" href="{{ badges_url }}" title="View badges" style="display:inline-flex;align-items:center">
+        <img src="/static/img/badges/default.svg" alt="badges" style="width:20px;height:20px;margin-right:6px;border-radius:4px"> <span id="ribbonBadgeCount" class="badge bg-secondary">0</span>
+      </a>
+      {% if session.username %}
+        <a id="ribbonAuth" class="btn btn-sm btn-primary ms-2" href="/logout">Logout</a>
+      {% else %}
+        <a id="ribbonAuth" class="btn btn-sm btn-primary ms-2" href="/login">Login</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
