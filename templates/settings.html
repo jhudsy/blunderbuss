@@ -24,18 +24,18 @@
           <input type="number" name="days" id="days" class="form-control" value="{{ days }}">
         </div>
         <div class="mb-3">
-          <label class="form-label">Time controls</label>
-          <div id="perfCheckboxes" class="form-check">
+          <label id="perfLabel" class="form-label">Time controls</label>
+          <div id="perfCheckboxes" class="form-check" role="group" aria-labelledby="perfLabel">
             <div class="form-check form-check-inline">
-              <input class="form-check-input" type="checkbox" id="perf_classical" name="perf" value="classical">
+              <input class="form-check-input" type="checkbox" id="perf_classical" name="perf" value="classical" aria-label="Time control Classical">
               <label class="form-check-label" for="perf_classical">Classical</label>
             </div>
             <div class="form-check form-check-inline">
-              <input class="form-check-input" type="checkbox" id="perf_rapid" name="perf" value="rapid">
+              <input class="form-check-input" type="checkbox" id="perf_rapid" name="perf" value="rapid" aria-label="Time control Rapid">
               <label class="form-check-label" for="perf_rapid">Rapid</label>
             </div>
             <div class="form-check form-check-inline">
-              <input class="form-check-input" type="checkbox" id="perf_blitz" name="perf" value="blitz">
+              <input class="form-check-input" type="checkbox" id="perf_blitz" name="perf" value="blitz" aria-label="Time control Blitz">
               <label class="form-check-label" for="perf_blitz">Blitz</label>
             </div>
           </div>
@@ -44,6 +44,23 @@
           <label class="form-label">Cooldown between repeats (minutes)</label>
           <input type="number" name="cooldown" id="cooldown" class="form-control" value="{{ cooldown }}">
         </div>
+        <div class="mb-3">
+          <label id="tagLabel" class="form-label">Puzzle tags</label>
+          <div id="tagCheckboxes" class="form-check" role="group" aria-labelledby="tagLabel">
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="checkbox" id="tag_blunder" name="tags" value="Blunder" aria-label="Tag Blunder">
+              <label class="form-check-label" for="tag_blunder">Blunder</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="checkbox" id="tag_mistake" name="tags" value="Mistake" aria-label="Tag Mistake">
+              <label class="form-check-label" for="tag_mistake">Mistake</label>
+            </div>
+            <div class="form-check form-check-inline">
+              <input class="form-check-input" type="checkbox" id="tag_inaccuracy" name="tags" value="Inaccuracy" aria-label="Tag Inaccuracy">
+              <label class="form-check-label" for="tag_inaccuracy">Inaccuracy</label>
+            </div>
+          </div>
+        </div>
         <button type="button" id="saveBtn" class="btn btn-primary">Save</button>
       </form>
     </div>
@@ -51,6 +68,17 @@
     <script src="/static/vendor/jquery-3.6.0.min.js"></script>
     <script src="/static/vendor/bootstrap.bundle.min.js"></script>
     <script src="/static/js/ribbon.js"></script>
+    <!-- Toast container -->
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+      <div id="saveToast" class="toast" role="status" aria-live="polite" aria-atomic="true" data-bs-autohide="true" data-bs-delay="2000">
+        <div class="toast-header">
+          <strong class="me-auto">Settings</strong>
+          <small>now</small>
+          <button type="button" class="btn-close ms-2 mb-1" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body" id="saveToastBody">Saved</div>
+      </div>
+    </div>
   <script>
       // initialize ribbon after DOM load
       window.addEventListener('DOMContentLoaded', ()=>{ if (window.initRibbon) window.initRibbon();
@@ -70,15 +98,33 @@
   if (perfItems.includes('classical')) document.getElementById('perf_classical').checked = true;
   if (perfItems.includes('rapid')) document.getElementById('perf_rapid').checked = true;
   if (perfItems.includes('blitz')) document.getElementById('perf_blitz').checked = true;
+  // Pre-check tag boxes from server-provided tags variable
+  try {
+    const serverTags = {{ tags|tojson|default('[]') }};
+    if (Array.isArray(serverTags)) {
+      if (serverTags.map(s=>String(s).toLowerCase()).includes('blunder')) document.getElementById('tag_blunder').checked = true;
+      if (serverTags.map(s=>String(s).toLowerCase()).includes('mistake')) document.getElementById('tag_mistake').checked = true;
+      if (serverTags.map(s=>String(s).toLowerCase()).includes('inaccuracy')) document.getElementById('tag_inaccuracy').checked = true;
+    }
+  } catch(e) { /* ignore templating/runtime issues */ }
       });
 
       document.getElementById('saveBtn').addEventListener('click', async ()=>{
         const days = document.getElementById('days').value;
         const cooldown = document.getElementById('cooldown').value;
   const checked = Array.from(document.querySelectorAll('#perfCheckboxes input[type=checkbox]:checked')).map(i=>i.value);
-  const payload = { days: days, perf: checked, cooldown: cooldown };
+  const tagChecked = Array.from(document.querySelectorAll('#tagCheckboxes input[type=checkbox]:checked')).map(i=>i.value);
+  const payload = { days: days, perf: checked, cooldown: cooldown, tags: tagChecked };
         const r = await fetch('/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-        if (r.ok) alert('Saved'); else alert('Failed');
+        const toastEl = document.getElementById('saveToast');
+        const toastBody = document.getElementById('saveToastBody');
+  const bsToast = new bootstrap.Toast(toastEl, { delay: 2000, autohide: true });
+        if (r.ok) {
+          toastBody.textContent = 'Settings saved';
+        } else {
+          toastBody.textContent = 'Failed to save settings';
+        }
+        bsToast.show();
       })
     </script>
   </body>
