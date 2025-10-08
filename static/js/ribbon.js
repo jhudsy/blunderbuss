@@ -47,7 +47,7 @@
       if (elAuth) { elAuth.href = '/logout'; elAuth.textContent = 'Logout' }
     }catch(e){
       // don't throw; ribbon is non-critical
-      console.debug('refreshRibbon failed', e)
+      if (window.__CP_DEBUG) console.debug('refreshRibbon failed', e)
     }
   }
 

@@ -2,6 +2,15 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <script>
+      // CP debug flag injected by server-side rendering. When false we
+      // intentionally silence console.debug to avoid leaking debug output
+      // in production browsers.
+  window.__CP_DEBUG = {{ CP_DEBUG|tojson }};
+      if (!window.__CP_DEBUG) {
+        try { console.debug = function(){} } catch(e){}
+      }
+    </script>
     <title>Chess Puzzle</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css" />

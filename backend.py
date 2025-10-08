@@ -39,15 +39,24 @@ def _configure_logging():
     # Send DEBUG logs to console in development
     # Allow explicit override via environment variable LOG_LEVEL or CHESSPUZZLE_LOG_LEVEL
     env_level = os.environ.get('LOG_LEVEL') or os.environ.get('CHESSPUZZLE_LOG_LEVEL')
+    is_dev = (os.environ.get('FLASK_ENV') == 'development') or (os.environ.get('FLASK_DEBUG') == '1')
     if env_level:
         try:
-            level = getattr(logging, env_level.strip().upper())
+            requested = getattr(logging, env_level.strip().upper())
         except Exception:
             # fallback to INFO if the provided value is invalid
-            level = logging.INFO
+            requested = logging.INFO
     else:
-        is_dev = (os.environ.get('FLASK_ENV') == 'development') or (os.environ.get('FLASK_DEBUG') == '1')
-        level = logging.DEBUG if is_dev else logging.INFO
+        requested = logging.DEBUG if is_dev else logging.INFO
+
+    # Never allow DEBUG logging in production. If DEBUG was explicitly requested
+    # but we're not in development mode, downgrade to INFO and remember we
+    # suppressed debug to inform later.
+    suppressed_debug = False
+    if not is_dev and requested == logging.DEBUG:
+        requested = logging.INFO
+        suppressed_debug = True
+    level = requested
     if not logger.handlers:
         ch = logging.StreamHandler()
         ch.setLevel(level)
@@ -55,6 +64,18 @@ def _configure_logging():
         ch.setFormatter(fmt)
         logger.addHandler(ch)
     logger.setLevel(level)
+    if suppressed_debug:
+        logger.warning('DEBUG logging was requested via LOG_LEVEL but suppressed because FLASK_ENV is not development')
+
+    # Expose a template/global flag that indicates whether debug-mode UI logging
+    # should be enabled. This is intentionally true only for development runs so
+    # frontend `console.debug` calls are suppressed in production even if
+    # LOG_LEVEL was set to DEBUG.
+    try:
+        app.jinja_env.globals['CP_DEBUG'] = bool(is_dev)
+    except Exception:
+        # Jinja environment may not be available in some early import paths; ignore
+        pass
 
 
 def _mask_secret(s):

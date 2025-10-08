@@ -2,6 +2,10 @@
 <html>
   <head>
     <meta charset="utf-8" />
+    <script>
+      window.__CP_DEBUG = {{ CP_DEBUG|tojson }};
+      if (!window.__CP_DEBUG) { try { console.debug = function(){} } catch(e){} }
+    </script>
     <title>Puzzle</title>
     <link href="/static/vendor/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/static/vendor/chessboard-1.0.0.min.css" />

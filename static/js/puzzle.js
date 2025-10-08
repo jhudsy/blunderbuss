@@ -1,3 +1,9 @@
+// Ensure CP_DEBUG exists and silence debug logs in production UI
+if (typeof window !== 'undefined') {
+  if (typeof window.__CP_DEBUG === 'undefined') window.__CP_DEBUG = false
+  if (!window.__CP_DEBUG) { try { console.debug = function(){} } catch(e){} }
+}
+
 let board = null
 let game = new Chess()
 let currentPuzzle = null
@@ -73,11 +79,11 @@ function onDrop(source, target){
   }
   // send SAN to backend
   const san = result.san
-  console.debug('starting fen', startFEN)
-  console.debug('check_puzzle: sending', { puzzleId: currentPuzzle && currentPuzzle.id, san })
+  if (window.__CP_DEBUG) console.debug('starting fen', startFEN)
+  if (window.__CP_DEBUG) console.debug('check_puzzle: sending', { puzzleId: currentPuzzle && currentPuzzle.id, san })
   fetch('/check_puzzle', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({id: currentPuzzle.id, san})})
     .then(r => {
-      console.debug('check_puzzle: raw response', r)
+  if (window.__CP_DEBUG) console.debug('check_puzzle: raw response', r)
       if (!r.ok) {
         // try to get body text for debugging then reject
         return r.text().then(t => {
@@ -89,8 +95,8 @@ function onDrop(source, target){
       return r.json().catch(e => { console.error('check_puzzle: JSON parse error', e); throw e })
     })
     .then(j => {
-    console.debug('check_puzzle: response', j)
-    try{ console.debug('check_puzzle: response keys', Object.keys(j), 'stringified', JSON.stringify(j)) } catch(e){}
+  if (window.__CP_DEBUG) console.debug('check_puzzle: response', j)
+  try{ if (window.__CP_DEBUG) console.debug('check_puzzle: response keys', Object.keys(j), 'stringified', JSON.stringify(j)) } catch(e){}
   if (j.correct){
   highlightSquareWithFade(source, 'green')
   highlightSquareWithFade(target, 'green')
@@ -119,7 +125,7 @@ function onDrop(source, target){
           showBadgeToast(j.awarded_badges)
         }
     } else {
-  console.debug('check_puzzle: incorrect branch entered', { startFEN })
+  if (window.__CP_DEBUG) console.debug('check_puzzle: incorrect branch entered', { startFEN })
   // Orchestrate the reveal sequence for an incorrect answer (visual only)
   highlightSquareWithFade(source, 'red')
   highlightSquareWithFade(target, 'red')
@@ -127,43 +133,43 @@ function onDrop(source, target){
       // Start reveal sequence using nested setTimeouts (avoid async/await so logs always run)
       setTimeout(() => {
         // 1) after brief pause, reset board to the starting position (don't mutate global game yet)
-        try { console.log('here'); board.position(startFEN) } catch (e) { console.log('Error resetting board position:', e) }
+  try { if (window.__CP_DEBUG) console.log('here'); board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
 
         // 2) wait a little more before revealing the correct move
         setTimeout(() => {
           // 3) reveal correct move if provided
-          console.debug('check_puzzle: hasOwnProperty(correct_san)?', j && Object.prototype.hasOwnProperty.call(j, 'correct_san'))
-          console.debug('check_puzzle: typeof correct_san', typeof j.correct_san, 'value:', j.correct_san)
+          if (window.__CP_DEBUG) console.debug('check_puzzle: hasOwnProperty(correct_san)?', j && Object.prototype.hasOwnProperty.call(j, 'correct_san'))
+          if (window.__CP_DEBUG) console.debug('check_puzzle: typeof correct_san', typeof j.correct_san, 'value:', j.correct_san)
           if (j.correct_san){
-            console.debug('server provided correct_san (raw):', j.correct_san)
+            if (window.__CP_DEBUG) console.debug('server provided correct_san (raw):', j.correct_san)
             const cmc = document.getElementById('correctMoveContainer')
             if (cmc) cmc.style.display = ''
             // sanitize SAN from server (strip stray punctuation or leading move numbers)
             let san = (j.correct_san || '').toString().trim()
-            console.debug('server provided correct_san (before sanitize):', j.correct_san, 'after trim:', san)
+            if (window.__CP_DEBUG) console.debug('server provided correct_san (before sanitize):', j.correct_san, 'after trim:', san)
             san = san.replace(/^\d+\.*\s*/, '')
             san = san.replace(/\.{2,}/g, '')
             san = san.replace(/[(),;:]/g, '')
             san = san.trim()
-            console.debug('server provided correct_san (sanitized):', san)
+            if (window.__CP_DEBUG) console.debug('server provided correct_san (sanitized):', san)
             try{
               // compute the correct move from the starting position using a temp Chess instance
               const temp = new Chess()
               try{ temp.load(startFEN) } catch(e){ /* ignore */ }
               const moveObj = temp.move(san, {sloppy: true})
-              console.debug('temp.move result:', moveObj)
+              if (window.__CP_DEBUG) console.debug('temp.move result:', moveObj)
               if (moveObj){
                 try{ revealCorrectMoveSquares(moveObj.from, moveObj.to) } catch(e){}
               } else {
                 const moves = temp.moves({verbose:true})
                 for (let m of moves){
                   if (m.san === san){
-                    console.debug('matched move in moves list:', m)
+                    if (window.__CP_DEBUG) console.debug('matched move in moves list:', m)
                     try{ revealCorrectMoveSquares(m.from, m.to) } catch(e){ board.position(startFEN) }
                     break
                   }
                 }
-                console.debug('fallback scan complete, no direct temp.move result')
+                if (window.__CP_DEBUG) console.debug('fallback scan complete, no direct temp.move result')
               }
               // ensure the global game is reset back to the starting position after reveal
               try{ game.load(startFEN) } catch(e){ /* ignore */ }
@@ -245,7 +251,7 @@ function showBadgeToast(badges){
       // remove after hidden
       toastEl.addEventListener('hidden.bs.toast', ()=>{ try{ container.removeChild(toastEl) }catch(e){} })
     })()
-  }catch(e){ console.debug('showBadgeToast failed', e) }
+  }catch(e){ if (window.__CP_DEBUG) console.debug('showBadgeToast failed', e) }
 }
 
 // Show a small +XP animation near the ribbon XP element
