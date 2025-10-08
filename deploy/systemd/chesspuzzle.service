@@ -1,0 +1,26 @@
+[Unit]
+Description=ChessPuzzle Docker Compose production stack
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/deploy/chesspuzzle
+EnvironmentFile=/home/deploy/chesspuzzle/secrets.env
+
+# Optional pre-start hook: ensure host volume directory exists and has correct ownership
+# Replace /var/lib/chesspuzzle/data and 1000:1000 with the host path and uid:gid you want
+ExecStartPre=/usr/bin/env sh -c '/home/deploy/chesspuzzle/scripts/prepare_host_volume.sh /var/lib/chesspuzzle/data 1000 1000'
+
+# Start the production docker-compose stack
+ExecStart=/usr/bin/docker compose -f /home/deploy/chesspuzzle/docker-compose.prod.yml up -d
+ExecStop=/usr/bin/docker compose -f /home/deploy/chesspuzzle/docker-compose.prod.yml down
+
+[Install]
+WantedBy=multi-user.target
+
+# Notes:
+# - Copy this file to /etc/systemd/system/chesspuzzle.service and adjust paths as needed.
+# - Ensure the deploy user (or whichever user runs docker) is in the docker group.
+# - The unit references /home/deploy/chesspuzzle; change to the actual repository path on the host.

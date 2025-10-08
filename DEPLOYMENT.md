@@ -127,12 +127,34 @@ Environment validation & CI
 
   Replace `/path/to/chesspuzzle` with the absolute path to the checked-out repository.
 
-4) Enable and start the systemd service
+  4) Enable and start the systemd service
 
   ```bash
   sudo systemctl daemon-reload
   sudo systemctl enable --now chesspuzzle.service
   sudo systemctl status chesspuzzle.service
+
+Using the included production compose (nginx + Let's Encrypt)
+-----------------------------------------------------------
+
+This repository includes `docker-compose.prod.yml`, which runs `web`, `worker`,
+`redis`, `postgres`, an `nginx` reverse proxy, and a `certbot` renewal service.
+To use it:
+
+1. Edit `.env` and set `DOMAIN` and `LETSENCRYPT_EMAIL` (and other secrets).
+2. Obtain initial certificates (one-time):
+  ```bash
+  docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot \
+    certbot certonly --webroot -w /var/www/certbot \
+    --email "$LETSENCRYPT_EMAIL" --agree-tos --no-eff-email -d "$DOMAIN"
+  ```
+3. Start the production stack:
+  ```bash
+  docker compose -f docker-compose.prod.yml up -d
+  ```
+
+The nginx config is templated at `deploy/nginx/conf.d/chesspuzzle.template` and
+is expanded at container start to produce the active nginx config.
   ```
 
 Notes and considerations
