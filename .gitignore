@@ -69,3 +69,6 @@ coverage/
 
 # Ensure entrypoint or scripts with exec perms are tracked but not temp copies
 *.sh~
+
+# Local runtime dir
+.run/
