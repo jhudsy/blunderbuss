@@ -85,6 +85,7 @@ def import_games_task(self, username, perftypes, days):
             u = User(username=username)
         u._import_total = len(puzzles)
         u._import_done = 0
+        imported_count = 0
         for p in puzzles:
             # Only import puzzles that correspond to this user's blunder (match by username)
             p_white = (p.get('white') or '').strip()
@@ -100,6 +101,16 @@ def import_games_task(self, username, perftypes, days):
                 logger.debug('Skipping puzzle game_id=%s move=%s: blunder by %s not current user %s', p.get('game_id'), p.get('move_number'), blunder_side, username)
                 continue
             logger.debug('Importing puzzle game_id=%s move=%s for user=%s prev_san=%s san=%s next_san=%s', p.get('game_id'), p.get('move_number'), username, p.get('prev_san'), p.get('correct_san'), p.get('next_san'))
+            # Ensure we don't insert duplicate puzzles for the same user based on FEN
+            fen = p.get('fen')
+            if not fen:
+                logger.debug('Skipping puzzle game_id=%s move=%s for user=%s: missing FEN', p.get('game_id'), p.get('move_number'), username)
+                continue
+            existing = Puzzle.get(user=u, fen=fen)
+            if existing:
+                logger.debug('Skipping duplicate puzzle for user=%s game_id=%s move=%s (fen already exists)', username, p.get('game_id'), p.get('move_number'))
+                continue
+
             Puzzle(
                 user=u,
                 game_id=p['game_id'],
@@ -120,5 +131,6 @@ def import_games_task(self, username, perftypes, days):
                 next_san=p.get('next_san'),
             )
             u._import_done += 1
+            imported_count += 1
         u._last_game_date = datetime.utcnow().isoformat()
-    return {'imported': len(puzzles)}
+    return {'imported': imported_count}
