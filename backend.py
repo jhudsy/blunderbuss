@@ -597,6 +597,50 @@ def settings():
 
 
 
+@app.route('/api/puzzle_counts')
+def api_puzzle_counts():
+    """Return counts for puzzles for the current user.
+
+    Query params:
+      perf=... (repeatable)
+      tags=... (repeatable)
+
+    Returns JSON: { 'available': X, 'total': Y }
+    """
+    username = session.get('username')
+    if not username:
+        return jsonify({'error': 'not logged in'}), 401
+    # read filters from query string
+    perf_list = request.args.getlist('perf') or []
+    tags_list = request.args.getlist('tags') or []
+    # normalize
+    perf_list = [str(p).strip().lower() for p in perf_list if p]
+    tags_list = [str(t).strip().lower() for t in tags_list if t]
+    with db_session:
+        u = User.get(username=username)
+        if not u:
+            return jsonify({'error': 'user not found'}), 404
+        # total puzzles for user
+        total = select(p for p in Puzzle if p.user == u).count()
+        # filtered
+        filtered_q = select(p for p in Puzzle if p.user == u)
+        filtered = []
+        for p in list(filtered_q):
+            ok = True
+            if perf_list:
+                t = getattr(p, 'time_control_type', None)
+                if not t or str(t).strip().lower() not in perf_list:
+                    ok = False
+            if ok and tags_list:
+                tag = getattr(p, 'tag', None)
+                if not tag or str(tag).strip().lower() not in tags_list:
+                    ok = False
+            if ok:
+                filtered.append(p)
+        return jsonify({'available': len(filtered), 'total': total})
+
+
+
 
 
 @app.route('/user_information')

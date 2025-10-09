@@ -65,6 +65,9 @@
             </div>
           </div>
         </div>
+        <div class="mb-3">
+          <p id="puzzleCounts" class="text-muted">Loading puzzle counts...</p>
+        </div>
         <button type="button" id="saveBtn" class="btn btn-primary">Save</button>
       </form>
     </div>
@@ -112,6 +115,35 @@
     }
   } catch(e) { /* ignore templating/runtime issues */ }
       });
+
+  // helper to fetch counts from backend and update UI
+  async function refreshCounts(){
+    const checked = Array.from(document.querySelectorAll('#perfCheckboxes input[type=checkbox]:checked')).map(i=>i.value);
+    const tagChecked = Array.from(document.querySelectorAll('#tagCheckboxes input[type=checkbox]:checked')).map(i=>i.value);
+    const params = new URLSearchParams();
+    for (const p of checked) params.append('perf', p);
+    for (const t of tagChecked) params.append('tags', t);
+    try{
+      const r = await fetch('/api/puzzle_counts?'+params.toString());
+      if (r.ok){
+        const j = await r.json();
+        const el = document.getElementById('puzzleCounts');
+        el.textContent = `${j.available} puzzles available from a total of ${j.total}`;
+      }
+    }catch(e){
+      // ignore
+    }
+  }
+
+  // refresh counts on load and whenever checkboxes change
+  window.addEventListener('DOMContentLoaded', ()=>{ 
+    // checkbox change handlers
+    Array.from(document.querySelectorAll('#perfCheckboxes input[type=checkbox], #tagCheckboxes input[type=checkbox]')).forEach(function(ch){
+      ch.addEventListener('change', ()=>{ refreshCounts(); });
+    });
+    // initial fetch
+    refreshCounts();
+  });
 
       document.getElementById('saveBtn').addEventListener('click', async ()=>{
         const days = document.getElementById('days').value;
