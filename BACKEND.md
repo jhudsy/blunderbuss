@@ -17,7 +17,7 @@ The backend exposes the following routes:
      - /get_puzzle. Selects a puzzle using spaced repetition and returns the puzzle's ID and FEN (move details are not exposed to the client).
      - /check_puzzle. Accepts a user's move and returns whether it was correct; the response may include awarded badges or XP deltas.
 - User settings
-     - /settings. The user can change the number of days that puzzles are taken from lichess for and the type of games (any of "blitz, rapid, classical").
+     - /settings. The user can change the number of days that puzzles are taken from lichess for and the type of games (any of "blitz, rapid, classical") as well as the type of errors that will be reviewed (Blunder, Inaccuracy or Mistake) and the maximum number of puzzles to be stored for that user. If more puzzles are imported than this maximum, older puzzles are removed.
   
      Notes:
      - Settings perftypes are now stored as a JSON array (e.g. ["blitz","rapid"]). The settings endpoint accepts a JSON list when POSTing.
@@ -41,8 +41,8 @@ Puzzles are selected for the user based on spaced repetition. Each puzzle has a 
 
 - Sample code snippets for logging into lichess can be found under examples/login.py
 - A sample PGN file can be found in examples/samples.pgn. 
-- To access the user's games from lichess, use the following URL which will return a PGN file `https://lichess.org/api/games/user/<username>?since=<integer timestamp>&analysed=True&evals=True&literate=True&perfType="<comma seperated string taken from blitz,rapid,classical>"` 
- - To access the user's games from lichess, use the following URL which will return a PGN file `https://lichess.org/api/games/user/<username>?since=<integer timestamp>&analysed=True&evals=True&literate=True&perfType="<comma seperated string taken from blitz,rapid,classical>"` 
+- To access the user's games from lichess, use the following URL which will return a PGN file `https://lichess.org/api/games/user/<username>?since=<integer timestamp>&analysed=True&evals=True&literate=True&perfType="<comma seperated string taken from blitz,rapid,classical>"`
+
 
 ## Security and deployment notes
 

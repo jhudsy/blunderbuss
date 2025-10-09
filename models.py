@@ -55,6 +55,8 @@ class User(db.Entity):
     # Which puzzle tags the user wants to see. Stored as a JSON array of
     # strings; defaults to showing all types. Examples: ["Blunder","Mistake"]
     settings_tags = Optional(str, default='["Blunder","Mistake","Inaccuracy"]')
+    # Maximum number of puzzles to keep for this user. 0 means unlimited.
+    settings_max_puzzles = Optional(int, default=0)
     streak_days = Optional(int, default=0)
     _import_total = Optional(int, default=0)
     _import_done = Optional(int, default=0)

@@ -335,6 +335,28 @@ def load_games():
             Puzzle(user=u, game_id=p['game_id'], move_number=p['move_number'], fen=p['fen'], correct_san=p['correct_san'], weight=p.get('initial_weight', 1.0), white=p.get('white'), black=p.get('black'), date=p.get('date'), time_control=p.get('time_control'), time_control_type=p.get('time_control_type'), pre_eval=p.get('pre_eval'), post_eval=p.get('post_eval'), tag=p.get('tag'), severity=p.get('tag'))
             u._import_done += 1
 
+        # Enforce per-user maximum puzzles after manual import
+        try:
+            max_p = int(getattr(u, 'settings_max_puzzles', 0) or 0)
+        except Exception:
+            max_p = 0
+        if max_p and max_p > 0:
+            from pony.orm import select
+            user_puzzles = select(q for q in Puzzle if q.user == u)
+            total = user_puzzles.count()
+            if total > max_p:
+                to_delete = total - max_p
+                ordered = list(select(q for q in Puzzle if q.user == u).order_by(Puzzle.id))
+                deleted = 0
+                for old in ordered:
+                    if deleted >= to_delete:
+                        break
+                    try:
+                        old.delete()
+                        deleted += 1
+                    except Exception:
+                        logger.exception('Failed to delete old puzzle id=%s for user=%s', getattr(old, 'id', None), username)
+
     return jsonify({'imported': len(puzzles)})
 
 
@@ -384,6 +406,26 @@ def get_puzzle():
                         logger.debug('Seeding puzzle game_id=%s move=%s san=%s for user=%s', p.get('game_id'), p.get('move_number'), p.get('correct_san'), username)
                         Puzzle(user=u, game_id=p['game_id'], move_number=p['move_number'], fen=p['fen'], correct_san=p['correct_san'], weight=p.get('initial_weight', 1.0), white=p.get('white'), black=p.get('black'), date=p.get('date'), time_control=p.get('time_control'), time_control_type=p.get('time_control_type'), pre_eval=p.get('pre_eval'), post_eval=p.get('post_eval'), tag=p.get('tag'), severity=p.get('tag'))
                     all_puzzles = list(select(p for p in Puzzle if p.user == u))
+                    # Enforce per-user maximum puzzles after seeding
+                    try:
+                        max_p = int(getattr(u, 'settings_max_puzzles', 0) or 0)
+                    except Exception:
+                        max_p = 0
+                    if max_p and max_p > 0:
+                        from pony.orm import select
+                        total = select(q for q in Puzzle if q.user == u).count()
+                        if total > max_p:
+                            to_delete = total - max_p
+                            ordered = list(select(q for q in Puzzle if q.user == u).order_by(Puzzle.id))
+                            deleted = 0
+                            for old in ordered:
+                                if deleted >= to_delete:
+                                    break
+                                try:
+                                    old.delete()
+                                    deleted += 1
+                                except Exception:
+                                    logger.exception('Failed to delete old puzzle id=%s for user=%s', getattr(old, 'id', None), username)
             except Exception:
                 # ignore seeding errors; fall through to no puzzles response
                 pass
@@ -520,6 +562,12 @@ def settings():
             import json
             u.settings_perftypes = json.dumps(perf_list)
             u.settings_tags = json.dumps(tags_list)
+            # persist user maximum puzzle limit (0 means unlimited)
+            try:
+                max_p = int(data.get('max_puzzles', getattr(u, 'settings_max_puzzles', 0) or 0))
+            except Exception:
+                max_p = 0
+            u.settings_max_puzzles = max_p
             u.cooldown_minutes = cooldown
             return jsonify({'status': 'ok'})
         else:
@@ -542,7 +590,8 @@ def settings():
             except Exception:
                 tags_list = [t.strip() for t in str(tags_stored).split(',') if t.strip()]
 
-            return render_template('settings.html', days=getattr(u, 'settings_days', 30), perf=perf_list, cooldown=getattr(u, 'cooldown_minutes', 10), tags=tags_list)
+            max_p = int(getattr(u, 'settings_max_puzzles', 0) or 0)
+            return render_template('settings.html', days=getattr(u, 'settings_days', 30), perf=perf_list, cooldown=getattr(u, 'cooldown_minutes', 10), tags=tags_list, max_puzzles=max_p)
 
 
 

@@ -131,4 +131,27 @@ def import_games_task(self, username, perftypes, days):
             u._import_done += 1
             imported_count += 1
         u._last_game_date = datetime.utcnow().isoformat()
+        # Enforce per-user maximum puzzles setting (0 => unlimited)
+        try:
+            max_p = int(getattr(u, 'settings_max_puzzles', 0) or 0)
+        except Exception:
+            max_p = 0
+        if max_p and max_p > 0:
+            # Count current puzzles for user and delete oldest by id until within limit
+            from pony.orm import select, delete
+            user_puzzles = select(q for q in Puzzle if q.user == u)
+            total = user_puzzles.count()
+            if total > max_p:
+                to_delete = total - max_p
+                # order by id (insertion order) and delete the oldest
+                ordered = list(select(q for q in Puzzle if q.user == u).order_by(Puzzle.id))
+                deleted = 0
+                for old in ordered:
+                    if deleted >= to_delete:
+                        break
+                    try:
+                        old.delete()
+                        deleted += 1
+                    except Exception:
+                        logger.exception('Failed to delete old puzzle id=%s for user=%s', getattr(old, 'id', None), username)
     return {'imported': imported_count}
