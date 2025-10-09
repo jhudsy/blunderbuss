@@ -77,6 +77,22 @@ source .venv/bin/activate
 pytest -q
 ```
 
+Testing note
+------------
+The test suite historically used SQLite's special `:memory:` value for
+`DATABASE_FILE`, which creates a separate in-memory database per connection.
+That can cause surprising failures when the Flask test client and test code
+open separate connections and cannot see each other's rows. For local pytest
+runs this project maps `DATABASE_FILE=':memory:'` to a shared file at
+`.run/pytest_db.sqlite` so tests and the app use the same DB file and see the
+same data.
+
+If you want to reset the test DB between runs, use the helper script:
+
+```bash
+./scripts/cleanup_test_db.sh
+```
+
 Troubleshooting
 ---------------
 - If you see import errors for `chess` or `chess.pgn`, install `python-chess` via `pip install python-chess` (it is in `requirements.txt`).
