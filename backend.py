@@ -346,7 +346,8 @@ def load_games():
             total = user_puzzles.count()
             if total > max_p:
                 to_delete = total - max_p
-                ordered = list(select(q for q in Puzzle if q.user == u).order_by(Puzzle.id))
+                ordered = list(select(q for q in Puzzle if q.user == u))
+                ordered.sort(key=lambda x: (getattr(x, 'date') or '', getattr(x, 'id') or 0))
                 deleted = 0
                 for old in ordered:
                     if deleted >= to_delete:
@@ -416,7 +417,8 @@ def get_puzzle():
                         total = select(q for q in Puzzle if q.user == u).count()
                         if total > max_p:
                             to_delete = total - max_p
-                            ordered = list(select(q for q in Puzzle if q.user == u).order_by(Puzzle.id))
+                            ordered = list(select(q for q in Puzzle if q.user == u))
+                            ordered.sort(key=lambda x: (getattr(x, 'date') or '', getattr(x, 'id') or 0))
                             deleted = 0
                             for old in ordered:
                                 if deleted >= to_delete:

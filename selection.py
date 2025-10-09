@@ -38,10 +38,25 @@ def select_puzzle(user, all_puzzles, due_only=True, cooldown_minutes=10):
     else:
         due = list(all_puzzles)
     # filter by user's selected tags (if any)
+    # Prefer the higher-level `tag_filters` property (defined on app User).
+    # For lightweight in-memory test User classes, fall back to parsing
+    # `settings_tags` (JSON or CSV) if present.
+    tag_filters = None
     try:
-        tag_filters = getattr(user, 'tag_filters', [])
+        tag_filters = getattr(user, 'tag_filters', None)
     except Exception:
-        tag_filters = []
+        tag_filters = None
+    if not tag_filters:
+        try:
+            raw = getattr(user, 'settings_tags', None) or '[]'
+            import json
+            parsed = json.loads(raw) if isinstance(raw, str) else raw
+            if isinstance(parsed, list):
+                tag_filters = [str(x).strip().lower() for x in parsed if x]
+            else:
+                tag_filters = [p.strip().lower() for p in str(raw).split(',') if p.strip()]
+        except Exception:
+            tag_filters = []
     if tag_filters:
         due = [p for p in due if getattr(p, 'tag', None) and str(getattr(p, 'tag')).strip().lower() in tag_filters]
 

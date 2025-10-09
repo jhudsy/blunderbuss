@@ -144,7 +144,9 @@ def import_games_task(self, username, perftypes, days):
             if total > max_p:
                 to_delete = total - max_p
                 # order by id (insertion order) and delete the oldest
-                ordered = list(select(q for q in Puzzle if q.user == u).order_by(Puzzle.id))
+                # Prefer deleting the oldest by `date` (if available), otherwise by insertion id
+                ordered = list(select(q for q in Puzzle if q.user == u))
+                ordered.sort(key=lambda x: (getattr(x, 'date') or '', getattr(x, 'id') or 0))
                 deleted = 0
                 for old in ordered:
                     if deleted >= to_delete:
