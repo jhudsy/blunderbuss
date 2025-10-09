@@ -259,6 +259,20 @@ def init_db(path='sqlite:///db.sqlite', create_tables=True):
         # resolve the same absolute path even if their CWDs differ.
         repo_root = os.path.dirname(os.path.abspath(__file__))
         requested_path = os.environ.get('DATABASE_FILE') or os.path.join(repo_root, 'db.sqlite')
+        # Special-case ':memory:' used by some tests: SQLite ':memory:' creates
+        # a distinct in-memory DB per connection which leads to surprising
+        # missing rows when the web test client and test code use different
+        # connections. To keep tests reliable, map ':memory:' to a single
+        # shared file under .run/pytest_db.sqlite inside the repo so all
+        # processes/requests during a test run operate on the same DB file.
+        if requested_path == ':memory:':
+            shared_dir = os.path.join(repo_root, '.run')
+            try:
+                os.makedirs(shared_dir, exist_ok=True)
+            except Exception:
+                # ignore errors creating the directory; fallback to repo_root
+                shared_dir = repo_root
+            requested_path = os.path.join(shared_dir, 'pytest_db.sqlite')
 
         # Ensure parent directory exists and is writable. If not, fall back to
         # a repo-local sqlite file which should be writable by the container's

@@ -341,7 +341,6 @@ def load_games():
         except Exception:
             max_p = 0
         if max_p and max_p > 0:
-            from pony.orm import select
             user_puzzles = select(q for q in Puzzle if q.user == u)
             total = user_puzzles.count()
             if total > max_p:
@@ -413,7 +412,6 @@ def get_puzzle():
                     except Exception:
                         max_p = 0
                     if max_p and max_p > 0:
-                        from pony.orm import select
                         total = select(q for q in Puzzle if q.user == u).count()
                         if total > max_p:
                             to_delete = total - max_p

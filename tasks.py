@@ -137,8 +137,8 @@ def import_games_task(self, username, perftypes, days):
         except Exception:
             max_p = 0
         if max_p and max_p > 0:
-            # Count current puzzles for user and delete oldest by id until within limit
-            from pony.orm import select, delete
+            # Count current puzzles for user and delete oldest by date until within limit
+            from pony.orm import select
             user_puzzles = select(q for q in Puzzle if q.user == u)
             total = user_puzzles.count()
             if total > max_p:
