@@ -593,7 +593,11 @@ def settings():
                 tags_list = [t.strip() for t in str(tags_stored).split(',') if t.strip()]
 
             max_p = int(getattr(u, 'settings_max_puzzles', 0) or 0)
-            return render_template('settings.html', days=getattr(u, 'settings_days', 30), perf=perf_list, cooldown=getattr(u, 'cooldown_minutes', 10), tags=tags_list, max_puzzles=max_p)
+            # warn users when max_puzzles is set but low
+            max_puzzles_warning = False
+            if max_p and max_p > 0 and max_p < 10:
+                max_puzzles_warning = True
+            return render_template('settings.html', days=getattr(u, 'settings_days', 30), perf=perf_list, cooldown=getattr(u, 'cooldown_minutes', 10), tags=tags_list, max_puzzles=max_p, max_puzzles_warning=max_puzzles_warning)
 
 
 

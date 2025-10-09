@@ -68,6 +68,11 @@
         <div class="mb-3">
           <p id="puzzleCounts" class="text-muted">Loading puzzle counts...</p>
         </div>
+        {% if max_puzzles_warning %}
+        <div class="alert alert-warning" role="alert" id="maxPWarning">
+          Your maximum puzzle limit is low — older puzzles will be deleted when new ones are imported.
+        </div>
+        {% endif %}
         <button type="button" id="saveBtn" class="btn btn-primary">Save</button>
       </form>
     </div>
