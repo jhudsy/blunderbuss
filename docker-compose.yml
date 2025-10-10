@@ -4,10 +4,10 @@ services:
     restart: unless-stopped
     volumes:
       - redis-data:/data
-  # Start Redis with requirepass only when REDIS_PASSWORD is non-empty.
-  # Use a small shell wrapper because docker-compose cannot conditionally omit
-  # arguments based on environment variables directly.
-  command: ["sh", "-c", "if [ -n \"${REDIS_PASSWORD}\" ]; then exec redis-server --requirepass \"${REDIS_PASSWORD}\"; else exec redis-server; fi"]
+    # Start Redis with requirepass only when REDIS_PASSWORD is non-empty.
+    # Use a small shell wrapper because docker-compose cannot conditionally omit
+    # arguments based on environment variables directly.
+    command: ["sh", "-c", "if [ -n \"${REDIS_PASSWORD}\" ]; then exec redis-server --requirepass \"${REDIS_PASSWORD}\"; else exec redis-server; fi"]
 
   web:
     build: .
