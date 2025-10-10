@@ -252,11 +252,19 @@ def login_callback():
     if not code:
         return 'Error: No code provided', 400
     verifier = session.get('pkce_verifier')
+    # Helpful debug logging: show whether we have a PKCE verifier and the
+    # redirect URI used for the token exchange. This distinguishes missing
+    # session/cookie issues from redirect_uri mismatches returned by Lichess.
+    try:
+        redirect_uri = url_for('login_callback', _external=True)
+    except Exception:
+        redirect_uri = '<unable to build redirect_uri>'
+    logger.debug('login_callback: pkce_verifier present=%s redirect_uri=%s', bool(verifier), redirect_uri)
     client_id = os.environ.get('LICHESS_CLIENT_ID') or os.environ.get('LICHESS_CLIENTID')
     if not client_id:
         return 'OAuth not configured', 500
     # exchange code for token (use helper)
-    token_data = exchange_code_for_token(code, verifier, url_for('login_callback', _external=True))
+    token_data = exchange_code_for_token(code, verifier, redirect_uri)
     token = token_data.get('access_token')
     refresh_t = token_data.get('refresh_token')
     expires_in = token_data.get('expires_in')
