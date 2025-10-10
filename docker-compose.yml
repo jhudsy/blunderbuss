@@ -21,6 +21,11 @@ services:
       - DATABASE_URL=${DATABASE_URL:-}
       - DATABASE_FILE=/data/db.sqlite
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - PGHOST=${POSTGRES_HOST:-postgres}
+      - PGPORT=${POSTGRES_PORT:-5432}
+      - PGUSER=${POSTGRES_USER:-postgres}
+      - PGPASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - PGDATABASE=${POSTGRES_DB:-chesspuzzle}
       # Postgres connection - prefer DATABASE_URL, but also expose individual vars
       - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
@@ -52,6 +57,11 @@ services:
       - DATABASE_URL=${DATABASE_URL:-}
       - DATABASE_FILE=/data/db.sqlite
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - PGHOST=${POSTGRES_HOST:-postgres}
+      - PGPORT=${POSTGRES_PORT:-5432}
+      - PGUSER=${POSTGRES_USER:-postgres}
+      - PGPASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - PGDATABASE=${POSTGRES_DB:-chesspuzzle}
       - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
