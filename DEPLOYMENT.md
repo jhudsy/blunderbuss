@@ -84,6 +84,23 @@ Healthchecks and readiness
   a slightly deeper readiness check (materialize a user row via the ORM and
   fetch `INFO` from Redis) to increase confidence before routing live traffic.
 
+Initialize the database (first-time setup)
+-----------------------------------------
+
+When deploying to a fresh Postgres instance you must create the database
+tables before the app can operate. The repository provides a small helper
+script that calls the same `init_db(create_tables=True)` used by the
+application:
+
+  ```bash
+  # Run the helper using the compose environment so the same PG env vars are used
+  docker compose run --rm web python scripts/create_tables.py
+  ```
+
+This command is idempotent and will create any missing tables. After it
+completes the application's readiness checks should report the DB as
+available.
+
 Pre-start host volume preparation
 --------------------------------
 
