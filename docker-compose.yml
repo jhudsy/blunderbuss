@@ -12,7 +12,7 @@ services:
   web:
     build: .
     environment:
-      - FLASK_ENV=production
+      - FLASK_ENV=${FLASK_ENV:-production}
       - SECRET_KEY=${SECRET_KEY}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - LICHESS_CLIENT_ID=${LICHESS_CLIENT_ID:-}
@@ -49,7 +49,7 @@ services:
     build: .
     command: sh -c "celery -A tasks worker --loglevel=info"
     environment:
-      - FLASK_ENV=production
+      - FLASK_ENV=${FLASK_ENV:-production}
       - SECRET_KEY=${SECRET_KEY}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - LICHESS_CLIENT_ID=${LICHESS_CLIENT_ID:-}
