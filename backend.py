@@ -105,9 +105,13 @@ except Exception:
     # If werkzeug not available or ProxyFix import fails, ignore and continue
     pass
 
-# Security: harden Flask session cookies for production
+is_dev = (os.environ.get('FLASK_ENV') == 'development') or (os.environ.get('FLASK_DEBUG') == '1')
+
+# Security: configure Flask session cookies. Use Secure cookies in production
+# but allow non-secure cookies during local development so OAuth PKCE flows
+# that rely on browser redirects still work when using HTTP.
 app.config.update({
-    'SESSION_COOKIE_SECURE': True,
+    'SESSION_COOKIE_SECURE': not is_dev,
     'SESSION_COOKIE_HTTPONLY': True,
     'SESSION_COOKIE_SAMESITE': 'Lax',
 })
