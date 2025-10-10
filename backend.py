@@ -91,6 +91,20 @@ def _mask_secret(s):
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 
+# If the app is deployed behind a reverse proxy (nginx) that sets
+# X-Forwarded-Host/X-Forwarded-Proto headers, enable ProxyFix so
+# url_for(..., _external=True) uses the forwarded host and scheme.
+try:
+    if os.environ.get('USE_PROXY_FIX') == '1':
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        # num_proxies=1 is appropriate for a single fronting proxy; change
+        # if your setup has additional layers.
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+        logger.info('ProxyFix enabled to respect X-Forwarded-* headers')
+except Exception:
+    # If werkzeug not available or ProxyFix import fails, ignore and continue
+    pass
+
 # Security: harden Flask session cookies for production
 app.config.update({
     'SESSION_COOKIE_SECURE': True,
