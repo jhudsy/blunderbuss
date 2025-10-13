@@ -20,9 +20,10 @@ import sys
 from pony.orm import db_session
 
 # Ensure the repository root is on sys.path so `import models` works whether
-# the script is invoked as `/app/clear_puzzles.py` or `/app/scripts/clear_puzzles.py`.
-# This is important when running inside the container where the CWD may differ.
-_this_dir = os.path.dirname(os.path.abspath(__file__))
+# the script is invoked as `/app/clear_puzzles.py` (a symlink created in the
+# image) or `/app/scripts/clear_puzzles.py`. Use realpath to resolve symlinks
+# so we compute the correct repo root even when __file__ points at a symlink.
+_this_dir = os.path.dirname(os.path.realpath(__file__))
 _repo_root = os.path.abspath(os.path.join(_this_dir, '..'))
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
