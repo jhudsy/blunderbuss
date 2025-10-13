@@ -230,8 +230,12 @@ function showSeeOnLichessLink(puzzle){
   // prefer game_url but fall back to game_id
   const raw = puzzle.game_url || puzzle.game_id
   const gameId = lichessGameIdFrom(raw)
-  const move = puzzle.move_number
-  const side = puzzle.side || 'white'
+  // puzzle.move_number is a full-move number (1..N). Lichess expects a
+  // half-move (ply) index for the fragment. Convert: ply = (move_number-1)*2 + (white?1:2)
+  const fullMove = parseInt(puzzle.move_number, 10)
+  const side = (puzzle.side || 'white').toLowerCase()
+  if (!isFinite(fullMove)) return
+  const move = ((fullMove - 1) * 2) + (side === 'white' ? 1 : 2)
   if (!gameId || !move) return
   let container = document.getElementById('seeOnLichessContainer')
   if (!container){
@@ -249,7 +253,9 @@ function showSeeOnLichessLink(puzzle){
   if (!link){
     link = document.createElement('a')
     link.id = 'seeOnLichess'
-    link.className = 'btn btn-sm btn-outline-primary'
+  // Use the same primary button styling as the 'Next' button for a
+  // consistent look-and-feel. Keep margin/spacing to match layout.
+  link.className = 'btn btn-primary mb-2'
     link.target = '_blank'
     link.rel = 'noopener'
     link.textContent = 'See on lichess'
