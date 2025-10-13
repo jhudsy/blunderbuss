@@ -130,6 +130,31 @@ services:
     # Default command renews certs periodically; initial cert obtain should be run manually (see top of file)
     command: sh -c "trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot --deploy-hook 'nginx -s reload'; done"
 
+  # management service for running one-off admin commands inside the app image
+  manage:
+    build: .
+    env_file: .env
+    environment:
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_FILE=/data/db.sqlite
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-chesspuzzle}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/0
+    volumes:
+      - chesspuzzle-data:/data
+    restart: 'no'
+    depends_on:
+      - redis
+      - postgres
+
 volumes:
   chesspuzzle-data:
   redis-data:
