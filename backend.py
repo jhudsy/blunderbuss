@@ -305,7 +305,8 @@ def login_callback():
                     # Celery task may be bound (self param). Call the task function directly.
                     logger.debug('Calling import_games_task directly for user=%s', username)
                     import_games_task(username, u.settings_perftypes, u.settings_days)
-    return redirect(url_for('index'))
+    # Redirect to an importing page which polls the worker progress.
+    return redirect(url_for('importing'))
 
 
 # fetch/import is handled by Celery task import_games_task
@@ -316,6 +317,35 @@ def login_callback():
 def logout():
     session.clear()
     return redirect(url_for('index'))
+
+
+@app.route('/importing')
+def importing():
+    username = session.get('username')
+    if not username:
+        return redirect(url_for('login'))
+    # Render a simple page that will poll the import status API
+    return render_template('importing.html', username=username)
+
+
+@app.route('/api/import_status')
+def api_import_status():
+    username = session.get('username')
+    if not username:
+        return jsonify({'status': 'not_logged_in'}), 401
+    try:
+        from pony.orm import db_session
+        with db_session:
+            u = User.get(username=username)
+            if not u:
+                return jsonify({'status': 'no_user'}), 404
+            total = int(getattr(u, '_import_total', 0) or 0)
+            done = int(getattr(u, '_import_done', 0) or 0)
+            finished = (total > 0 and done >= total)
+            return jsonify({'status': 'importing' if not finished else 'done', 'total': total, 'done': done})
+    except Exception:
+        logger.exception('Failed to read import status for user=%s', username)
+        return jsonify({'status': 'error'}), 500
 
 
 @app.route('/load_games', methods=['POST'])
