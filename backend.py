@@ -498,13 +498,27 @@ def get_puzzle():
     resp = {
         'id': chosen.id,
         'fen': chosen.fen,
-        'next_review': (chosen.next_review.isoformat() if chosen.next_review else None)
+        'next_review': (chosen.next_review.isoformat() if chosen.next_review else None),
+        'game_id': getattr(chosen, 'game_id', None),
+        'move_number': getattr(chosen, 'move_number', None),
     }
     # include optional metadata fields if present on the Puzzle (seeded from PGN)
     for fld in ('white','black','date','time_control','time_control_type','pre_eval','post_eval','tag'):
         val = getattr(chosen, fld, None)
         if val is not None:
             resp[fld] = val
+    # include 'side' derived from whether the puzzle's white or black player
+    try:
+        uname = username.lower() if username else None
+        side = None
+        if uname and getattr(chosen, 'white', None) and getattr(chosen, 'white', None).strip().lower() == uname:
+            side = 'white'
+        elif uname and getattr(chosen, 'black', None) and getattr(chosen, 'black', None).strip().lower() == uname:
+            side = 'black'
+        # if we could not determine, default to 'white'
+        resp['side'] = side or 'white'
+    except Exception:
+        resp['side'] = 'white'
     return jsonify(resp)
 
 

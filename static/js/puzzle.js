@@ -127,6 +127,8 @@ async function onDrop(source, target){
         // show inline toast for new badges
         showBadgeToast(j.awarded_badges)
       }
+      // reveal 'See on lichess' link if we have game info
+      try{ showSeeOnLichessLink(currentPuzzle) } catch(e){}
     } else {
       if (window.__CP_DEBUG) console.debug('check_puzzle: incorrect branch entered', { startFEN })
       // Orchestrate the reveal sequence for an incorrect answer (visual only)
@@ -200,11 +202,61 @@ async function onDrop(source, target){
           // refresh ribbon from backend to get full state (streak etc.)
           try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
           setTimeout(()=>{ document.getElementById('next').disabled = false }, 800)
+          // reveal 'See on lichess' link if we have game info
+          try{ showSeeOnLichessLink(currentPuzzle) } catch(e){}
         }, 250)
       }, 800)
     }
   }catch(err){
     console.error('check_puzzle: async error', err)
+  }
+}
+
+function lichessGameIdFrom(s){
+  if (!s) return null
+  try{
+    const url = new URL(s)
+    const parts = url.pathname.replace(/^\//,'').split('/')
+    return parts.length ? parts[0] : null
+  }catch(e){
+    // not a full URL; assume just an id or path
+    const parts = String(s).split('/').filter(Boolean)
+    return parts.length ? parts.pop() : s
+  }
+}
+
+function showSeeOnLichessLink(puzzle){
+  if (!puzzle) return
+  // prefer game_url but fall back to game_id
+  const raw = puzzle.game_url || puzzle.game_id
+  const gameId = lichessGameIdFrom(raw)
+  const move = puzzle.move_number
+  const side = puzzle.side || 'white'
+  if (!gameId || !move) return
+  let container = document.getElementById('seeOnLichessContainer')
+  if (!container){
+    // try to place next to Next button
+    const nextBtn = document.getElementById('next')
+    if (!nextBtn) return
+    container = document.createElement('span')
+    container.id = 'seeOnLichessContainer'
+    container.style.marginLeft = '8px'
+    nextBtn.parentNode.insertBefore(container, nextBtn.nextSibling)
+  }
+  // create or update link
+  let link = document.getElementById('seeOnLichess')
+  const url = `https://lichess.org/${gameId}/${side}#${move}`
+  if (!link){
+    link = document.createElement('a')
+    link.id = 'seeOnLichess'
+    link.className = 'btn btn-sm btn-outline-primary'
+    link.target = '_blank'
+    link.rel = 'noopener'
+    link.textContent = 'See on lichess'
+    link.href = url
+    container.appendChild(link)
+  } else {
+    link.href = url
   }
 }
 
