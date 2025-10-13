@@ -278,136 +278,79 @@ def login_lichess():
 
 @app.route('/login-callback')
 def login_callback():
-    data = request.get_json() or {}
-    pid = data.get('id')
-    san = data.get('san')
-    if not pid or not san:
-        return jsonify({'error': 'id and san required'}), 400
+    # OAuth redirect handler: accept a `code` query parameter from the provider
+    code = request.args.get('code') or request.form.get('code')
+    if not code:
+        return jsonify({'error': 'code required'}), 400
+
+    # Retrieve PKCE verifier from session (pop so it isn't reused)
+    verifier = session.pop('pkce_verifier', None)
+
+    # Exchange code for token
+    try:
+        token = exchange_code_for_token(code, verifier, url_for('login_callback', _external=True))
+    except Exception as e:
+        logger.exception('Token exchange failed')
+        return jsonify({'error': 'token-exchange-failed', 'detail': str(e)}), 400
+
+    access_token = token.get('access_token')
+    refresh_tok = token.get('refresh_token')
+    try:
+        expires_in = int(token.get('expires_in') or 0)
+    except Exception:
+        expires_in = 0
+
+    # Fetch profile to determine username
+    username = None
+    try:
+        headers = {'Authorization': f'Bearer {access_token}'} if access_token else {}
+        profile_resp = requests.get('https://lichess.org/api/account', headers=headers)
+        if profile_resp.status_code == 200:
+            profile = profile_resp.json()
+            username = profile.get('username')
+        else:
+            logger.warning('Profile fetch returned status=%s body=%s', getattr(profile_resp, 'status_code', None), getattr(profile_resp, 'text', None))
+    except Exception:
+        logger.exception('Failed to fetch profile from provider')
+
+    if not username:
+        logger.error('Unable to determine username from provider during login-callback')
+        return jsonify({'error': 'no-username'}), 400
+
+    # Persist tokens and user record
+    perftypes = None
+    days = None
     with db_session:
-        p = Puzzle.get(id=pid)
-        if not p:
-            return jsonify({'error': 'puzzle not found'}), 404
+        u = User.get(username=username)
+        if not u:
+            u = User(username=username)
+            u.settings_days = 30
+            u.settings_perftypes = 'blitz,rapid'
+        # store tokens using model properties to respect encryption
+        try:
+            u.access_token = access_token
+        except Exception:
+            u.access_token_encrypted = access_token
+        try:
+            u.refresh_token = refresh_tok
+        except Exception:
+            u.refresh_token_encrypted = refresh_tok
+        u.token_expires_at = (time.time() + expires_in) if expires_in else None
+        perftypes = getattr(u, 'settings_perftypes', '')
+        try:
+            days = int(getattr(u, 'settings_days', 30) or 30)
+        except Exception:
+            days = 30
 
-        logger.debug('User answering puzzle id=%s user=%s provided_san=%s correct_san=%s', pid, getattr(p.user, 'username', None), san, p.correct_san)
-        correct = (san.strip() == p.correct_san.strip())
-        logger.debug('Answer correctness for puzzle id=%s: %s', pid, correct)
-        # determine quality and update SM-2 fields
-        quality = quality_from_answer(correct, p.pre_eval, p.post_eval)
-        reps, interval, ease = sm2_update(p.repetitions or 0, p.interval or 0, p.ease_factor or 2.5, quality)
-        p.repetitions = reps
-        p.interval = interval
-        p.ease_factor = ease
-        p.last_reviewed = datetime.utcnow()
-        p.next_review = p.last_reviewed + timedelta(days=interval)
-        if correct:
-            p.successes = (p.successes or 0) + 1
-        else:
-            p.failures = (p.failures or 0) + 1
-        # update selection weight (lower weight for well-known items)
-        p.weight = max(0.1, 5.0 / (1 + reps))
-        # award xp and badges (scale XP with user's cooldown and streak)
-        u = p.user
-        cd = getattr(u, 'cooldown_minutes', 10) or 10
-        consec = int(getattr(u, 'consecutive_correct', 0) or 0)
-        # compute gained XP based on pre-existing consecutive count
-        gained = xp_for_answer(correct, cooldown_minutes=cd, consecutive_correct=consec)
-        # apply XP immediately so badge logic can see updated value
-        u.xp = (u.xp or 0) + gained
-        # Update user's daily streak (number of consecutive days with activity)
-        # only when the current answer is correct. Do this before badge calculation
-        # so day-streak badges may be awarded in the same transaction.
-        if correct:
-            try:
-                last_iso = getattr(u, '_last_game_date', None)
-                from datetime import datetime as _dt, timedelta as _td
-                today = _dt.utcnow().date()
-                if last_iso:
-                    try:
-                        last_dt = _dt.fromisoformat(last_iso)
-                        last_date = last_dt.date()
-                    except Exception:
-                        last_date = None
-                else:
-                    last_date = None
+    # Enqueue background import (best-effort)
+    try:
+        import_games_task.delay(username, perftypes, days)
+    except Exception:
+        logger.exception('Failed to enqueue import task for user=%s', username)
 
-                if last_date == today:
-                    # already had a correct activity today; don't change streak_days
-                    pass
-                elif last_date == (today - _td(days=1)):
-                    # consecutive day -> increment streak
-                    u.streak_days = (getattr(u, 'streak_days', 0) or 0) + 1
-                else:
-                    # new day after a gap (or no previous record) -> start at 1
-                    u.streak_days = 1
-            except Exception:
-                # If anything unexpected happens, ensure we at least have a sensible default
-                u.streak_days = getattr(u, 'streak_days', 0) or 0
-            # Record this successful activity timestamp for future streak calculations
-            u._last_game_date = datetime.utcnow().isoformat()
-
-        if correct:
-            u.correct_count = (u.correct_count or 0) + 1
-            u.consecutive_correct = consec + 1
-        else:
-            u.consecutive_correct = 0
-
-        # Now determine which badges (if any) should be awarded. badge_updates
-        # expects the user's counters (xp, correct_count, consecutive_correct,
-        # streak_days) to reflect the latest answer.
-        new_badges = badge_updates(u, correct)
-        if new_badges:
-            for b in new_badges:
-                # avoid duplicates
-                exists = Badge.get(user=u, name=b)
-                if not exists:
-                    Badge(user=u, name=b)
-        # Update user's daily streak (number of consecutive days with activity)
-        # only when the current answer is correct.
-        if correct:
-            try:
-                last_iso = getattr(u, '_last_game_date', None)
-                from datetime import datetime as _dt, timedelta as _td
-                today = _dt.utcnow().date()
-                if last_iso:
-                    try:
-                        last_dt = _dt.fromisoformat(last_iso)
-                        last_date = last_dt.date()
-                    except Exception:
-                        last_date = None
-                else:
-                    last_date = None
-
-                if last_date == today:
-                    # already had a correct activity today; don't change streak_days
-                    pass
-                elif last_date == (today - _td(days=1)):
-                    # consecutive day -> increment streak
-                    u.streak_days = (getattr(u, 'streak_days', 0) or 0) + 1
-                else:
-                    # new day after a gap (or no previous record) -> start at 1
-                    u.streak_days = 1
-            except Exception:
-                # If anything unexpected happens, ensure we at least have a sensible default
-                u.streak_days = getattr(u, 'streak_days', 0) or 0
-            # Record this successful activity timestamp for future streak calculations
-            u._last_game_date = datetime.utcnow().isoformat()
-        # prepare response while DB session is active to avoid session-is-over errors
-        resp = {
-            'correct': correct,
-            'new_weight': p.weight,
-            'xp': u.xp,
-            'badges': [b.name for b in u.badges]
-        }
-        # Reveal the correct SAN to the client only after an incorrect attempt.
-        # We intentionally do NOT include prev/next SAN or other PGN context.
-        # expose any newly awarded badges explicitly so the frontend can
-        # show a modal only when new badges were earned during this answer
-        if new_badges:
-            resp['awarded_badges'] = new_badges
-
-        if not correct:
-            resp['correct_san'] = p.correct_san
-        return jsonify(resp)
+    # Mark session as logged in and redirect to index (or importing UI)
+    session['username'] = username
+    return redirect(url_for('index'))
 
 
     @app.route('/load_games', methods=['POST'])
