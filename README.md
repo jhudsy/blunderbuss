@@ -99,6 +99,40 @@ Troubleshooting
 - If you change vendor files and the browser caches them, do a hard refresh (Ctrl/Cmd+Shift+R) or remove cached static files.
 - urllib3 may warn about LibreSSL vs OpenSSL when running tests in some macOS environments — it’s informational unless you need specific OpenSSL features.
 
+Admin scripts
+-------------
+This repository includes a set of admin scripts under the `scripts/` directory for maintenance tasks. The primary script is `scripts/clear_puzzles.py`, which safely deletes Puzzle rows (and can optionally delete users and badges).
+
+Usage notes:
+- The script supports `--dry-run` to show counts without performing deletions.
+- Deletion requires explicit confirmation: either pass `--yes` or set the env var `FORCE_CLEAR_PUZZLES=1`.
+- To restrict operations to a specific user use `--user <username>` and combine with `--delete-user` to remove the user and their related rows.
+
+Running inside Docker
+---------------------
+When using Docker the repository image exposes the `scripts/` directory at `/app/scripts/` inside the container. For convenience a lightweight symlink `/app/clear_puzzles.py` is created during image build so the script can also be invoked at `/app/clear_puzzles.py`.
+
+Examples (using the `manage` one-off service defined in `docker-compose.yml`):
+
+```bash
+# Dry run: show how many puzzles would be removed
+docker compose run --rm manage python3 /app/clear_puzzles.py --dry-run
+
+# Non-interactive delete all puzzles (force via env)
+docker compose run --rm -e FORCE_CLEAR_PUZZLES=1 manage python3 /app/clear_puzzles.py --yes
+
+# Delete puzzles for a specific user (interactive confirmation)
+docker compose run --rm manage python3 /app/clear_puzzles.py --user jhudsy
+```
+
+If you prefer not to rebuild the image you may also call the script at its full path inside the container:
+
+```bash
+docker compose run --rm manage python3 /app/scripts/clear_puzzles.py --dry-run
+```
+
+Backup reminder: always make a DB backup (copy the SQLite file or run `pg_dump`) before running destructive operations in production.
+
 CI / reproducible installs
 --------------------------
 If you want a pinned lockfile, run inside a fresh venv and create a freeze output:

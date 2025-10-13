@@ -32,6 +32,11 @@ RUN useradd -m appuser \
     && chown -R appuser:appuser /app
 # ensure our entrypoint script (if present) is executable
 RUN chmod 755 /app/entrypoint.sh || true
+# convenience: make top-level shortcuts for commonly-run admin scripts so
+# callers can run /app/clear_puzzles.py inside the container. This is a
+# non-fatal operation if the script isn't present.
+RUN ln -s /app/scripts/clear_puzzles.py /app/clear_puzzles.py || true \
+    && chmod a+x /app/clear_puzzles.py || true
 USER appuser
 
 ENV FLASK_APP=backend.py \

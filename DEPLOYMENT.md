@@ -101,6 +101,60 @@ This command is idempotent and will create any missing tables. After it
 completes the application's readiness checks should report the DB as
 available.
 
+Admin scripts and the `manage` one-off service
+----------------------------------------------
+The compose setup includes a `manage` service intended for running one-off
+admin tasks from the same image and environment as the `web` service. It's
+handy for running scripts that need the app's code and the same environment
+variables (DB URL, secrets, etc.). The `manage` service mounts the same
+project volume so scripts can access the repository's `scripts/` directory.
+
+Common usage examples:
+
+```bash
+# Dry-run the clear_puzzles script
+docker compose run --rm manage python3 /app/clear_puzzles.py --dry-run
+
+# Force non-interactive delete (use with care)
+docker compose run --rm -e FORCE_CLEAR_PUZZLES=1 manage python3 /app/clear_puzzles.py --yes
+```
+
+Note: during image build a convenience symlink `/app/clear_puzzles.py` is
+created that points at `/app/scripts/clear_puzzles.py`. If you do not rebuild
+the image you can still call the script at `/app/scripts/clear_puzzles.py`.
+
+When to use `--force-recreate` with `docker compose up`
+-------------------------------------------------------
+`docker compose up` attempts to reuse existing containers when possible to
+preserve state and reduce downtime. The `--force-recreate` flag forces Docker
+to recreate containers even if their configuration appears unchanged. Use
+`--force-recreate` in these situations:
+
+- You built a new image locally (or pulled an updated image) and want to be
+  certain the running containers use the new image and fresh filesystem.
+- You changed mounted-volume initialization scripts or altered files that are
+  only copied into the image at build time (for example, the Dockerfile creates
+  convenience symlinks). In that case recreating the container ensures the
+  container's filesystem matches the built image.
+- You changed the compose service definition in ways that cannot be applied to
+  the running container (for example, adding/removing ports or changing
+  restart policies).
+
+Examples:
+
+```bash
+# Rebuild images and start fresh containers (recreate even if names match)
+docker compose build --pull
+docker compose up -d --force-recreate
+
+# Recreate only the web service containers explicitly
+docker compose up -d --force-recreate web
+```
+
+Warning: `--force-recreate` will restart containers and may cause short
+downtime. If you have attached volumes with state, ensure you understand the
+impact to those volumes before forcing recreation.
+
 Pre-start host volume preparation
 --------------------------------
 
