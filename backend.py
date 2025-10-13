@@ -127,6 +127,35 @@ def index():
     return redirect(url_for('puzzle_page'))
 
 
+@app.route('/logout')
+def logout():
+    username = session.get('username')
+    # Clear OAuth tokens from DB for the logged-in user, if present.
+    try:
+        if username:
+            from pony.orm import db_session
+            with db_session:
+                u = User.get(username=username)
+                if u:
+                    # Use the property setters to ensure encryption hooks run
+                    try:
+                        u.access_token = None
+                    except Exception:
+                        # best-effort: ignore if encryption layer errors
+                        u.access_token_encrypted = None
+                    try:
+                        u.refresh_token = None
+                    except Exception:
+                        u.refresh_token_encrypted = None
+                    u.token_expires_at = None
+    except Exception:
+        # Avoid failing logout due to DB errors; log and continue to clear session
+        logger.exception('Failed to clear OAuth tokens for user=%s during logout', username)
+    # Clear session in all cases
+    session.clear()
+    return redirect(url_for('index'))
+
+
 @app.route('/health')
 def health():
     # Simple health endpoint for container healthchecks. Keep lightweight.
