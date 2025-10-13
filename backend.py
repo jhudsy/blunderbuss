@@ -363,8 +363,8 @@ def load_games():
         u = User.get(username=username)
         if not u:
             u = User(username=username)
-        # Decide which puzzles to import: prefer puzzles where the blunder matches username
-        matched = []
+        # Decide which puzzles to import: only puzzles where the blunder matches username
+        to_insert = []
         for p in puzzles:
             p_white = (p.get('white') or '').strip()
             p_black = (p.get('black') or '').strip()
@@ -375,13 +375,13 @@ def load_games():
             if blunder_side == 'black' and p_black and p_black.lower() == username.lower():
                 is_match = True
             if is_match:
-                matched.append(p)
+                to_insert.append(p)
             else:
                 logger.debug('Manual load candidate puzzle game_id=%s move=%s: blunder by %s does not match %s san=%s', p.get('game_id'), p.get('move_number'), blunder_side, username, p.get('correct_san'))
 
-        to_insert = matched if matched else puzzles
-        if not matched:
-            logger.debug('No puzzles matched username=%s; falling back to importing all %d puzzles', username, len(puzzles))
+        #to_insert = matched if matched else puzzles
+        #if not matched:
+        #    logger.debug('No puzzles matched username=%s; falling back to importing all %d puzzles', username, len(puzzles))
 
         # mark progress state
         u._import_total = len(to_insert)
