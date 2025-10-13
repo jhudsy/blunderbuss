@@ -117,17 +117,28 @@ def extract_puzzles_from_pgn(pgn_text):
             comment = (next_node.comment or '')
             meta = parse_comment_for_eval(comment)
             # only treat comments that are explicitly tagged as blunder/mistake
-            if meta and (meta.get('tag') or '').lower() in ('blunder', 'mistake'):
+            if meta and (meta.get('tag') or '').lower() in ('blunder', 'mistake','inaccuracy'):
                 pre = meta['pre_eval']
                 post = meta['post_eval']
-                # Apply the rules from BACKEND.md:
-                # - prioritize blunders where eval goes from positive to negative
-                # - ignore blunders where pre_eval < -1.5 and goes to a larger negative
-                # Rule: ignore cases where the position was already deeply
-                # unfavorable (pre < -1.5) and it becomes even worse — not a good teaching puzzle
-                if pre < -1.5 and post < pre:
-                    pass
-                else:
+                # New selection rules (see BACKEND.md):
+                # - Prioritize blunders where the engine evaluation changes sign
+                #   (e.g., positive -> negative or negative -> positive).
+                # - Ignore blunders where the position was already deeply
+                #   unfavorable (abs(pre_eval) > 2.0), the sign does NOT change,
+                #   and the magnitude of the evaluation increases (abs(post) > abs(pre)).
+                #   These are long-term losing positions and not good teaching puzzles.
+                skip_puzzle = False
+                sign_change = False
+                if pre is not None and post is not None:
+                    try:
+                        sign_change = (pre * post) < 0
+                    except Exception:
+                        sign_change = False
+                    if (abs(pre) > 2.0) and (not sign_change) and (abs(post) > abs(pre)):
+                        # skip this candidate (deep, non-sign-changing worsening)
+                        skip_puzzle = True
+
+                if not skip_puzzle:
                     fen = board.fen()
                     # Determine the correct SAN: prefer a suggested SAN from the
                     # comment (human/editor may include the "best" move), otherwise
@@ -140,12 +151,17 @@ def extract_puzzles_from_pgn(pgn_text):
                     # compute next SAN if available
                     # next_san computation removed
 
-                    # initial weight: higher if big positive->negative swing
-                    swing = pre - post
-                    if pre > 0 and post < 0:
+                    # initial weight: use the magnitude of the eval swing.
+                    # Give a stronger boost when the eval sign changes (these
+                    # typically represent decisive tactical moments).
+                    try:
+                        swing = abs((pre or 0.0) - (post or 0.0))
+                    except Exception:
+                        swing = 0.0
+                    if sign_change:
                         initial_weight = max(5.0, swing * 2.0)
                     else:
-                        # smaller weight for less dramatic
+                        # smaller weight for less dramatic, non-sign-changing swings
                         initial_weight = max(1.0, swing)
                     # attach some common PGN header metadata if available
                     # determine which side made the move (the side to move on this board)

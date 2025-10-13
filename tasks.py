@@ -101,14 +101,16 @@ def import_games_task(self, username, perftypes, days):
                 logger.debug('Skipping puzzle game_id=%s move=%s: blunder by %s not current user %s', p.get('game_id'), p.get('move_number'), blunder_side, username)
                 continue
             logger.debug('Importing puzzle game_id=%s move=%s for user=%s san=%s', p.get('game_id'), p.get('move_number'), username, p.get('correct_san'))
-            # Ensure we don't insert duplicate puzzles for the same user based on FEN
-            fen = p.get('fen')
-            if not fen:
+            # Ensure we don't insert duplicate puzzles for the same user based on
+            # (game_id, move_number). This allows multiple puzzles per game
+            # (different move numbers) while avoiding duplicate imports of the
+            # same annotated move.
+            if not p.get('fen'):
                 logger.debug('Skipping puzzle game_id=%s move=%s for user=%s: missing FEN', p.get('game_id'), p.get('move_number'), username)
                 continue
-            existing = Puzzle.get(user=u, fen=fen)
+            existing = Puzzle.get(user=u, game_id=p.get('game_id'), move_number=p.get('move_number'))
             if existing:
-                logger.debug('Skipping duplicate puzzle for user=%s game_id=%s move=%s (fen already exists)', username, p.get('game_id'), p.get('move_number'))
+                logger.debug('Skipping duplicate puzzle for user=%s game_id=%s move=%s (already exists)', username, p.get('game_id'), p.get('move_number'))
                 continue
 
             Puzzle(

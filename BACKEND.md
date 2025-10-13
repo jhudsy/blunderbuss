@@ -35,7 +35,19 @@ The backend exposes the following routes:
 
 Puzzles are selected using spaced repetition. Whenever a user logs into the system (or once a day, whichever is more frequent), the user's games are retrieved from lichess. The PGN will contain entries such as `24. Bxh6?? { (8.10 -> 1.22) Blunder. f6 was best. }` The board position for this puzzle will be the game following move 23. If the user selects f6 then they have answered the puzzle correctly, any other move is incorrect.
 
-Puzzles are selected for the user based on spaced repetition. Each puzzle has a selection weight, as the user answers the puzzles correctly this selection weight decreases, while incorrect answers increase it. Puzzles are randomly selected based on this selection weight. The more times the puzzle is answered correctly, the faster the selection weight decreases. **Users should only get puzzles from their own games**. Puzzles where moves are categorised as "Blunders" and where weight changes significantly from positive to negative (if white) or negative to positive (if black) should be prioritised over blunders where weight stays positive, and Blunders where weight is below -1.5 (for white) or 1.5 (for black) and goes to a larger negative (for white, or positive for black) should be ignored.
+Puzzles are selected for the user based on spaced repetition. Each puzzle has a selection weight, as the user answers the puzzles correctly this selection weight decreases, while incorrect answers increase it. Puzzles are randomly selected based on this selection weight. The more times the puzzle is answered correctly, the faster the selection weight decreases. **Users should only get puzzles from their own games**.
+
+PGN evaluation selection rules
+-----------------------------
+- Prioritize blunders where the engine evaluation changes sign (for example, a positive evaluation turning negative, or vice versa). These sign-changing swings typically indicate decisive tactical mistakes and are usually more instructive.
+- Ignore blunders that meet all of the following conditions: the position was already deeply unfavorable (abs(pre_eval) > 2.0), the evaluation does NOT change sign, and the magnitude of the evaluation increases (abs(post_eval) > abs(pre_eval)). These cases usually reflect long-term losing positions that became slightly worse and are not good teaching puzzles.
+
+Weighting
+---------
+- Initial puzzle weight is proportional to the magnitude of the evaluation swing (abs(pre_eval - post_eval)).
+- If the evaluation sign changes, the parser gives a stronger boost to the initial weight (e.g. max(5.0, swing * 2.0)). For non-sign-changing swings the parser uses a more modest baseline (e.g. max(1.0, swing)).
+
+These rules are implemented in the PGN parser (`pgn_parser.py`) and are used during game import to decide which annotated engine/mistake comments become puzzles and how they are prioritized.
 
 # Samples
 
