@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 from models import init_db, User, Puzzle, Badge
 from badges import get_badge_meta, catalog
 from pgn_parser import extract_puzzles_from_pgn
+from importer import import_puzzles_for_user
 from auth import exchange_code_for_token, refresh_token
 from tasks import import_games_task
 from sr import sm2_update, quality_from_answer, xp_for_answer, badge_updates
@@ -248,172 +249,162 @@ def login_lichess():
 
 @app.route('/login-callback')
 def login_callback():
-    code = request.args.get('code')
-    if not code:
-        return 'Error: No code provided', 400
-    verifier = session.get('pkce_verifier')
-    # Helpful debug logging: show whether we have a PKCE verifier and the
-    # redirect URI used for the token exchange. This distinguishes missing
-    # session/cookie issues from redirect_uri mismatches returned by Lichess.
-    try:
-        redirect_uri = url_for('login_callback', _external=True)
-    except Exception:
-        redirect_uri = '<unable to build redirect_uri>'
-    logger.debug('login_callback: pkce_verifier present=%s redirect_uri=%s', bool(verifier), redirect_uri)
-    client_id = os.environ.get('LICHESS_CLIENT_ID') or os.environ.get('LICHESS_CLIENTID')
-    if not client_id:
-        return 'OAuth not configured', 500
-    # exchange code for token (use helper)
-    token_data = exchange_code_for_token(code, verifier, redirect_uri)
-    token = token_data.get('access_token')
-    refresh_t = token_data.get('refresh_token')
-    expires_in = token_data.get('expires_in')
-    if not token:
-        return 'No access token', 400
-    # fetch profile
-    profile = requests.get('https://lichess.org/api/account', headers={'Authorization': f'Bearer {token}'})
-    if profile.status_code != 200:
-        return 'Failed to fetch profile', 400
-    username = profile.json().get('username')
-    logger.debug('Lichess login successful for user: %s', username)
-    session['username'] = username
-    with db_session:
-        u = User.get(username=username)
-        if not u:
-            u = User(username=username)
-        u.access_token = token
-        # Some providers (including Lichess public OAuth) may not return a refresh_token.
-        # PonyORM fields that are non-nullable cannot be assigned None, so only set when present.
-        if refresh_t is not None:
-            u.refresh_token = refresh_t
-        if expires_in:
-            u.token_expires_at = time.time() + int(expires_in)
-            # enqueue Celery import task; if the broker is unavailable (e.g., no Redis
-            # running in development), fall back to running the import synchronously.
-            try:
-                logger.debug('Enqueueing import_games_task for user=%s days=%s perftypes=%s', username, u.settings_days, u.settings_perftypes)
-                # For security, do not pass access tokens into the broker. The
-                # worker will read the user's token from the database.
-                import_games_task.delay(username, u.settings_perftypes, u.settings_days)
-            except Exception:
-                # best-effort synchronous fallback for local dev/test environments
-                try:
-                    logger.debug('Broker unavailable, running import_games_task synchronously for user=%s', username)
-                    # Call the task synchronously; task will read token from DB.
-                    import_games_task.run(None, username, u.settings_perftypes, u.settings_days)
-                except TypeError:
-                    # Celery task may be bound (self param). Call the task function directly.
-                    logger.debug('Calling import_games_task directly for user=%s', username)
-                    import_games_task(username, u.settings_perftypes, u.settings_days)
-    # Redirect to an importing page which polls the worker progress.
-    return redirect(url_for('importing'))
-
-
-# fetch/import is handled by Celery task import_games_task
-
-
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('index'))
-
-
-@app.route('/importing')
-def importing():
-    username = session.get('username')
-    if not username:
-        return redirect(url_for('login'))
-    # Render a simple page that will poll the import status API
-    return render_template('importing.html', username=username)
-
-
-@app.route('/api/import_status')
-def api_import_status():
-    username = session.get('username')
-    if not username:
-        return jsonify({'status': 'not_logged_in'}), 401
-    try:
-        from pony.orm import db_session
-        with db_session:
-            u = User.get(username=username)
-            if not u:
-                return jsonify({'status': 'no_user'}), 404
-            total = int(getattr(u, '_import_total', 0) or 0)
-            done = int(getattr(u, '_import_done', 0) or 0)
-            finished = (total > 0 and done >= total)
-            return jsonify({'status': 'importing' if not finished else 'done', 'total': total, 'done': done})
-    except Exception:
-        logger.exception('Failed to read import status for user=%s', username)
-        return jsonify({'status': 'error'}), 500
-
-
-@app.route('/load_games', methods=['POST'])
-def load_games():
-    # expects JSON {"username": "...", "pgn": "..."}
     data = request.get_json() or {}
-    username = data.get('username')
-    pgn = data.get('pgn')
-    if not username or not pgn:
-        return jsonify({'error': 'username and pgn required'}), 400
-
-    puzzles = extract_puzzles_from_pgn(pgn)
-    logger.debug('Manual load_games called for username=%s, puzzles_found=%d', username, len(puzzles))
+    pid = data.get('id')
+    san = data.get('san')
+    if not pid or not san:
+        return jsonify({'error': 'id and san required'}), 400
     with db_session:
-        u = User.get(username=username)
-        if not u:
-            u = User(username=username)
-        # Decide which puzzles to import: only puzzles where the blunder matches username
-        to_insert = []
-        for p in puzzles:
-            p_white = (p.get('white') or '').strip()
-            p_black = (p.get('black') or '').strip()
-            blunder_side = p.get('side')
-            is_match = False
-            if blunder_side == 'white' and p_white and p_white.lower() == username.lower():
-                is_match = True
-            if blunder_side == 'black' and p_black and p_black.lower() == username.lower():
-                is_match = True
-            if is_match:
-                to_insert.append(p)
-            else:
-                logger.debug('Manual load candidate puzzle game_id=%s move=%s: blunder by %s does not match %s san=%s', p.get('game_id'), p.get('move_number'), blunder_side, username, p.get('correct_san'))
+        p = Puzzle.get(id=pid)
+        if not p:
+            return jsonify({'error': 'puzzle not found'}), 404
 
-        #to_insert = matched if matched else puzzles
-        #if not matched:
-        #    logger.debug('No puzzles matched username=%s; falling back to importing all %d puzzles', username, len(puzzles))
-
-        # mark progress state
-        u._import_total = len(to_insert)
-        u._import_done = 0
-        for p in to_insert:
-            logger.debug('Manual importing puzzle game_id=%s move=%s san=%s for user=%s', p.get('game_id'), p.get('move_number'), p.get('correct_san'), username)
-            Puzzle(user=u, game_id=p['game_id'], move_number=p['move_number'], fen=p['fen'], correct_san=p['correct_san'], weight=p.get('initial_weight', 1.0), white=p.get('white'), black=p.get('black'), date=p.get('date'), time_control=p.get('time_control'), time_control_type=p.get('time_control_type'), pre_eval=p.get('pre_eval'), post_eval=p.get('post_eval'), tag=p.get('tag'), severity=p.get('tag'))
-            u._import_done += 1
-
-        # Enforce per-user maximum puzzles after manual import
-        try:
-            max_p = int(getattr(u, 'settings_max_puzzles', 0) or 0)
-        except Exception:
-            max_p = 0
-        if max_p and max_p > 0:
-            user_puzzles = select(q for q in Puzzle if q.user == u)
-            total = user_puzzles.count()
-            if total > max_p:
-                to_delete = total - max_p
-                ordered = list(select(q for q in Puzzle if q.user == u))
-                ordered.sort(key=lambda x: (getattr(x, 'date') or '', getattr(x, 'id') or 0))
-                deleted = 0
-                for old in ordered:
-                    if deleted >= to_delete:
-                        break
+        logger.debug('User answering puzzle id=%s user=%s provided_san=%s correct_san=%s', pid, getattr(p.user, 'username', None), san, p.correct_san)
+        correct = (san.strip() == p.correct_san.strip())
+        logger.debug('Answer correctness for puzzle id=%s: %s', pid, correct)
+        # determine quality and update SM-2 fields
+        quality = quality_from_answer(correct, p.pre_eval, p.post_eval)
+        reps, interval, ease = sm2_update(p.repetitions or 0, p.interval or 0, p.ease_factor or 2.5, quality)
+        p.repetitions = reps
+        p.interval = interval
+        p.ease_factor = ease
+        p.last_reviewed = datetime.utcnow()
+        p.next_review = p.last_reviewed + timedelta(days=interval)
+        if correct:
+            p.successes = (p.successes or 0) + 1
+        else:
+            p.failures = (p.failures or 0) + 1
+        # update selection weight (lower weight for well-known items)
+        p.weight = max(0.1, 5.0 / (1 + reps))
+        # award xp and badges (scale XP with user's cooldown and streak)
+        u = p.user
+        cd = getattr(u, 'cooldown_minutes', 10) or 10
+        consec = int(getattr(u, 'consecutive_correct', 0) or 0)
+        # compute gained XP based on pre-existing consecutive count
+        gained = xp_for_answer(correct, cooldown_minutes=cd, consecutive_correct=consec)
+        # apply XP immediately so badge logic can see updated value
+        u.xp = (u.xp or 0) + gained
+        # Update user's daily streak (number of consecutive days with activity)
+        # only when the current answer is correct. Do this before badge calculation
+        # so day-streak badges may be awarded in the same transaction.
+        if correct:
+            try:
+                last_iso = getattr(u, '_last_game_date', None)
+                from datetime import datetime as _dt, timedelta as _td
+                today = _dt.utcnow().date()
+                if last_iso:
                     try:
-                        old.delete()
-                        deleted += 1
+                        last_dt = _dt.fromisoformat(last_iso)
+                        last_date = last_dt.date()
                     except Exception:
-                        logger.exception('Failed to delete old puzzle id=%s for user=%s', getattr(old, 'id', None), username)
+                        last_date = None
+                else:
+                    last_date = None
 
-    return jsonify({'imported': len(puzzles)})
+                if last_date == today:
+                    # already had a correct activity today; don't change streak_days
+                    pass
+                elif last_date == (today - _td(days=1)):
+                    # consecutive day -> increment streak
+                    u.streak_days = (getattr(u, 'streak_days', 0) or 0) + 1
+                else:
+                    # new day after a gap (or no previous record) -> start at 1
+                    u.streak_days = 1
+            except Exception:
+                # If anything unexpected happens, ensure we at least have a sensible default
+                u.streak_days = getattr(u, 'streak_days', 0) or 0
+            # Record this successful activity timestamp for future streak calculations
+            u._last_game_date = datetime.utcnow().isoformat()
+
+        if correct:
+            u.correct_count = (u.correct_count or 0) + 1
+            u.consecutive_correct = consec + 1
+        else:
+            u.consecutive_correct = 0
+
+        # Now determine which badges (if any) should be awarded. badge_updates
+        # expects the user's counters (xp, correct_count, consecutive_correct,
+        # streak_days) to reflect the latest answer.
+        new_badges = badge_updates(u, correct)
+        if new_badges:
+            for b in new_badges:
+                # avoid duplicates
+                exists = Badge.get(user=u, name=b)
+                if not exists:
+                    Badge(user=u, name=b)
+        # Update user's daily streak (number of consecutive days with activity)
+        # only when the current answer is correct.
+        if correct:
+            try:
+                last_iso = getattr(u, '_last_game_date', None)
+                from datetime import datetime as _dt, timedelta as _td
+                today = _dt.utcnow().date()
+                if last_iso:
+                    try:
+                        last_dt = _dt.fromisoformat(last_iso)
+                        last_date = last_dt.date()
+                    except Exception:
+                        last_date = None
+                else:
+                    last_date = None
+
+                if last_date == today:
+                    # already had a correct activity today; don't change streak_days
+                    pass
+                elif last_date == (today - _td(days=1)):
+                    # consecutive day -> increment streak
+                    u.streak_days = (getattr(u, 'streak_days', 0) or 0) + 1
+                else:
+                    # new day after a gap (or no previous record) -> start at 1
+                    u.streak_days = 1
+            except Exception:
+                # If anything unexpected happens, ensure we at least have a sensible default
+                u.streak_days = getattr(u, 'streak_days', 0) or 0
+            # Record this successful activity timestamp for future streak calculations
+            u._last_game_date = datetime.utcnow().isoformat()
+        # prepare response while DB session is active to avoid session-is-over errors
+        resp = {
+            'correct': correct,
+            'new_weight': p.weight,
+            'xp': u.xp,
+            'badges': [b.name for b in u.badges]
+        }
+        # Reveal the correct SAN to the client only after an incorrect attempt.
+        # We intentionally do NOT include prev/next SAN or other PGN context.
+        # expose any newly awarded badges explicitly so the frontend can
+        # show a modal only when new badges were earned during this answer
+        if new_badges:
+            resp['awarded_badges'] = new_badges
+
+        if not correct:
+            resp['correct_san'] = p.correct_san
+        return jsonify(resp)
+
+
+    @app.route('/load_games', methods=['POST'])
+    def load_games():
+        # expects JSON {"username": "...", "pgn": "..."}
+        data = request.get_json() or {}
+        username = data.get('username')
+        pgn = data.get('pgn')
+        if not username or not pgn:
+            return jsonify({'error': 'username and pgn required'}), 400
+
+        # Restrict manual PGN uploads to development mode only as this endpoint
+        # bypasses access controls and should not be available in production.
+        if not is_dev:
+            return jsonify({'error': 'manual import disabled in production'}), 403
+
+        try:
+            imported, candidates = import_puzzles_for_user(username, pgn, match_username=True)
+            # If nothing matched the username, allow a developer to import all as a fallback
+            if imported == 0:
+                imported_all, _ = import_puzzles_for_user(username, pgn, match_username=False)
+                imported = imported_all
+            return jsonify({'imported': imported, 'candidates': candidates})
+        except Exception:
+            logger.exception('Failed to import puzzles for user=%s', username)
+            return jsonify({'error': 'import-failed'}), 500
 
 
 # /loading-progress endpoint removed; import progress polling disabled in the UI
@@ -438,50 +429,16 @@ def get_puzzle():
                 sample = Path('examples/samples.pgn')
                 if sample.exists():
                     pgn = sample.read_text()
-                    puzzles = extract_puzzles_from_pgn(pgn)
-                    matched = []
-                    for p in puzzles:
-                        p_white = (p.get('white') or '').strip()
-                        p_black = (p.get('black') or '').strip()
-                        blunder_side = p.get('side')
-                        is_match = False
-                        if blunder_side == 'white' and p_white and p_white.lower() == username.lower():
-                            is_match = True
-                        if blunder_side == 'black' and p_black and p_black.lower() == username.lower():
-                            is_match = True
-                        if is_match:
-                            matched.append(p)
-                        else:
-                            logger.debug('Seed candidate puzzle game_id=%s move=%s: blunder by %s not user %s', p.get('game_id'), p.get('move_number'), blunder_side, username)
-
-                    to_seed = matched if matched else puzzles
-                    if not matched:
-                        logger.debug('No seeded puzzles matched username=%s; importing all %d puzzles as fallback', username, len(puzzles))
-
-                    for p in to_seed:
-                        logger.debug('Seeding puzzle game_id=%s move=%s san=%s for user=%s', p.get('game_id'), p.get('move_number'), p.get('correct_san'), username)
-                        Puzzle(user=u, game_id=p['game_id'], move_number=p['move_number'], fen=p['fen'], correct_san=p['correct_san'], weight=p.get('initial_weight', 1.0), white=p.get('white'), black=p.get('black'), date=p.get('date'), time_control=p.get('time_control'), time_control_type=p.get('time_control_type'), pre_eval=p.get('pre_eval'), post_eval=p.get('post_eval'), tag=p.get('tag'), severity=p.get('tag'))
-                    all_puzzles = list(select(p for p in Puzzle if p.user == u))
-                    # Enforce per-user maximum puzzles after seeding
+                    # Delegate seeding to the centralized importer. Try a username-matching
+                    # import first, and fall back to importing all puzzles if nothing matched.
                     try:
-                        max_p = int(getattr(u, 'settings_max_puzzles', 0) or 0)
+                        imported, candidates = import_puzzles_for_user(username, pgn, match_username=True)
+                        if imported == 0:
+                            logger.debug('No seeded puzzles matched username=%s; importing all %d puzzles as fallback', username, candidates)
+                            import_puzzles_for_user(username, pgn, match_username=False)
                     except Exception:
-                        max_p = 0
-                    if max_p and max_p > 0:
-                        total = select(q for q in Puzzle if q.user == u).count()
-                        if total > max_p:
-                            to_delete = total - max_p
-                            ordered = list(select(q for q in Puzzle if q.user == u))
-                            ordered.sort(key=lambda x: (getattr(x, 'date') or '', getattr(x, 'id') or 0))
-                            deleted = 0
-                            for old in ordered:
-                                if deleted >= to_delete:
-                                    break
-                                try:
-                                    old.delete()
-                                    deleted += 1
-                                except Exception:
-                                    logger.exception('Failed to delete old puzzle id=%s for user=%s', getattr(old, 'id', None), username)
+                        logger.exception('Seeding via importer failed for user=%s', username)
+                    all_puzzles = list(select(p for p in Puzzle if p.user == u))
             except Exception:
                 # ignore seeding errors; fall through to no puzzles response
                 pass

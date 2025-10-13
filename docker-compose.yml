@@ -52,7 +52,7 @@ services:
     # avoid a race where the worker starts, cannot bind to Postgres, and
     # falls back to sqlite. The wait_for_db script exits quickly when no
     # Postgres configuration is present so this is safe for sqlite-only dev.
-    command: sh -c "/app/scripts/wait_for_db.py && celery -A tasks worker --loglevel=info"
+    command: ["sh", "-c", "python3 /app/scripts/wait_for_db.py && celery -A tasks worker --loglevel=info"]
     environment:
       - FLASK_ENV=${FLASK_ENV:-production}
       - SECRET_KEY=${SECRET_KEY}
