@@ -12,7 +12,7 @@
       const r = await fetch('/user_information', { credentials: 'same-origin' })
       if (!r.ok){
         if (elXP) elXP.textContent = '-'
-        if (elStreak) elStreak.textContent = '-'
+        if (elDays) elDays.textContent = '-'
         if (elUser) elUser.textContent = 'Not signed in'
         if (elAuth) { elAuth.href = '/login'; elAuth.textContent = 'Login' }
         return

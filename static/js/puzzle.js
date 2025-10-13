@@ -69,7 +69,13 @@ async function loadPuzzle(){
 }
 
   // import-related UI removed
-function onDrop(source, target){
+async function onDrop(source, target){
+  // guard: ensure we have a loaded puzzle
+  if (!currentPuzzle){
+    if (window.__CP_DEBUG) console.debug('onDrop called before puzzle loaded')
+    return 'snapback'
+  }
+
   const move = {from: source, to: target, promotion: 'q'}
   // capture the starting FEN so we can reset after a wrong move
   const startFEN = game.fen()
@@ -81,28 +87,25 @@ function onDrop(source, target){
   const san = result.san
   if (window.__CP_DEBUG) console.debug('starting fen', startFEN)
   if (window.__CP_DEBUG) console.debug('check_puzzle: sending', { puzzleId: currentPuzzle && currentPuzzle.id, san })
-  fetch('/check_puzzle', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({id: currentPuzzle.id, san})})
-    .then(r => {
-  if (window.__CP_DEBUG) console.debug('check_puzzle: raw response', r)
-      if (!r.ok) {
-        // try to get body text for debugging then reject
-        return r.text().then(t => {
-          console.error('check_puzzle: non-OK response', r.status, t)
-          throw new Error('check_puzzle non-OK: ' + r.status)
-        })
-      }
-      // try to parse JSON, surface parse errors
-      return r.json().catch(e => { console.error('check_puzzle: JSON parse error', e); throw e })
-    })
-    .then(j => {
-  if (window.__CP_DEBUG) console.debug('check_puzzle: response', j)
-  try{ if (window.__CP_DEBUG) console.debug('check_puzzle: response keys', Object.keys(j), 'stringified', JSON.stringify(j)) } catch(e){}
-  if (j.correct){
-  highlightSquareWithFade(source, 'green')
-  highlightSquareWithFade(target, 'green')
-  // brief inline feedback instead of modal
-  const infoEl = document.getElementById('info')
-  if (infoEl) infoEl.textContent = 'Correct! Click Next to continue.'
+
+  try{
+    const r = await fetch('/check_puzzle', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({id: currentPuzzle.id, san})})
+    if (window.__CP_DEBUG) console.debug('check_puzzle: raw response', r)
+    if (!r.ok){
+      const t = await r.text().catch(e => '<no-body>')
+      console.error('check_puzzle: non-OK response', r.status, t)
+      throw new Error('check_puzzle non-OK: ' + r.status)
+    }
+    const j = await r.json().catch(e => { console.error('check_puzzle: JSON parse error', e); throw e })
+    if (window.__CP_DEBUG) console.debug('check_puzzle: response', j)
+    try{ if (window.__CP_DEBUG) console.debug('check_puzzle: response keys', Object.keys(j), 'stringified', JSON.stringify(j)) } catch(e){}
+
+    if (j.correct){
+      highlightSquareWithFade(source, 'green')
+      highlightSquareWithFade(target, 'green')
+      // brief inline feedback instead of modal
+      const infoEl = document.getElementById('info')
+      if (infoEl) infoEl.textContent = 'Correct! Click Next to continue.'
       // update ribbon XP immediately from server response if present
       try{
         if (typeof j.xp !== 'undefined'){
@@ -121,19 +124,19 @@ function onDrop(source, target){
       setTimeout(()=>{ document.getElementById('next').disabled = false }, 800)
       // show badge modal only if new badges were awarded on this answer
       if (j.awarded_badges && j.awarded_badges.length){
-          // show inline toast for new badges
-          showBadgeToast(j.awarded_badges)
-        }
+        // show inline toast for new badges
+        showBadgeToast(j.awarded_badges)
+      }
     } else {
-  if (window.__CP_DEBUG) console.debug('check_puzzle: incorrect branch entered', { startFEN })
-  // Orchestrate the reveal sequence for an incorrect answer (visual only)
-  highlightSquareWithFade(source, 'red')
-  highlightSquareWithFade(target, 'red')
+      if (window.__CP_DEBUG) console.debug('check_puzzle: incorrect branch entered', { startFEN })
+      // Orchestrate the reveal sequence for an incorrect answer (visual only)
+      highlightSquareWithFade(source, 'red')
+      highlightSquareWithFade(target, 'red')
 
       // Start reveal sequence using nested setTimeouts (avoid async/await so logs always run)
       setTimeout(() => {
         // 1) after brief pause, reset board to the starting position (don't mutate global game yet)
-  try { if (window.__CP_DEBUG) console.log('here'); board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
+        try { if (window.__CP_DEBUG) console.log('here'); board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
 
         // 2) wait a little more before revealing the correct move
         setTimeout(() => {
@@ -200,9 +203,9 @@ function onDrop(source, target){
         }, 250)
       }, 800)
     }
-  }).catch(err => {
-    console.error('check_puzzle: promise chain error', err)
-  })
+  }catch(err){
+    console.error('check_puzzle: async error', err)
+  }
 }
 
 function highlightSquare(square, color){

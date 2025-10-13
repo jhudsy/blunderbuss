@@ -26,6 +26,7 @@ from auth import exchange_code_for_token, refresh_token
 from tasks import import_games_task
 from sr import sm2_update, quality_from_answer, xp_for_answer, badge_updates
 from selection import select_puzzle
+from types import SimpleNamespace
 
 # load .env if present
 load_dotenv()
@@ -89,6 +90,59 @@ def _mask_secret(s):
         return '*****'
 
 
+def get_current_user():
+    """Return a lightweight object with .username from the session or None.
+
+    This helper avoids repeating the session lookup in many routes. It
+    intentionally does NOT touch the database; callers should re-query
+    the ORM inside a db_session when they need a Pony entity.
+    """
+    username = session.get('username')
+    if not username:
+        return None
+    return SimpleNamespace(username=username)
+
+
+def json_error(message, code=400):
+    return jsonify({'error': message}), code
+
+
+def parse_perf_types(stored_value):
+    """Normalize stored perf types into a list of lowercase tokens.
+
+    Accepts JSON array text or CSV string and always returns a list.
+    """
+    try:
+        import json as _json
+        parsed = _json.loads(stored_value) if stored_value else []
+        if isinstance(parsed, list):
+            return [str(p).strip().lower() for p in parsed if p]
+    except Exception:
+        pass
+    # fallback: treat as CSV or simple string
+    try:
+        return [p.strip().lower() for p in str(stored_value).split(',') if p.strip()]
+    except Exception:
+        return []
+
+
+def safe_set_token(user, attr_name, value):
+    """Set token on a PonyORM user entity using property setters when possible.
+
+    attr_name should be 'access_token' or 'refresh_token'. On failure the
+    function will attempt to set the encrypted backing field directly.
+    """
+    try:
+        setattr(user, attr_name, value)
+    except Exception:
+        # fallback to encrypted field naming convention
+        try:
+            setattr(user, attr_name + '_encrypted', value)
+        except Exception:
+            # last resort: set raw attribute
+            setattr(user, attr_name + '_encrypted', value)
+
+
 app = Flask(__name__, static_folder='static', template_folder='templates')
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 
@@ -139,12 +193,11 @@ def logout():
                 if u:
                     # Use the property setters to ensure encryption hooks run
                     try:
-                        u.access_token = None
+                        safe_set_token(u, 'access_token', None)
                     except Exception:
-                        # best-effort: ignore if encryption layer errors
                         u.access_token_encrypted = None
                     try:
-                        u.refresh_token = None
+                        safe_set_token(u, 'refresh_token', None)
                     except Exception:
                         u.refresh_token_encrypted = None
                     u.token_expires_at = None
@@ -328,11 +381,11 @@ def login_callback():
             u.settings_perftypes = 'blitz,rapid'
         # store tokens using model properties to respect encryption
         try:
-            u.access_token = access_token
+            safe_set_token(u, 'access_token', access_token)
         except Exception:
             u.access_token_encrypted = access_token
         try:
-            u.refresh_token = refresh_tok
+            safe_set_token(u, 'refresh_token', refresh_tok)
         except Exception:
             u.refresh_token_encrypted = refresh_tok
         u.token_expires_at = (time.time() + expires_in) if expires_in else None
@@ -351,43 +404,44 @@ def login_callback():
     # Mark session as logged in and redirect to index (or importing UI)
     session['username'] = username
     return redirect(url_for('index'))
+    
 
 
-    @app.route('/load_games', methods=['POST'])
-    def load_games():
-        # expects JSON {"username": "...", "pgn": "..."}
-        data = request.get_json() or {}
-        username = data.get('username')
-        pgn = data.get('pgn')
-        if not username or not pgn:
-            return jsonify({'error': 'username and pgn required'}), 400
+@app.route('/load_games', methods=['POST'])
+def load_games():
+    # expects JSON {"username": "...", "pgn": "..."}
+    data = request.get_json() or {}
+    username = data.get('username')
+    pgn = data.get('pgn')
+    if not username or not pgn:
+        return jsonify({'error': 'username and pgn required'}), 400
 
-        # Restrict manual PGN uploads to development mode only as this endpoint
-        # bypasses access controls and should not be available in production.
-        if not is_dev:
-            return jsonify({'error': 'manual import disabled in production'}), 403
+    # Restrict manual PGN uploads to development mode only as this endpoint
+    # bypasses access controls and should not be available in production.
+    if not is_dev:
+        return jsonify({'error': 'manual import disabled in production'}), 403
 
-        try:
-            imported, candidates = import_puzzles_for_user(username, pgn, match_username=True)
-            # If nothing matched the username, allow a developer to import all as a fallback
-            if imported == 0:
-                imported_all, _ = import_puzzles_for_user(username, pgn, match_username=False)
-                imported = imported_all
-            return jsonify({'imported': imported, 'candidates': candidates})
-        except Exception:
-            logger.exception('Failed to import puzzles for user=%s', username)
-            return jsonify({'error': 'import-failed'}), 500
+    try:
+        imported, candidates = import_puzzles_for_user(username, pgn, match_username=True)
+        # If nothing matched the username, allow a developer to import all as a fallback
+        if imported == 0:
+            imported_all, _ = import_puzzles_for_user(username, pgn, match_username=False)
+            imported = imported_all
+        return jsonify({'imported': imported, 'candidates': candidates})
+    except Exception:
+        logger.exception('Failed to import puzzles for user=%s', username)
+        return jsonify({'error': 'import-failed'}), 500
 
-
-# /loading-progress endpoint removed; import progress polling disabled in the UI
 
 
 @app.route('/get_puzzle')
 def get_puzzle():
-    username = session.get('username')
-    if not username:
+    u = get_current_user()
+    if not u:
         return jsonify({'error': 'not logged in'}), 401
+    username = u.username
     with db_session:
+        # refresh user entity within a db_session context
         u = User.get(username=username)
         if not u:
             return jsonify({'error': 'user not found'}), 404
@@ -421,12 +475,7 @@ def get_puzzle():
         # filtering is applied.
         import json
         stored = getattr(u, 'settings_perftypes', None) or '[]'
-        try:
-            perf_list = json.loads(stored)
-            if not isinstance(perf_list, list):
-                perf_list = [p.strip().lower() for p in str(stored).split(',') if p.strip()]
-        except Exception:
-            perf_list = [p.strip().lower() for p in str(stored).split(',') if p.strip()]
+        perf_list = parse_perf_types(stored)
         # normalize and filter out empty entries
         perf_list = [str(p).strip().lower() for p in perf_list if p]
         if perf_list:
@@ -442,7 +491,7 @@ def get_puzzle():
         chosen = select_puzzle(u, all_puzzles, due_only=True, cooldown_minutes=10)
         if not chosen:
             return jsonify({'error': 'no available puzzles'}), 404
-        logger.debug('Selected puzzle id=%s for user=%s', getattr(chosen, 'id', None), username)
+    logger.debug('Selected puzzle id=%s for user=%s', getattr(chosen, 'id', None), username)
     # Do NOT include move details (correct_san, move_number) or surrounding PGN context
     # in the API response returned to the frontend. Those details are logged
     # server-side for debugging but must not be exposed to clients.
@@ -559,13 +608,7 @@ def settings():
             # For GET, return the perf types as a list (decoded JSON) so templates can use tojson
             import json
             stored = getattr(u, 'settings_perftypes', None) or '[]'
-            try:
-                perf_list = json.loads(stored)
-                if not isinstance(perf_list, list):
-                    # if somehow stored as CSV string, normalize it
-                    perf_list = [p.strip().lower() for p in str(stored).split(',') if p.strip()]
-            except Exception:
-                perf_list = [p.strip().lower() for p in str(stored).split(',') if p.strip()]
+            perf_list = parse_perf_types(stored)
             # load tags similarly
             tags_stored = getattr(u, 'settings_tags', None) or '[]'
             try:
@@ -594,8 +637,8 @@ def api_puzzle_counts():
 
     Returns JSON: { 'available': X, 'total': Y }
     """
-    username = session.get('username')
-    if not username:
+    u = get_current_user()
+    if not u:
         return jsonify({'error': 'not logged in'}), 401
     # read filters from query string
     perf_list = request.args.getlist('perf') or []
@@ -604,7 +647,7 @@ def api_puzzle_counts():
     perf_list = [str(p).strip().lower() for p in perf_list if p]
     tags_list = [str(t).strip().lower() for t in tags_list if t]
     with db_session:
-        u = User.get(username=username)
+        u = User.get(username=u.username)
         if not u:
             return jsonify({'error': 'user not found'}), 404
         # total puzzles for user
