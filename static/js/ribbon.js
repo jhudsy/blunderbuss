@@ -26,18 +26,6 @@
         if (bc){
           const badges = (j.badges || [])
           bc.textContent = badges.length || 0
-          // Populate a hover tooltip using the native title attribute. Truncate
-          // long lists to keep tooltips readable.
-          if (badges.length){
-            const joined = badges.join(', ')
-            const max = 200
-            const title = joined.length > max ? joined.slice(0, max-1) + '\u2026' : joined
-            bc.title = title
-            bc.setAttribute('aria-label', `${badges.length} badges: ${title}`)
-          } else {
-            bc.title = ''
-            bc.removeAttribute('aria-label')
-          }
         }
       }catch(e){}
       // Puzzle streak may be animated when it increases; detect increase and
