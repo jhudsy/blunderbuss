@@ -245,7 +245,7 @@ function hintHighlightSquare(square, durationMs){
     if (!el) return
     // hints should use the blue highlight class
     el.classList.add('square-highlight-blue')
-    setTimeout(()=>{ try{ el.classList.remove('square-highlight-blue') }catch(e){} }, durationMs || 3000)
+    setTimeout(()=>{ try{ el.classList.remove('square-highlight-blue') }catch(e){} }, durationMs || 2000)
   }catch(e){}
 }
 
