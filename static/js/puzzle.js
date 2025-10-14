@@ -51,12 +51,43 @@ async function loadPuzzle(){
   // populate metadata if available
   const metaEl = document.getElementById('puzzleMeta')
   if (metaEl){
-    const parts = []
-    if (currentPuzzle.white) parts.push(`White: ${currentPuzzle.white}`)
-    if (currentPuzzle.black) parts.push(`Black: ${currentPuzzle.black}`)
-    if (currentPuzzle.date) parts.push(`Date: ${currentPuzzle.date}`)
-    if (currentPuzzle.time_control) parts.push(`Time: ${currentPuzzle.time_control}`)
-    metaEl.textContent = parts.join(' \u2022 ')
+    // Helper: escape HTML to avoid injection when using innerHTML
+    const esc = (s) => String(s || '').replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[m] })
+    // Format time control like "300+0" -> "5:00+0s" or "45+5" -> "45+5s" or "3661+2" -> "1:01:01+2s"
+    const formatTimeControl = (tc) => {
+      if (!tc) return ''
+      try{
+        const parts = String(tc).split('+')
+        const base = parseInt(parts[0], 10)
+        const inc = parts.length > 1 ? parseInt(parts[1], 10) : 0
+        if (!isFinite(base) || base < 0) return String(tc)
+        let hrs = Math.floor(base / 3600)
+        let mins = Math.floor((base % 3600) / 60)
+        let secs = base % 60
+        let baseStr = ''
+        if (hrs > 0){
+          // H:MM:SS
+          baseStr = `${hrs}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`
+        } else if (mins > 0){
+          // M:SS
+          baseStr = `${mins}:${String(secs).padStart(2,'0')}`
+        } else {
+          // seconds only
+          baseStr = `${secs}`
+        }
+        const incStr = isFinite(inc) ? `+${inc}s` : ''
+        return baseStr + incStr
+      }catch(e){ return String(tc) }
+    }
+
+    const rows = []
+    if (currentPuzzle.white) rows.push(`<div><strong>White:</strong> ${esc(currentPuzzle.white)}</div>`)
+    if (currentPuzzle.black) rows.push(`<div><strong>Black:</strong> ${esc(currentPuzzle.black)}</div>`)
+    if (currentPuzzle.date) rows.push(`<div><strong>Date:</strong> ${esc(currentPuzzle.date)}</div>`)
+    if (currentPuzzle.time_control) rows.push(`<div><strong>Time Control:</strong> ${esc(formatTimeControl(currentPuzzle.time_control))}</div>`)
+    // If no metadata found, clear the element
+    if (!rows.length) metaEl.textContent = ''
+    else metaEl.innerHTML = rows.join('')
   }
 
   document.getElementById('info').textContent = 'Make the correct move.'
