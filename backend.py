@@ -525,6 +525,15 @@ def login_callback():
             days = int(getattr(u, 'settings_days', 30) or 30)
         except Exception:
             days = 30
+        # Mark import as in-progress in the DB when we plan to enqueue a background import.
+        # This ensures the frontend (which polls /import_status) will immediately see
+        # an in-progress state and show the import modal after login.
+        try:
+            u._import_status = 'in_progress'
+            u._import_error = None
+        except Exception:
+            # If updating the field fails for any reason, continue without blocking login
+            logger.exception('Failed to set import status for user=%s during login', username)
 
     # Enqueue background import (best-effort)
     try:
@@ -591,6 +600,13 @@ def start_import():
         except Exception:
             perf_arg = str(perftypes)
         days = int(getattr(u, 'settings_days', 30) or 30)
+        # Mark import as in-progress immediately so the UI can detect and display
+        # the modal/polling state without waiting for the worker to start the task.
+        try:
+            u._import_status = 'in_progress'
+            u._import_error = None
+        except Exception:
+            logger.exception('Failed to set import status for user=%s in start_import', username)
     try:
         task = import_games_task.delay(username, perf_arg, days)
         return jsonify({'ok': True, 'task_id': task.id}), 200
