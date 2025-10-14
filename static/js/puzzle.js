@@ -303,7 +303,8 @@ async function onDrop(source, target){
   if (result === null){
     return 'snapback'
   }
-  // send SAN to backend
+  // lock moves and send SAN to backend
+  try{ allowMoves = false }catch(e){}
   const san = result.san
   if (window.__CP_DEBUG) console.debug('starting fen', startFEN)
   if (window.__CP_DEBUG) console.debug('check_puzzle: sending', { puzzleId: currentPuzzle && currentPuzzle.id, san })
