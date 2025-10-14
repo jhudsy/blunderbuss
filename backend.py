@@ -996,7 +996,10 @@ def puzzle_hint():
                 # Try a sloppy SAN parse by iterating moves on the original board
                 for m in board.legal_moves:
                     try:
-                        if _norm_san(board.san(m)) == norm_san:
+                        san_m = _norm_san(board.san(m))
+                        # also accept a version with piece disambiguation removed
+                        san_m_no_disamb = re.sub(r'^([NBRQK])([a-h1-8])', r'\1', san_m)
+                        if san_m == norm_san or san_m_no_disamb == norm_san:
                             move = m
                             break
                     except Exception:
@@ -1012,7 +1015,9 @@ def puzzle_hint():
                         except Exception:
                             for m in flipped.legal_moves:
                                 try:
-                                    if _norm_san(flipped.san(m)) == norm_san:
+                                    san_m = _norm_san(flipped.san(m))
+                                    san_m_no_disamb = re.sub(r'^([NBRQK])([a-h1-8])', r'\1', san_m)
+                                    if san_m == norm_san or san_m_no_disamb == norm_san:
                                         move = m
                                         break
                                 except Exception:
