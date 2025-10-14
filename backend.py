@@ -827,16 +827,15 @@ def user_information():
         u = User.get(username=username)
         if not u:
             return jsonify({'error': 'user not found'}), 404
-    # Use the stored cumulative XP so the UI value never decreases due to
-    # per-puzzle weight changes. Stored XP is updated on each answer in
-    # /check_puzzle (u.xp = (u.xp or 0) + gained).
-    xp = int(getattr(u, 'xp', 0) or 0)
-    badges = []
-    # calendar-day streak (days in a row with activity)
-    days_streak = int(getattr(u, 'streak_days', 0) or 0)
-    # puzzle streak (consecutive correct puzzles in a row)
-    puzzle_streak = int(getattr(u, 'consecutive_correct', 0) or 0)
-    return jsonify({'xp': xp, 'badges': badges, 'streak': days_streak, 'puzzle_streak': puzzle_streak, 'username': u.username})
+        # Collect values while inside the db_session to avoid lazy-loading
+        # errors when the JSON is serialized outside the session.
+        xp = int(getattr(u, 'xp', 0) or 0)
+        # return badge names so the frontend can compute a count
+        badges = [b.name for b in u.badges]
+        days_streak = int(getattr(u, 'streak_days', 0) or 0)
+        puzzle_streak = int(getattr(u, 'consecutive_correct', 0) or 0)
+        username_val = u.username
+    return jsonify({'xp': xp, 'badges': badges, 'streak': days_streak, 'puzzle_streak': puzzle_streak, 'username': username_val})
 
 
 @app.route('/leaderboard')
