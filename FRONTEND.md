@@ -27,3 +27,43 @@ The puzzle page should also show the game's details, i.e., who was white and bla
 The user should also get feedback showing how much XP they have earned for getting the puzzle correct, together with any badges or achievements they have earned. Badges/achievements earned will not happen that often and should be displayed via a modal window. XP earned depends on puzzle cooldown; puzzles which appear less frequently (i.e., which have a low selection weight) will have a higher associated XP.
 
 The UI should be attractive and utilise Bootstrap.
+
+## Hint functionality
+
+The puzzle UI includes a "Hint" button that helps users by highlighting the source
+square (the square containing the piece that should move) for the correct solution.
+Key behaviour and implementation details:
+
+- Visuals
+	- Hints are highlighted using a blue overlay on the board square (CSS class
+		`.square-highlight-blue`). Incorrect moves continue to be shown in red and
+		correct moves in green.
+	- The Hint button is styled to match the primary action (`Next`) button so the
+		controls feel consistent.
+
+- Interaction and lifecycle
+	- Pressing the Hint button requests the from-square from the server via
+		`POST /puzzle_hint` (the frontend sends the current puzzle id). The server
+		marks the puzzle as having had a hint used in the session so server-side
+		rules can be applied on answer submission.
+	- The blue hint highlight is temporary: it lasts ~3 seconds, and is removed
+		immediately when the user begins interacting with the board (pointerdown or
+		drag). This works across mouse and touch devices (pointer events are used).
+	- The Hint button is disabled after the puzzle is answered (correct or
+		incorrect) and is only re-enabled when the next puzzle is loaded.
+
+- Server-side enforcement
+	- The server ignores any client-supplied hint flag and instead uses a
+		session-scoped record (`session['hints_used']`) set when `POST /puzzle_hint`
+		is called. This prevents clients from spoofing hint usage.
+	- When a puzzle answer is checked (`POST /check_puzzle`), if a hint was used
+		the server caps XP gain for that answer to at most 1 (or 0 if no XP would
+		otherwise be awarded) and will not increment the user's consecutive puzzle
+		streak. Badges and daily streaks are still calculated based on the
+		server-side counters.
+
+Notes
+- The frontend sanitizes SAN values when revealing the correct move after an
+	incorrect attempt; however, the server computes hint squares deterministically
+	from the stored puzzle FEN and SAN so the client never receives the full
+	correct SAN unless the puzzle was answered incorrectly.
