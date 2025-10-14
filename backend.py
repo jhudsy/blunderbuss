@@ -27,6 +27,8 @@ from tasks import import_games_task
 from sr import sm2_update, quality_from_answer, xp_for_answer, badge_updates
 from selection import select_puzzle
 from types import SimpleNamespace
+import re
+import chess
 
 # load .env if present
 load_dotenv()
@@ -874,6 +876,58 @@ def check_puzzle():
         if not correct:
             resp['correct_san'] = p.correct_san
         return jsonify(resp)
+
+
+@app.route('/puzzle_hint', methods=['POST'])
+def puzzle_hint():
+    """Return the from-square (e.g. 'e2') for the correct move of a puzzle.
+
+    Request JSON: { 'id': <puzzle_id> }
+    Response JSON: { 'from': 'e2' }
+
+    This endpoint marks in the session that a hint was used for the given
+    puzzle id (so subsequent /check_puzzle calls can apply hint rules).
+    """
+    data = request.get_json() or {}
+    pid = data.get('id')
+    if not pid:
+        return jsonify({'error': 'id required'}), 400
+    username = session.get('username')
+    if not username:
+        return jsonify({'error': 'not logged in'}), 401
+    with db_session:
+        p = Puzzle.get(id=pid)
+        if not p:
+            return jsonify({'error': 'puzzle not found'}), 404
+        # Only allow hints for the requesting user's puzzles
+        if getattr(p.user, 'username', None) != username:
+            return jsonify({'error': 'forbidden'}), 403
+        # Derive the from-square by applying the SAN to the stored FEN
+        try:
+            board = chess.Board(p.fen)
+            san = (p.correct_san or '').strip()
+            # sanitize SAN: remove any leading move numbers
+            san = re.sub(r'^\d+\.*\s*', '', san)
+            move = None
+            try:
+                move = board.parse_san(san)
+            except Exception:
+                # Try a sloppy SAN parse by iterating moves
+                for m in board.legal_moves:
+                    if board.san(m) == san:
+                        move = m
+                        break
+            if not move:
+                return jsonify({'error': 'could not determine hint'}), 500
+            from_sq = chess.square_name(move.from_square)
+            # record hint use in session for this puzzle id
+            used = session.get('hints_used', {})
+            used[str(pid)] = True
+            session['hints_used'] = used
+            return jsonify({'from': from_sq})
+        except Exception as e:
+            logger.exception('Failed to compute puzzle hint for id=%s: %s', pid, e)
+            return jsonify({'error': 'hint-failed'}), 500
 
 
 if __name__ == '__main__':
