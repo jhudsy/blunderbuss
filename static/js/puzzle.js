@@ -7,6 +7,7 @@ if (typeof window !== 'undefined') {
 let board = null
 let game = new Chess()
 let currentPuzzle = null
+let hintUsedForCurrent = false
 // result modal removed; use inline UI feedback instead
 
 async function loadPuzzle(){
@@ -63,7 +64,10 @@ async function loadPuzzle(){
   const cmc = document.getElementById('correctMoveContainer')
   if (cmc) { cmc.style.display = 'none'; document.getElementById('correctMoveText').textContent = '' }
     // Ensure Next is disabled until the puzzle is answered
-    try{ document.getElementById('next').disabled = true } catch(e){}
+      try{ document.getElementById('next').disabled = true } catch(e){}
+      // reset hint state
+      hintUsedForCurrent = false
+      try{ const hintBtn = document.getElementById('hint'); if (hintBtn) hintBtn.disabled = false } catch(e){}
     // refresh ribbon XP/streak for this user if the ribbon helper is present
     try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
 }
@@ -89,7 +93,7 @@ async function onDrop(source, target){
   if (window.__CP_DEBUG) console.debug('check_puzzle: sending', { puzzleId: currentPuzzle && currentPuzzle.id, san })
 
   try{
-    const r = await fetch('/check_puzzle', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({id: currentPuzzle.id, san})})
+    const r = await fetch('/check_puzzle', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({id: currentPuzzle.id, san, hint_used: hintUsedForCurrent})})
     if (window.__CP_DEBUG) console.debug('check_puzzle: raw response', r)
     if (!r.ok){
       const t = await r.text().catch(e => '<no-body>')
@@ -211,6 +215,47 @@ async function onDrop(source, target){
     console.error('check_puzzle: async error', err)
   }
 }
+
+// highlight a square (e.g., the square containing the piece to move) for a short duration
+function hintHighlightSquare(square, durationMs){
+  try{
+    const el = document.querySelector('.square-' + square)
+    if (!el) return
+    el.classList.add('square-highlight-red')
+    setTimeout(()=>{ try{ el.classList.remove('square-highlight-red') }catch(e){} }, durationMs || 3000)
+  }catch(e){}
+}
+
+// attach hint button handler
+window.addEventListener('DOMContentLoaded', ()=>{
+  const hintBtn = document.getElementById('hint')
+  if (hintBtn){
+    hintBtn.addEventListener('click', ()=>{
+      try{
+        // find the piece square that should move: use the currentPuzzle.correct_san and currentPuzzle.fen
+        if (!currentPuzzle) return
+        // compute the from-square by applying the correct SAN on a temp Chess instance
+        const temp = new Chess()
+        try{ temp.load(currentPuzzle.fen) } catch(e){ /* ignore */ }
+        let san = currentPuzzle.correct_san || ''
+        san = String(san).replace(/^\d+\.*\s*/, '').replace(/\.{2,}/g, '').trim()
+        let moveObj = null
+        try{ moveObj = temp.move(san, {sloppy: true}) } catch(e){ moveObj = null }
+        if (!moveObj){
+          // fallback: scan verbose moves
+          const moves = temp.moves({verbose:true})
+          for (let m of moves){ if (m.san === san){ moveObj = m; break } }
+        }
+        if (moveObj && moveObj.from){
+          hintUsedForCurrent = true
+          // disable hint button until next puzzle
+          hintBtn.disabled = true
+          hintHighlightSquare(moveObj.from, 3000)
+        }
+      }catch(e){ if (window.__CP_DEBUG) console.debug('Hint failed', e) }
+    })
+  }
+})
 
 function lichessGameIdFrom(s){
   if (!s) return null

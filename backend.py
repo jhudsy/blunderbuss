@@ -738,6 +738,7 @@ def check_puzzle():
     data = request.get_json() or {}
     pid = data.get('id')
     san = data.get('san')
+    hint_used = bool(data.get('hint_used'))
     if not pid or not san:
         return jsonify({'error': 'id and san required'}), 400
     with db_session:
@@ -768,6 +769,11 @@ def check_puzzle():
         consec = int(getattr(u, 'consecutive_correct', 0) or 0)
         # compute gained XP based on pre-existing consecutive count
         gained = xp_for_answer(correct, cooldown_minutes=cd, consecutive_correct=consec)
+        # If a hint was used, enforce the rule: only 1 XP can be gained for the puzzle
+        # and the puzzle streak should not increase. We implement this by capping
+        # the gained XP and preventing increment of consecutive_correct below.
+        if hint_used:
+            gained = 1 if gained > 0 else 0
         # apply XP immediately so badge logic can see updated value
         u.xp = (u.xp or 0) + gained
         # Update user's daily streak (number of consecutive days with activity)
@@ -804,7 +810,10 @@ def check_puzzle():
 
         if correct:
             u.correct_count = (u.correct_count or 0) + 1
-            u.consecutive_correct = consec + 1
+            # If a hint was used, do NOT increase the puzzle streak (consecutive_correct)
+            # but do not reset it either on correct answer. If no hint used, increment as usual.
+            if not hint_used:
+                u.consecutive_correct = consec + 1
         else:
             u.consecutive_correct = 0
 
