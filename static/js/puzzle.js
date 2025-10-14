@@ -457,6 +457,16 @@ window.addEventListener('DOMContentLoaded', ()=>{
   // create the board once with our local pieceTheme
   // clear hint when user begins interacting with the board (onDragStart)
   board = Chessboard('board', {position: 'start', draggable: true, onDrop, onDragStart: ()=>{ try{ clearHintHighlights() }catch(e){} }, pieceTheme: '/static/img/chesspieces/{piece}.png'})
+  // Ensure pointer/touch interactions clear the hint immediately for mobile/touch users
+  try{
+    const boardEl = document.getElementById('board')
+    if (boardEl){
+      // Prefer pointer events; fall back to touch/mouse for older platforms
+      boardEl.addEventListener('pointerdown', ()=>{ try{ clearHintHighlights() }catch(e){} }, {passive:true})
+      boardEl.addEventListener('touchstart', ()=>{ try{ clearHintHighlights() }catch(e){} }, {passive:true})
+      boardEl.addEventListener('mousedown', ()=>{ try{ clearHintHighlights() }catch(e){} }, {passive:true})
+    }
+  }catch(e){}
   document.getElementById('next').addEventListener('click', loadPuzzle)
   // ensure Hint button matches Next button styling and initial enabled/disabled state
   try{
