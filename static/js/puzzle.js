@@ -528,7 +528,22 @@ function revealCorrectMoveSquares(from, to){
 window.addEventListener('DOMContentLoaded', ()=>{
   // create the board once with our local pieceTheme
   // clear hint when user begins interacting with the board (onDragStart)
-  board = Chessboard('board', {position: 'start', draggable: true, onDrop, onDragStart: ()=>{ try{ clearHintHighlights() }catch(e){} }, pieceTheme: '/static/img/chesspieces/{piece}.png'})
+  board = Chessboard('board', {
+    position: 'start',
+    draggable: true,
+    onDrop,
+    onDragStart: function(source, piece, position, orientation){
+      // Only allow picking up pieces for the side to move.
+      try{ clearHintHighlights() }catch(e){}
+      try{
+        if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+            (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+          return false
+        }
+      }catch(e){ /* ignore and allow by default */ }
+    },
+    pieceTheme: '/static/img/chesspieces/{piece}.png'
+  })
   // Responsive: ensure chessboard recomputes its pixel size based on the
   // Bootstrap column/container width. chessboard.js exposes a `resize`
   // method that recalculates square sizes from the container width.
