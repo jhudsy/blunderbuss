@@ -230,28 +230,20 @@ function hintHighlightSquare(square, durationMs){
 window.addEventListener('DOMContentLoaded', ()=>{
   const hintBtn = document.getElementById('hint')
   if (hintBtn){
-    hintBtn.addEventListener('click', ()=>{
+    hintBtn.addEventListener('click', async ()=>{
       try{
-        // find the piece square that should move: use the currentPuzzle.correct_san and currentPuzzle.fen
         if (!currentPuzzle) return
-        // compute the from-square by applying the correct SAN on a temp Chess instance
-        const temp = new Chess()
-        try{ temp.load(currentPuzzle.fen) } catch(e){ /* ignore */ }
-        let san = currentPuzzle.correct_san || ''
-        san = String(san).replace(/^\d+\.*\s*/, '').replace(/\.{2,}/g, '').trim()
-        let moveObj = null
-        try{ moveObj = temp.move(san, {sloppy: true}) } catch(e){ moveObj = null }
-        if (!moveObj){
-          // fallback: scan verbose moves
-          const moves = temp.moves({verbose:true})
-          for (let m of moves){ if (m.san === san){ moveObj = m; break } }
+        // Ask the server for the hint (from-square) so we don't need to expose correct_san
+        const r = await fetch('/puzzle_hint', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({id: currentPuzzle.id})})
+        if (!r.ok){
+          if (window.__CP_DEBUG) console.debug('puzzle_hint failed', r.status)
+          return
         }
-        if (moveObj && moveObj.from){
-          hintUsedForCurrent = true
-          // disable hint button until next puzzle
-          hintBtn.disabled = true
-          hintHighlightSquare(moveObj.from, 3000)
-        }
+        const j = await r.json().catch(e=>null)
+        if (!j || !j.from) return
+  hintUsedForCurrent = true
+  // keep the hint button enabled so the user can press it again to re-highlight
+        hintHighlightSquare(j.from, 3000)
       }catch(e){ if (window.__CP_DEBUG) console.debug('Hint failed', e) }
     })
   }
