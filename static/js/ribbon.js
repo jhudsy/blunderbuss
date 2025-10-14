@@ -25,7 +25,29 @@
         const bc = document.getElementById('ribbonBadgeCount')
         if (bc){
           const badges = (j.badges || [])
-          bc.textContent = badges.length || 0
+          const count = badges.length || 0
+          bc.textContent = count
+          // Build a compact tooltip: show count and up to two truncated badge names
+          try{
+            if (count === 0){
+              bc.removeAttribute('title')
+              bc.removeAttribute('aria-label')
+            } else {
+              const maxNames = 2
+              const names = badges.slice(0, maxNames).map(n => {
+                // truncate long names to 20 chars
+                const s = String(n || '')
+                return s.length > 20 ? (s.slice(0,17) + '...') : s
+              })
+              const more = count > maxNames ? ` +${count - maxNames} more` : ''
+              const title = `${count} badge${count !== 1 ? 's' : ''} — ${names.join(', ')}${more}`
+              bc.setAttribute('title', title)
+              bc.setAttribute('aria-label', title)
+            }
+          }catch(e){
+            // ignore tooltip failures; don't block ribbon update
+            if (window.__CP_DEBUG) console.debug('badge tooltip build failed', e)
+          }
         }
       }catch(e){}
       // Puzzle streak may be animated when it increases; detect increase and
