@@ -525,6 +525,27 @@ window.addEventListener('DOMContentLoaded', ()=>{
   // create the board once with our local pieceTheme
   // clear hint when user begins interacting with the board (onDragStart)
   board = Chessboard('board', {position: 'start', draggable: true, onDrop, onDragStart: ()=>{ try{ clearHintHighlights() }catch(e){} }, pieceTheme: '/static/img/chesspieces/{piece}.png'})
+  // Responsive: ensure chessboard recomputes its pixel size based on the
+  // Bootstrap column/container width. chessboard.js exposes a `resize`
+  // method that recalculates square sizes from the container width.
+  const resizeBoard = () => {
+    try{
+      const boardEl = document.getElementById('board')
+      if (!boardEl) return
+      // allow our CSS max-width to constrain the container while keeping width fluid
+      boardEl.style.width = '100%'
+      // trigger the chessboard library to resize internal elements
+      if (board && typeof board.resize === 'function') board.resize()
+    }catch(e){ if (window.__CP_DEBUG) console.debug('resizeBoard failed', e) }
+  }
+  // debounce helper
+  let _rb_to = null
+  const scheduleResize = () => { clearTimeout(_rb_to); _rb_to = setTimeout(resizeBoard, 120) }
+  // Call once immediately to ensure initial sizing
+  scheduleResize()
+  // Recompute on window resize and orientation change
+  window.addEventListener('resize', scheduleResize, {passive:true})
+  window.addEventListener('orientationchange', scheduleResize)
   // Ensure pointer/touch interactions clear the hint immediately for mobile/touch users
   try{
     const boardEl = document.getElementById('board')
@@ -547,5 +568,23 @@ window.addEventListener('DOMContentLoaded', ()=>{
   }catch(e){}
   loadPuzzle()
 })
+
+// Also trigger a board resize after a puzzle is loaded to handle cases where
+// the board was hidden or the container width changed before initialization.
+// This is a best-effort call; if the board isn't initialized yet the call is noop.
+const postPuzzleResize = () => {
+  try{ if (board && typeof board.resize === 'function') board.resize() }catch(e){}
+}
+
+// Hook into loadPuzzle to trigger a resize after the puzzle is rendered.
+// We wrap the original loadPuzzle if present (to avoid redefining) and
+// ensure the resize runs after loadPuzzle completes its async work.
+if (typeof loadPuzzle === 'function') {
+  const _origLoad = loadPuzzle
+  loadPuzzle = async function(){
+    await _origLoad()
+    try{ postPuzzleResize() }catch(e){}
+  }
+}
 
 // Inline feedback is used; modal removed
