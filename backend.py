@@ -1030,11 +1030,18 @@ def puzzle_hint():
                             else:
                                 candidates = [f"{file}{rank+1}", f"{file}{rank+2}"]
                         else:
-                            # fallback: assume this is a white pawn push if dst rank >=4
-                            if rank >= 4:
+                            # Fallback: destination square was empty; infer origin
+                            # using the board's side-to-move. If white to move, a
+                            # pawn push to dst likely came from rank-1 or rank-2.
+                            # If black to move, origin is likely rank+1 or rank+2.
+                            try:
+                                if board.turn == chess.WHITE:
+                                    candidates = [f"{file}{rank-1}", f"{file}{rank-2}"]
+                                else:
+                                    candidates = [f"{file}{rank+1}", f"{file}{rank+2}"]
+                            except Exception:
+                                # As a last resort, pick plausible static defaults
                                 candidates = [f"{file}2", f"{file}3"]
-                            else:
-                                candidates = [f"{file}7", f"{file}6"]
                         # pick the first candidate that is a valid square; don't require a piece
                         for c in candidates:
                             try:
