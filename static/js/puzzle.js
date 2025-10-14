@@ -542,6 +542,10 @@ window.addEventListener('DOMContentLoaded', ()=>{
         }
       }catch(e){ /* ignore and allow by default */ }
     },
+    // for castling, en passant, pawn promotion — ensure UI matches game state
+    onSnapEnd: function(){
+      try{ board.position(game.fen()) }catch(e){}
+    },
     pieceTheme: '/static/img/chesspieces/{piece}.png'
   })
   // Responsive: ensure chessboard recomputes its pixel size based on the
