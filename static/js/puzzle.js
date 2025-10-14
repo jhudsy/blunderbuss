@@ -67,7 +67,15 @@ async function loadPuzzle(){
       try{ document.getElementById('next').disabled = true } catch(e){}
       // reset hint state
       hintUsedForCurrent = false
-      try{ const hintBtn = document.getElementById('hint'); if (hintBtn) hintBtn.disabled = false } catch(e){}
+      try{
+        const hintBtn = document.getElementById('hint')
+        const nextBtn = document.getElementById('next')
+        if (hintBtn){
+          // mirror Next button styling so the buttons look consistent
+          if (nextBtn) hintBtn.className = nextBtn.className
+          hintBtn.disabled = false
+        }
+      } catch(e){}
     // refresh ribbon XP/streak for this user if the ribbon helper is present
     try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
 }
@@ -125,7 +133,9 @@ async function onDrop(source, target){
       // refresh full ribbon state from server
       try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
       // enable Next after a short delay
-      setTimeout(()=>{ document.getElementById('next').disabled = false }, 800)
+  setTimeout(()=>{ document.getElementById('next').disabled = false }, 800)
+  // disable Hint after an answer is given; it will be re-enabled on next puzzle load
+  try{ const hintBtn = document.getElementById('hint'); if (hintBtn) hintBtn.disabled = true } catch(e){}
       // show badge modal only if new badges were awarded on this answer
       if (j.awarded_badges && j.awarded_badges.length){
         // show inline toast for new badges
@@ -206,6 +216,8 @@ async function onDrop(source, target){
           // refresh ribbon from backend to get full state (streak etc.)
           try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
           setTimeout(()=>{ document.getElementById('next').disabled = false }, 800)
+          // disable Hint after an incorrect attempt as well
+          try{ const hintBtn = document.getElementById('hint'); if (hintBtn) hintBtn.disabled = true } catch(e){}
           // reveal 'See on lichess' link if we have game info
           try{ showSeeOnLichessLink(currentPuzzle) } catch(e){}
         }, 250)
@@ -434,6 +446,17 @@ window.addEventListener('DOMContentLoaded', ()=>{
   // create the board once with our local pieceTheme
   board = Chessboard('board', {position: 'start', draggable: true, onDrop, pieceTheme: '/static/img/chesspieces/{piece}.png'})
   document.getElementById('next').addEventListener('click', loadPuzzle)
+  // ensure Hint button matches Next button styling and initial enabled/disabled state
+  try{
+    const nextBtn = document.getElementById('next')
+    const hintBtn = document.getElementById('hint')
+    if (nextBtn && hintBtn){
+      // copy className to match appearance (keeps margins/spacings consistent)
+      hintBtn.className = nextBtn.className
+      // by default, hint should be enabled only when a puzzle is loaded; disable until loadPuzzle runs
+      hintBtn.disabled = true
+    }
+  }catch(e){}
   loadPuzzle()
 })
 
