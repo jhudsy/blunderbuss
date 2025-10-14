@@ -38,6 +38,9 @@ Additional user helpers and token handling
 - Helper properties `perf_types` and `tag_filters` are provided on the `User` model to return normalized Python lists (lowercased) derived from the JSON-encoded `settings_perftypes` and `settings_tags` fields.
 
 Additional notes:
+ - The backend provides a few lightweight helper utilities in `backend.py` to reduce direct session mutation and SAN normalization duplication. Notably:
+   - `_get_hints_map()`, `_is_hint_used(pid)`, `_mark_hint_used(pid)`, and `_clear_hint_used(pid)` centralize access to `session['hints_used']` used by the puzzle hinting flow.
+   - `_strip_move_number(s)` and `_normalize_san(s)` are used to normalize SAN text when parsing or comparing moves (they strip leading move numbers, trailing annotations like +/#/!, and simple punctuation).
 - A new `Puzzle.severity` field stores the parsed classification of a puzzle (e.g. 'Blunder', 'Mistake', 'Inaccuracy') extracted from PGN comments. This is populated by the parser when importing PGN.
 - Access and refresh tokens are now stored in encrypted columns when an `ENCRYPTION_KEY` is provided via environment (Fernet). The model exposes `access_token` and `refresh_token` properties that transparently encrypt/decrypt using `ENCRYPTION_KEY` when present; underlying columns are `access_token_encrypted` and `refresh_token_encrypted` (nullable). If encryption is not configured the fields fall back to plaintext for local development.
  - A new `Puzzle.severity` field stores the parsed classification of a puzzle (e.g. 'Blunder', 'Mistake', 'Inaccuracy') extracted from PGN comments. This is populated by the parser when importing PGN.

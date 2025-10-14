@@ -117,6 +117,73 @@ def _generate_pkce_pair():
     return verifier, challenge
 
 
+def _get_hints_map():
+    """Return the session-scoped hints_used mapping (string pid -> truthy).
+
+    This helper centralizes safe access to session['hints_used'] so callers
+    don't need to repeat try/except blocks.
+    """
+    try:
+        return session.get('hints_used', {}) or {}
+    except Exception:
+        return {}
+
+
+def _is_hint_used(pid):
+    try:
+        return bool(_get_hints_map().get(str(pid)))
+    except Exception:
+        return False
+
+
+def _mark_hint_used(pid):
+    try:
+        used = _get_hints_map()
+        used[str(pid)] = True
+        session['hints_used'] = used
+    except Exception:
+        pass
+
+
+def _clear_hint_used(pid):
+    try:
+        used = _get_hints_map()
+        if str(pid) in used:
+            used.pop(str(pid), None)
+            session['hints_used'] = used
+    except Exception:
+        pass
+
+
+def _strip_move_number(s):
+    try:
+        return re.sub(r'^\d+\.*\s*', '', (s or '').strip())
+    except Exception:
+        return (s or '').strip()
+
+
+def _normalize_san(s):
+    """Normalize a SAN string for permissive matching.
+
+    - strips leading move numbers like '24.'
+    - removes common trailing annotations like +, #, !, ?
+    - removes simple punctuation used in PGN comments
+    """
+    if not s:
+        return ''
+    try:
+        s = str(s).strip()
+        s = _strip_move_number(s)
+        # strip trailing annotation characters (check/mate/nags)
+        s = re.sub(r'[+#?!]+$', '', s).strip()
+        # remove excessive dots/ellipsis and common punctuation
+        s = re.sub(r'\.{2,}', '', s)
+        s = re.sub(r'[(),;:\"]', '', s)
+        return s.strip()
+    except Exception:
+        return str(s).strip()
+
+
 def json_error(message, code=400):
     return jsonify({'error': message}), code
 
@@ -835,11 +902,7 @@ def check_puzzle():
         cd = getattr(u, 'cooldown_minutes', 10) or 10
         consec = int(getattr(u, 'consecutive_correct', 0) or 0)
         # determine if a hint was used (server-side session record takes priority)
-        try:
-            used = session.get('hints_used', {}) or {}
-            hint_used = bool(used.get(str(pid)))
-        except Exception:
-            hint_used = False
+        hint_used = _is_hint_used(pid)
 
         # compute gained XP based on pre-existing consecutive count
         gained = xp_for_answer(correct, cooldown_minutes=cd, consecutive_correct=consec)
@@ -896,13 +959,7 @@ def check_puzzle():
         if not correct:
             resp['correct_san'] = p.correct_san
         # Clear hint record for this puzzle now that it has been answered
-        try:
-            used = session.get('hints_used', {}) or {}
-            if str(pid) in used:
-                used.pop(str(pid), None)
-                session['hints_used'] = used
-        except Exception:
-            pass
+        _clear_hint_used(pid)
         return jsonify(resp)
 
 
@@ -956,19 +1013,9 @@ def puzzle_hint():
         # Derive the from-square by applying the SAN to the stored FEN
         try:
             board = chess.Board(p.fen)
-            raw_san = (p.correct_san or '').strip()
-            # sanitize SAN: remove any leading move numbers and trailing
-            # annotations like +, #, !, ? which python-chess may not accept
-            san = re.sub(r'^\d+\.*\s*', '', raw_san)
-            def _norm_san(s):
-                if not s:
-                    return ''
-                s = s.strip()
-                # strip trailing annotation characters (check/mate/ nags)
-                s = re.sub(r'[+#?!]+$', '', s).strip()
-                # remove unnecessary whitespace
-                return s
-            norm_san = _norm_san(san)
+            raw_san = (p.correct_san or '')
+            san = _strip_move_number(raw_san)
+            norm_san = _normalize_san(san)
             move = None
             from_sq = None
             try:
@@ -991,7 +1038,7 @@ def puzzle_hint():
                 # Try a sloppy SAN parse by iterating moves on the original board
                 for m in board.legal_moves:
                     try:
-                        san_m = _norm_san(board.san(m))
+                        san_m = _normalize_san(board.san(m))
                         # also accept a version with piece disambiguation removed
                         san_m_no_disamb = re.sub(r'^([NBRQK])([a-h1-8])', r'\1', san_m)
                         if san_m == norm_san or san_m_no_disamb == norm_san:
@@ -1010,7 +1057,7 @@ def puzzle_hint():
                         except Exception:
                             for m in flipped.legal_moves:
                                 try:
-                                    san_m = _norm_san(flipped.san(m))
+                                    san_m = _normalize_san(flipped.san(m))
                                     san_m_no_disamb = re.sub(r'^([NBRQK])([a-h1-8])', r'\1', san_m)
                                     if san_m == norm_san or san_m_no_disamb == norm_san:
                                         move = m
@@ -1094,9 +1141,7 @@ def puzzle_hint():
                 if move:
                     from_sq = chess.square_name(move.from_square)
             # record hint use in session for this puzzle id
-            used = session.get('hints_used', {})
-            used[str(pid)] = True
-            session['hints_used'] = used
+            _mark_hint_used(pid)
             # Final sanity check
             if not from_sq:
                 logger.debug('Computed no from-square for puzzle id=%s (san=%r, fen=%r)', pid, san, p.fen)

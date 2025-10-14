@@ -76,6 +76,10 @@ above — include them here for completeness:
 
 - `GET /puzzle` — UI route that renders the puzzle page (`templates/puzzle.html`). The frontend uses this as the entry point for the puzzle UI.
 - `POST /puzzle_hint` — Returns a minimal hint for the current puzzle. Request body should include `{ "id": <puzzle_id> }` (optional in tests). Response is `{ "from": "e2" }`. Calling this endpoint also marks the puzzle as having had a hint used in the server-side session so `/check_puzzle` can enforce rules (XP cap and no streak increment).
+  
+     Implementation notes:
+     - The server centralizes session hint access behind tiny helpers (`_get_hints_map`, `_is_hint_used`, `_mark_hint_used`, `_clear_hint_used`) in `backend.py` to avoid repeated try/except patterns and make the session usage easier to test.
+     - SAN normalization used when parsing stored SANs is provided by `_strip_move_number` and `_normalize_san` helpers which handle common PGN artifacts (leading move numbers, trailing annotations, simple punctuation).
 - `GET /api/badges` — Returns the current user's badges and a small catalog of badge metadata used to enrich UI display.
 - `POST /load_games` — Development-only endpoint that accepts `{ "username": "...", "pgn": "..." }` and imports puzzles from the provided PGN. This endpoint is intentionally restricted to non-production environments.
 - `GET /api/puzzle_counts` — Returns counts for available and total puzzles for the current user. Accepts optional `perf` and `tags` query parameters to filter the counts.

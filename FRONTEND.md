@@ -62,6 +62,13 @@ Key behaviour and implementation details:
 		streak. Badges and daily streaks are still calculated based on the
 		server-side counters.
 
+	Note for maintainers:
+	- The server exposes small helpers in `backend.py` for session hint tracking
+	  (`_mark_hint_used`, `_is_hint_used`, `_clear_hint_used`) and SAN normalization
+	  (`_normalize_san`, `_strip_move_number`). These are implementation details
+	  intended to reduce duplication and make the hinting flow easier to reason
+	  about when reading the code or writing tests.
+
 Notes
 - The frontend sanitizes SAN values when revealing the correct move after an
 	incorrect attempt; however, the server computes hint squares deterministically
