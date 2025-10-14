@@ -990,8 +990,21 @@ def puzzle_hint():
             move = None
             from_sq = None
             try:
-                # try parsing the normalized SAN first
-                move = board.parse_san(norm_san)
+                # Try parsing several variants in order: raw (as stored),
+                # sanitized (leading move numbers removed), and normalized
+                # (annotations stripped). This covers cases where the stored
+                # SAN contains unexpected whitespace or annotations.
+                for try_s in (raw_san, san, norm_san):
+                    if not try_s:
+                        continue
+                    try:
+                        move = board.parse_san(try_s)
+                        logger.debug('parse_san succeeded for puzzle id=%s using variant=%r', pid, try_s)
+                        break
+                    except Exception:
+                        # continue to next variant
+                        logger.debug('parse_san failed for puzzle id=%s variant=%r', pid, try_s)
+                        continue
             except Exception:
                 # Try a sloppy SAN parse by iterating moves on the original board
                 for m in board.legal_moves:
