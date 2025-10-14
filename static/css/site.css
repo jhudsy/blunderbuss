@@ -1,7 +1,7 @@
 /* Small site-specific CSS: smooth highlight transitions and metadata styling */
 :root{
   --highlight-green: rgba(40, 167, 69, 0.6);
-  --highlight-red: rgba(220, 53, 69, 0.6);
+  --highlight-red: rgba(0, 123, 255, 0.6); /* changed from red to blue for hint highlights */
   --highlight-duration: 1.2s; /* default duration for highlight visibility */
 }
 .square-55d63 {
