@@ -978,6 +978,7 @@ def puzzle_hint():
             # sanitize SAN: remove any leading move numbers
             san = re.sub(r'^\d+\.*\s*', '', san)
             move = None
+            from_sq = None
             try:
                 move = board.parse_san(san)
             except Exception:
@@ -1046,14 +1047,20 @@ def puzzle_hint():
                         from_sq = None
                     except Exception:
                         from_sq = None
-                if not move and 'from_sq' not in locals():
-                    return jsonify({'error': 'could not determine hint'}), 500
+                if not move and not from_sq:
+                    # couldn't compute a fallback from-square
+                    logger.debug('Hint heuristic failed for puzzle id=%s san=%r fen=%r', pid, san, p.fen)
+                    return jsonify({'error': 'could not determine hint'}), 400
                 if move:
                     from_sq = chess.square_name(move.from_square)
             # record hint use in session for this puzzle id
             used = session.get('hints_used', {})
             used[str(pid)] = True
             session['hints_used'] = used
+            # Final sanity check
+            if not from_sq:
+                logger.debug('Computed no from-square for puzzle id=%s (san=%r, fen=%r)', pid, san, p.fen)
+                return jsonify({'error': 'could not determine hint'}), 400
             return jsonify({'from': from_sq})
         except Exception as e:
             logger.exception('Failed to compute puzzle hint for id=%s: %s', pid, e)
