@@ -83,6 +83,8 @@ async function loadPuzzle(){
   // import-related UI removed
 async function onDrop(source, target){
   // guard: ensure we have a loaded puzzle
+  // clear any lingering hint highlight immediately when attempting a move
+  try{ clearHintHighlights() } catch(e){}
   if (!currentPuzzle){
     if (window.__CP_DEBUG) console.debug('onDrop called before puzzle loaded')
     return 'snapback'
@@ -226,6 +228,14 @@ async function onDrop(source, target){
   }catch(err){
     console.error('check_puzzle: async error', err)
   }
+}
+
+// remove only hint (blue) highlight classes
+function clearHintHighlights(){
+  try{
+    const els = document.querySelectorAll('.square-highlight-blue')
+    els.forEach(el=>{ try{ el.classList.remove('square-highlight-blue') }catch(e){} })
+  }catch(e){}
 }
 
 // highlight a square (e.g., the square containing the piece to move) for a short duration
@@ -445,7 +455,8 @@ function revealCorrectMoveSquares(from, to){
 
 window.addEventListener('DOMContentLoaded', ()=>{
   // create the board once with our local pieceTheme
-  board = Chessboard('board', {position: 'start', draggable: true, onDrop, pieceTheme: '/static/img/chesspieces/{piece}.png'})
+  // clear hint when user begins interacting with the board (onDragStart)
+  board = Chessboard('board', {position: 'start', draggable: true, onDrop, onDragStart: ()=>{ try{ clearHintHighlights() }catch(e){} }, pieceTheme: '/static/img/chesspieces/{piece}.png'})
   document.getElementById('next').addEventListener('click', loadPuzzle)
   // ensure Hint button matches Next button styling and initial enabled/disabled state
   try{
