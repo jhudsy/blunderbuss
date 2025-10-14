@@ -121,6 +121,42 @@ def json_error(message, code=400):
     return jsonify({'error': message}), code
 
 
+def _record_successful_activity(u):
+    """Update the user's calendar-day streak and record last activity timestamp.
+
+    This consolidates duplicated logic that was previously copy-pasted in
+    `/check_puzzle`. It expects `u` to be a PonyORM User entity and will
+    modify `u.streak_days` and `u._last_game_date` in-place.
+    """
+    try:
+        last_iso = getattr(u, '_last_game_date', None)
+        from datetime import datetime as _dt, timedelta as _td
+        today = _dt.utcnow().date()
+        if last_iso:
+            try:
+                last_dt = _dt.fromisoformat(last_iso)
+                last_date = last_dt.date()
+            except Exception:
+                last_date = None
+        else:
+            last_date = None
+
+        if last_date == today:
+            # already had a correct activity today; don't change streak_days
+            pass
+        elif last_date == (today - _td(days=1)):
+            # consecutive day -> increment streak
+            u.streak_days = (getattr(u, 'streak_days', 0) or 0) + 1
+        else:
+            # new day after a gap (or no previous record) -> start at 1
+            u.streak_days = 1
+    except Exception:
+        # If anything unexpected happens, ensure we at least have a sensible default
+        u.streak_days = getattr(u, 'streak_days', 0) or 0
+    # Record this successful activity timestamp for future streak calculations
+    u._last_game_date = datetime.utcnow().isoformat()
+
+
 def parse_perf_types(stored_value):
     """Normalize stored perf types into a list of lowercase tokens.
 
@@ -818,33 +854,7 @@ def check_puzzle():
         # only when the current answer is correct. Do this before badge calculation
         # so day-streak badges may be awarded in the same transaction.
         if correct:
-            try:
-                last_iso = getattr(u, '_last_game_date', None)
-                from datetime import datetime as _dt, timedelta as _td
-                today = _dt.utcnow().date()
-                if last_iso:
-                    try:
-                        last_dt = _dt.fromisoformat(last_iso)
-                        last_date = last_dt.date()
-                    except Exception:
-                        last_date = None
-                else:
-                    last_date = None
-
-                if last_date == today:
-                    # already had a correct activity today; don't change streak_days
-                    pass
-                elif last_date == (today - _td(days=1)):
-                    # consecutive day -> increment streak
-                    u.streak_days = (getattr(u, 'streak_days', 0) or 0) + 1
-                else:
-                    # new day after a gap (or no previous record) -> start at 1
-                    u.streak_days = 1
-            except Exception:
-                # If anything unexpected happens, ensure we at least have a sensible default
-                u.streak_days = getattr(u, 'streak_days', 0) or 0
-            # Record this successful activity timestamp for future streak calculations
-            u._last_game_date = datetime.utcnow().isoformat()
+            _record_successful_activity(u)
 
         if correct:
             u.correct_count = (u.correct_count or 0) + 1
@@ -868,33 +878,7 @@ def check_puzzle():
         # Update user's daily streak (number of consecutive days with activity)
         # only when the current answer is correct.
         if correct:
-            try:
-                last_iso = getattr(u, '_last_game_date', None)
-                from datetime import datetime as _dt, timedelta as _td
-                today = _dt.utcnow().date()
-                if last_iso:
-                    try:
-                        last_dt = _dt.fromisoformat(last_iso)
-                        last_date = last_dt.date()
-                    except Exception:
-                        last_date = None
-                else:
-                    last_date = None
-
-                if last_date == today:
-                    # already had a correct activity today; don't change streak_days
-                    pass
-                elif last_date == (today - _td(days=1)):
-                    # consecutive day -> increment streak
-                    u.streak_days = (getattr(u, 'streak_days', 0) or 0) + 1
-                else:
-                    # new day after a gap (or no previous record) -> start at 1
-                    u.streak_days = 1
-            except Exception:
-                # If anything unexpected happens, ensure we at least have a sensible default
-                u.streak_days = getattr(u, 'streak_days', 0) or 0
-            # Record this successful activity timestamp for future streak calculations
-            u._last_game_date = datetime.utcnow().isoformat()
+            _record_successful_activity(u)
         # prepare response while DB session is active to avoid session-is-over errors
         resp = {
             'correct': correct,
