@@ -14,6 +14,20 @@ The script is idempotent: it will not re-bind an already-initialized DB
 and will simply return if models are already bound.
 """
 
+import os
+import sys
+
+# When this script is executed as `python scripts/create_tables.py` the
+# interpreter places the `scripts` directory at sys.path[0], which means
+# Python won't automatically find sibling modules at the project root
+# (for example `models.py` at /app/models.py). Ensure the project root
+# (parent of the scripts directory) is on sys.path so `from models import ...`
+# works regardless of how the script is invoked.
+_HERE = os.path.dirname(__file__)
+_PROJECT_ROOT = os.path.abspath(os.path.join(_HERE, '..'))
+if _PROJECT_ROOT not in sys.path:
+  sys.path.insert(0, _PROJECT_ROOT)
+
 from models import init_db, db
 
 if __name__ == '__main__':
