@@ -8,6 +8,7 @@ let board = null
 let game = new Chess()
 let currentPuzzle = null
 let hintUsedForCurrent = false
+let allowMoves = true
 // result modal removed; use inline UI feedback instead
 
 async function loadPuzzle(){
@@ -98,6 +99,8 @@ async function loadPuzzle(){
       try{ document.getElementById('next').disabled = true } catch(e){}
       // reset hint state
       hintUsedForCurrent = false
+        // allow moves for the newly loaded puzzle
+        allowMoves = true
       try{
         const hintBtn = document.getElementById('hint')
         const nextBtn = document.getElementById('next')
@@ -143,7 +146,9 @@ async function onDrop(source, target){
       if (window.__CP_DEBUG) console.debug('check_puzzle: response', j)
       try{ if (window.__CP_DEBUG) console.debug('check_puzzle: response keys', Object.keys(j), 'stringified', JSON.stringify(j)) } catch(e){}
 
-      if (j.correct){
+  // lock board interactions once we have a definitive answer
+  try{ allowMoves = false }catch(e){}
+  if (j.correct){
         highlightSquareWithFade(source, 'green')
         highlightSquareWithFade(target, 'green')
         // brief inline feedback instead of modal
@@ -285,7 +290,8 @@ async function onDrop(source, target){
           }
           // update board to reflect the chosen promotion
           try{ board.position(game.fen()) }catch(e){}
-          // send to server and handle UI
+          // lock moves and send to server and handle UI
+          try{ allowMoves = false }catch(e){}
           await sendCheckPuzzle(res, startFEN)
         })
         return 'snapback'
@@ -797,9 +803,11 @@ window.addEventListener('DOMContentLoaded', ()=>{
     draggable: true,
     onDrop,
     onDragStart: function(source, piece, position, orientation){
-      // Only allow picking up pieces for the side to move.
+      // Respect allowMoves flag
       try{ clearHintHighlights() }catch(e){}
       try{
+        if (!allowMoves) return false
+        // Only allow picking up pieces for the side to move.
         if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
             (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
           return false
