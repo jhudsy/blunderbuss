@@ -1037,6 +1037,14 @@ def puzzle_hint():
                                     continue
                     except Exception:
                         pass
+            # If we've found a move (via parse_san or by matching legal moves),
+            # populate from_sq immediately so later checks behave correctly.
+            if move:
+                try:
+                    from_sq = chess.square_name(move.from_square)
+                except Exception:
+                    from_sq = None
+
             if not move:
                 # Heuristic fallback: if SAN ends with a destination square like 'e4'
                 # and that square currently contains a pawn, attempt to infer the
