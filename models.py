@@ -69,6 +69,10 @@ class User(db.Entity):
     xp_today_date = Optional(str)
     _import_total = Optional(int, default=0)
     _import_done = Optional(int, default=0)
+    # Human-readable import status: 'idle', 'in_progress', 'finished'
+    _import_status = Optional(str)
+    # Optional short error message when import fails
+    _import_error = Optional(str)
     _last_game_date = Optional(str)
 
     # access_token property: transparently encrypts/decrypts when ENCRYPTION_FERNET is configured

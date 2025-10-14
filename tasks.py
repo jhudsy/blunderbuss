@@ -79,83 +79,112 @@ def import_games_task(self, username, perftypes, days):
     logger.debug('Retrieved %d bytes of PGN for user=%s (games=%s)', len(pgn), username, game_count)
     puzzles = extract_puzzles_from_pgn(pgn)
     logger.debug('Parsed %d puzzles for user=%s', len(puzzles), username)
-    with db_session:
-        u = User.get(username=username)
-        if not u:
-            u = User(username=username)
-        u._import_total = len(puzzles)
-        u._import_done = 0
-        imported_count = 0
+    imported_count = 0
+    try:
+        with db_session:
+            u = User.get(username=username)
+            if not u:
+                u = User(username=username)
+            # mark import as started and reset counters
+            u._import_status = 'in_progress'
+            u._import_total = len(puzzles)
+            u._import_done = 0
+        # perform imports; keep DB writes short-living inside db_session blocks
         for p in puzzles:
-            # Only import puzzles that correspond to this user's blunder (match by username)
-            p_white = (p.get('white') or '').strip()
-            p_black = (p.get('black') or '').strip()
-            blunder_side = p.get('side')
-            # determine if the lichess username matches the side that blundered
-            matched = False
-            if blunder_side == 'white' and p_white and p_white.lower() == username.lower():
-                matched = True
-            if blunder_side == 'black' and p_black and p_black.lower() == username.lower():
-                matched = True
-            if not matched:
-                logger.debug('Skipping puzzle game_id=%s move=%s: blunder by %s not current user %s', p.get('game_id'), p.get('move_number'), blunder_side, username)
+            try:
+                with db_session:
+                    u = User.get(username=username)
+                    if not u:
+                        u = User(username=username)
+                    # Only import puzzles that correspond to this user's blunder
+                    p_white = (p.get('white') or '').strip()
+                    p_black = (p.get('black') or '').strip()
+                    blunder_side = p.get('side')
+                    matched = False
+                    if blunder_side == 'white' and p_white and p_white.lower() == username.lower():
+                        matched = True
+                    if blunder_side == 'black' and p_black and p_black.lower() == username.lower():
+                        matched = True
+                    if not matched:
+                        logger.debug('Skipping puzzle game_id=%s move=%s: blunder by %s not current user %s', p.get('game_id'), p.get('move_number'), blunder_side, username)
+                        continue
+                    if not p.get('fen'):
+                        logger.debug('Skipping puzzle game_id=%s move=%s for user=%s: missing FEN', p.get('game_id'), p.get('move_number'), username)
+                        continue
+                    existing = Puzzle.get(user=u, game_id=p.get('game_id'), move_number=p.get('move_number'))
+                    if existing:
+                        logger.debug('Skipping duplicate puzzle for user=%s game_id=%s move=%s (already exists)', username, p.get('game_id'), p.get('move_number'))
+                        continue
+                    Puzzle(
+                        user=u,
+                        game_id=p['game_id'],
+                        move_number=p['move_number'],
+                        fen=p['fen'],
+                        correct_san=p['correct_san'],
+                        weight=p.get('initial_weight', 1.0),
+                        white=p.get('white'),
+                        black=p.get('black'),
+                        date=p.get('date'),
+                        time_control=p.get('time_control'),
+                        time_control_type=p.get('time_control_type'),
+                        pre_eval=p.get('pre_eval'),
+                        post_eval=p.get('post_eval'),
+                        tag=p.get('tag'),
+                        severity=p.get('tag'),
+                    )
+                    u._import_done = (getattr(u, '_import_done', 0) or 0) + 1
+                    imported_count += 1
+            except Exception:
+                # Log per-puzzle errors and continue with other puzzles
+                logger.exception('Error importing puzzle for user=%s entry=%r', username, p)
                 continue
-            logger.debug('Importing puzzle game_id=%s move=%s for user=%s san=%s', p.get('game_id'), p.get('move_number'), username, p.get('correct_san'))
-            # Ensure we don't insert duplicate puzzles for the same user based on
-            # (game_id, move_number). This allows multiple puzzles per game
-            # (different move numbers) while avoiding duplicate imports of the
-            # same annotated move.
-            if not p.get('fen'):
-                logger.debug('Skipping puzzle game_id=%s move=%s for user=%s: missing FEN', p.get('game_id'), p.get('move_number'), username)
-                continue
-            existing = Puzzle.get(user=u, game_id=p.get('game_id'), move_number=p.get('move_number'))
-            if existing:
-                logger.debug('Skipping duplicate puzzle for user=%s game_id=%s move=%s (already exists)', username, p.get('game_id'), p.get('move_number'))
-                continue
-
-            Puzzle(
-                user=u,
-                game_id=p['game_id'],
-                move_number=p['move_number'],
-                fen=p['fen'],
-                correct_san=p['correct_san'],
-                weight=p.get('initial_weight', 1.0),
-                white=p.get('white'),
-                black=p.get('black'),
-                date=p.get('date'),
-                time_control=p.get('time_control'),
-                time_control_type=p.get('time_control_type'),
-                pre_eval=p.get('pre_eval'),
-                post_eval=p.get('post_eval'),
-                tag=p.get('tag'),
-                severity=p.get('tag'),
-            )
-            u._import_done += 1
-            imported_count += 1
-        u._last_game_date = datetime.utcnow().isoformat()
-        # Enforce per-user maximum puzzles setting (0 => unlimited)
+        # finalization inside db_session
+        with db_session:
+            u = User.get(username=username)
+            if not u:
+                u = User(username=username)
+            u._last_game_date = datetime.utcnow().isoformat()
+            u._import_status = 'finished'
+            # Enforce per-user maximum puzzles setting (0 => unlimited)
+            try:
+                max_p = int(getattr(u, 'settings_max_puzzles', 0) or 0)
+            except Exception:
+                max_p = 0
+            if max_p and max_p > 0:
+                from pony.orm import select
+                user_puzzles = select(q for q in Puzzle if q.user == u)
+                total = user_puzzles.count()
+                if total > max_p:
+                    to_delete = total - max_p
+                    ordered = list(select(q for q in Puzzle if q.user == u))
+                    ordered.sort(key=lambda x: (getattr(x, 'date') or '', getattr(x, 'id') or 0))
+                    deleted = 0
+                    for old in ordered:
+                        if deleted >= to_delete:
+                            break
+                        try:
+                            old.delete()
+                            deleted += 1
+                        except Exception:
+                            logger.exception('Failed to delete old puzzle id=%s for user=%s', getattr(old, 'id', None), username)
+    except Exception as e:
+        # Fatal error: mark user import as failed and record a short message
+        logger.exception('Import failed for user=%s: %s', username, e)
         try:
-            max_p = int(getattr(u, 'settings_max_puzzles', 0) or 0)
+            with db_session:
+                u = User.get(username=username)
+                if not u:
+                    u = User(username=username)
+                u._import_status = 'failed'
+                # Store a short error message so the frontend can show it; avoid leaking full exception
+                try:
+                    msg = str(e)
+                    if len(msg) > 200:
+                        msg = msg[:197] + '...'
+                except Exception:
+                    msg = 'import-failed'
+                u._import_error = msg
         except Exception:
-            max_p = 0
-        if max_p and max_p > 0:
-            # Count current puzzles for user and delete oldest by date until within limit
-            from pony.orm import select
-            user_puzzles = select(q for q in Puzzle if q.user == u)
-            total = user_puzzles.count()
-            if total > max_p:
-                to_delete = total - max_p
-                # order by id (insertion order) and delete the oldest
-                # Prefer deleting the oldest by `date` (if available), otherwise by insertion id
-                ordered = list(select(q for q in Puzzle if q.user == u))
-                ordered.sort(key=lambda x: (getattr(x, 'date') or '', getattr(x, 'id') or 0))
-                deleted = 0
-                for old in ordered:
-                    if deleted >= to_delete:
-                        break
-                    try:
-                        old.delete()
-                        deleted += 1
-                    except Exception:
-                        logger.exception('Failed to delete old puzzle id=%s for user=%s', getattr(old, 'id', None), username)
+            logger.exception('Failed to record import failure state for user=%s', username)
+        return {'imported': imported_count}
     return {'imported': imported_count}

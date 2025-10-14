@@ -22,12 +22,19 @@
         if (!r.ok) return null
         const s = await r.json()
         if (typeof onUpdate === 'function') onUpdate(s)
-        // Completion conditions:
-        // - if total > 0 and done >= total
-        // - if total == 0 (no puzzles to import) treat as complete
-        const total = Number(s.total || 0)
-        const done = Number(s.done || 0)
-        if ((total > 0 && done >= total) || (total === 0)){
+        // Completion condition: backend returns status 'finished' when worker is done.
+        const status = (s.status || 'idle')
+        if (status === 'finished'){
+          return s
+        }
+        if (status === 'failed'){
+          // update modal once more to show error and treat as terminal
+          try{
+            const el = document.getElementById('importSpinner')
+            if (el) el.innerHTML = '<div class="text-danger">Import failed</div>'
+            const last = document.getElementById('importLastGame')
+            if (last && s.error) last.textContent = s.error
+          }catch(e){}
           return s
         }
         // wait a short interval before polling again
@@ -61,9 +68,8 @@
 
   function updateModal(progress){
     try{
-      document.getElementById('importTotal').textContent = progress.total || '?'
       document.getElementById('importDone').textContent = progress.done || 0
-      document.getElementById('importLastGame').textContent = progress.last_game_date || '-'
+      document.getElementById('importLastGame').textContent = progress.last_game_date || '-'    
     }catch(e){}
   }
 
@@ -85,7 +91,7 @@
     try{
       // If the server indicated an import is in-progress (total>0 && done<total), show modal and poll
       fetch('/import_status', { credentials: 'same-origin' }).then(r=>r.ok?r.json():null).then(s=>{
-        if (s && (s.total || 0) > 0 && (s.done || 0) < (s.total || 0)){
+        if (s && (s.status || 'idle') === 'in_progress'){
           const bs = showModal()
           pollImportUntilDone(updateModal).then(()=>hideModal(bs))
         }

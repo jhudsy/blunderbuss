@@ -609,10 +609,25 @@ def import_status():
         u = User.get(username=username)
         if not u:
             return jsonify({'error': 'user not found'}), 404
-        total = int(getattr(u, '_import_total', 0) or 0)
         done = int(getattr(u, '_import_done', 0) or 0)
         last_game = getattr(u, '_last_game_date', None)
-    return jsonify({'total': total, 'done': done, 'last_game_date': last_game})
+        status = getattr(u, '_import_status', None) or 'idle'
+        error = getattr(u, '_import_error', None)
+    # Format last_game_date into a more readable string if present. Store times in UTC.
+    if last_game:
+        try:
+            # last_game is ISO format; parse and format as 'YYYY-MM-DD HH:MM UTC'
+            from datetime import datetime as _dt
+            _d = _dt.fromisoformat(last_game)
+            last_game_fmt = _d.strftime('%Y-%m-%d %H:%M UTC')
+        except Exception:
+            last_game_fmt = last_game
+    else:
+        last_game_fmt = None
+    resp = {'done': done, 'last_game_date': last_game_fmt, 'status': status}
+    if error:
+        resp['error'] = str(error)
+    return jsonify(resp)
 
 
 
