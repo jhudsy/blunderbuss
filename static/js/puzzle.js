@@ -233,8 +233,9 @@ function hintHighlightSquare(square, durationMs){
   try{
     const el = document.querySelector('.square-' + square)
     if (!el) return
-    el.classList.add('square-highlight-red')
-    setTimeout(()=>{ try{ el.classList.remove('square-highlight-red') }catch(e){} }, durationMs || 3000)
+    // hints should use the blue highlight class
+    el.classList.add('square-highlight-blue')
+    setTimeout(()=>{ try{ el.classList.remove('square-highlight-blue') }catch(e){} }, durationMs || 3000)
   }catch(e){}
 }
 
