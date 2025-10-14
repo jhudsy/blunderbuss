@@ -22,10 +22,15 @@
         if (!r.ok) return null
         const s = await r.json()
         if (typeof onUpdate === 'function') onUpdate(s)
-        if ((s.total || 0) > 0 && (s.done || 0) >= (s.total || 0)){
+        // Completion conditions:
+        // - if total > 0 and done >= total
+        // - if total == 0 (no puzzles to import) treat as complete
+        const total = Number(s.total || 0)
+        const done = Number(s.done || 0)
+        if ((total > 0 && done >= total) || (total === 0)){
           return s
         }
-        // If total is zero, still poll until it becomes non-zero or a short timeout
+        // wait a short interval before polling again
         await new Promise(res => setTimeout(res, 800))
       }
     }catch(e){
@@ -37,14 +42,21 @@
   function showModal(){
     const el = document.getElementById('importModal')
     if (!el) return
-    const bs = new bootstrap.Modal(el)
+    // Use existing instance if present to avoid multiple backdrops
+    const existing = bootstrap.Modal.getInstance(el)
+    const bs = existing || new bootstrap.Modal(el)
     bs.show()
     return bs
   }
 
   function hideModal(bs){
     if (!bs) return
-    setTimeout(()=> bs.hide(), 1000) // 1 second delay before hiding to show final counts
+    // hide then dispose to ensure any backdrop elements are removed
+    setTimeout(()=>{
+      try{ bs.hide() }catch(e){}
+      // dispose after a short delay to allow hide animation to finish
+      setTimeout(()=>{ try{ bs.dispose() }catch(e){} }, 300)
+    }, 1000) // 1 second delay before hiding to show final counts
   }
 
   function updateModal(progress){
