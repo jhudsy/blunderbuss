@@ -53,10 +53,13 @@
     width: 100%;
     max-width: 100%;
   }
-  /* make board slightly smaller on very narrow portrait phones */
-  #board { max-width: calc(100vw - 2rem); }
-  /* ensure buttons stay visible below the board */
-  #info, #puzzleMeta, #hint, #next { margin-top: 0.5rem; }
+  /* make board occupy more of the viewport on small devices (allow room
+     for padding) so the chessboard can be larger in portrait. */
+  #board { max-width: calc(100vw - 1.5rem); }
+  /* When controls stack below the board, add breathing room and ensure
+     button sizing is comfortable on touch devices. */
+  #info, #puzzleMeta { margin-top: 0.75rem; }
+  #hint, #next { margin-top: 0.5rem; min-width: 6.5rem; }
 }
 
 /* Landscape phones: cap board height to viewport but allow scrolling so users

@@ -21,14 +21,20 @@
     <div class="container py-4">
   <h1 class="h4 mb-3">Puzzle</h1>
       <div class="row">
-        <div class="col-md-6">
+        <!-- Keep DOM order: board first, controls second. Use Bootstrap order classes
+             so on medium+ screens controls appear to the right, and on small screens
+             they stack below the board. This improves accessibility and mobile
+             layout so the board can take maximum horizontal space in portrait. -->
+        <div class="col-md-6 order-1 order-md-1">
           <div id="board"></div>
         </div>
-        <div class="col-md-6">
+        <div class="col-md-6 order-2 order-md-2 mt-3 mt-md-0">
           <div id="info" class="mb-3"></div>
           <div id="puzzleMeta" class="text-muted mb-3"></div>
-          <button id="hint" class="btn btn-outline-secondary mb-2">Hint</button>
-          <button id="next" class="btn btn-primary mb-2" disabled>Next</button>
+          <div class="d-flex flex-wrap gap-2">
+            <button id="hint" class="btn btn-outline-secondary">Hint</button>
+            <button id="next" class="btn btn-primary" disabled>Next</button>
+          </div>
         </div>
       </div>
     </div>
