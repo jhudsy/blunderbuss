@@ -174,10 +174,10 @@ async function onDrop(source, target){
         // show inline toast for new badges
         showBadgeToast(j.awarded_badges)
       }
-      // Show congratulatory modal if the server reports a new record streak
+      // Show congratulatory toast if the server reports a new record streak
       try{
         if (j.new_record_streak){
-          try{ showRecordModal(j.new_record_streak) } catch(e){ alert('New record! Streak: ' + j.new_record_streak) }
+          try{ showRecordToast(j.new_record_streak) } catch(e){ try{ alert('New record! Streak: ' + j.new_record_streak) }catch(e){} }
         }
       }catch(e){}
       // reveal 'See on lichess' link if we have game info
@@ -268,37 +268,33 @@ async function onDrop(source, target){
 }
 
 // Display a simple congratulatory modal for new puzzle-streak records
-function showRecordModal(newBest){
+// Show a small toast for new puzzle-streak records (uses same toast container as badges)
+function showRecordToast(newBest){
   try{
-    // Use Bootstrap modal if available
-    if (typeof bootstrap !== 'undefined' && bootstrap.Modal){
-      let modalEl = document.getElementById('recordModal')
-      if (!modalEl){
-        modalEl = document.createElement('div')
-        modalEl.id = 'recordModal'
-        modalEl.className = 'modal'
-        modalEl.innerHTML = `
-          <div class="modal-dialog modal-sm modal-dialog-centered">
-            <div class="modal-content">
-              <div class="modal-header">
-                <h5 class="modal-title">Congratulations!</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-              </div>
-              <div class="modal-body">
-                <p>New record puzzle streak: <strong>${String(newBest)}</strong></p>
-              </div>
-            </div>
-          </div>`
-        document.body.appendChild(modalEl)
-      } else {
-        modalEl.querySelector('.modal-body p').innerHTML = `New record puzzle streak: <strong>${String(newBest)}</strong>`
-      }
-      const bs = new bootstrap.Modal(modalEl)
-      bs.show()
-    } else {
-      // Fallback: simple alert
-      alert('Congratulations! New record puzzle streak: ' + String(newBest))
+    const container = document.getElementById('toastContainer')
+    if (!container){
+      // fallback to alert if no toast container present
+      try{ alert('Congratulations! New record puzzle streak: ' + String(newBest)) }catch(e){}
+      return
     }
+    const toastEl = document.createElement('div')
+    toastEl.className = 'toast'
+    toastEl.setAttribute('role','alert')
+    toastEl.setAttribute('aria-live','polite')
+    toastEl.setAttribute('aria-atomic','true')
+    toastEl.innerHTML = `
+      <div class="toast-header">
+        <strong class="me-auto">New record!</strong>
+        <small class="text-muted">now</small>
+        <button type="button" class="btn-close ms-2 mb-1" data-bs-dismiss="toast" aria-label="Close"></button>
+      </div>
+      <div class="toast-body">
+        New record puzzle streak: <strong>${String(newBest)}</strong>
+      </div>`
+    container.appendChild(toastEl)
+    const bs = new bootstrap.Toast(toastEl, { delay: 5000 })
+    bs.show()
+    toastEl.addEventListener('hidden.bs.toast', ()=>{ try{ container.removeChild(toastEl) }catch(e){} })
   }catch(e){ try{ alert('Congratulations! New record puzzle streak: ' + String(newBest)) }catch(e){} }
 }
 
