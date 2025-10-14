@@ -72,7 +72,8 @@ class User(db.Entity):
     # Human-readable import status: 'idle', 'in_progress', 'finished'
     _import_status = Optional(str)
     # Optional short error message when import fails
-    _import_error = Optional(str)
+    # Make nullable=True so code can clear the error by assigning None.
+    _import_error = Optional(str, nullable=True)
     _last_game_date = Optional(str)
 
     # access_token property: transparently encrypts/decrypts when ENCRYPTION_FERNET is configured
