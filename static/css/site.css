@@ -38,6 +38,16 @@
   margin: 0 auto 1rem auto;
 }
 
+/* Prevent page scrolling/selection while interacting with the board on touch devices.
+   This allows dragging pieces without the browser gesture dragging the page. */
+#board, #board .board {
+  touch-action: none; /* disable native panning when interacting with the board */
+  -ms-touch-action: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
+
 /* Chessboard contained element (chessboard.js sets an inner .board) */
 .board {
   width: 100% !important;
