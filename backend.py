@@ -425,7 +425,18 @@ def login():
     if 'username' in session:
         return jsonify({'username': session['username']}), 200
 
-    # create a PKCE verifier/challenge pair and store verifier for callback
+    # If a Lichess client id is configured, start the OAuth PKCE redirect
+    # flow via the dedicated `/login-lichess` endpoint. This keeps the
+    # behaviour consistent: when a provider is configured the server should
+    # redirect the browser to the provider rather than return a raw PKCE
+    # challenge JSON payload.
+    client_id = os.environ.get('LICHESS_CLIENT_ID') or os.environ.get('LICHESS_CLIENTID')
+    if client_id:
+        return redirect(url_for('login_lichess'))
+
+    # Fallback (development/test): create a PKCE verifier/challenge pair and
+    # return the challenge so tests / non-browser clients can complete a PKCE
+    # flow without an external provider.
     verifier, challenge = _generate_pkce_pair()
     session['pkce_verifier'] = verifier
     return jsonify({'pkce_challenge': challenge}), 200
