@@ -323,9 +323,7 @@ def login():
         return jsonify({'username': session['username']}), 200
 
     # create a PKCE verifier/challenge pair and store verifier for callback
-    verifier = base64.urlsafe_b64encode(os.urandom(32)).rstrip(b'=').decode('utf-8')
-    challenge = hashlib.sha256(verifier.encode('utf-8')).digest()
-    challenge = base64.urlsafe_b64encode(challenge).rstrip(b'=').decode('utf-8')
+    verifier, challenge = _generate_pkce_pair()
     session['pkce_verifier'] = verifier
     return jsonify({'pkce_challenge': challenge}), 200
 
