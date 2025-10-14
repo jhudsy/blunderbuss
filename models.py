@@ -50,6 +50,8 @@ class User(db.Entity):
     # cooldown in minutes between repeats
     cooldown_minutes = Optional(int, default=10)
     consecutive_correct = Optional(int, default=0)
+    # longest puzzle streak recorded for this user
+    best_puzzle_streak = Optional(int, default=0)
     settings_days = Optional(int, default=30)
     settings_perftypes = Optional(str, default='["blitz","rapid"]')
     # Which puzzle tags the user wants to see. Stored as a JSON array of

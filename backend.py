@@ -834,8 +834,9 @@ def user_information():
         badges = [b.name for b in u.badges]
         days_streak = int(getattr(u, 'streak_days', 0) or 0)
         puzzle_streak = int(getattr(u, 'consecutive_correct', 0) or 0)
+        best_puzzle_streak = int(getattr(u, 'best_puzzle_streak', 0) or 0)
         username_val = u.username
-    return jsonify({'xp': xp, 'badges': badges, 'streak': days_streak, 'puzzle_streak': puzzle_streak, 'username': username_val})
+    return jsonify({'xp': xp, 'badges': badges, 'streak': days_streak, 'puzzle_streak': puzzle_streak, 'best_puzzle_streak': best_puzzle_streak, 'username': username_val})
 
 
 @app.route('/leaderboard')
@@ -959,6 +960,21 @@ def check_puzzle():
             'xp': u.xp,
             'badges': [b.name for b in u.badges]
         }
+        # Check and update best puzzle streak record when appropriate
+        try:
+            current_streak = int(getattr(u, 'consecutive_correct', 0) or 0)
+            best = int(getattr(u, 'best_puzzle_streak', 0) or 0)
+            new_record = False
+            if current_streak and current_streak > best:
+                u.best_puzzle_streak = current_streak
+                best = current_streak
+                new_record = True
+            resp['best_puzzle_streak'] = best
+            if new_record:
+                resp['new_record_streak'] = best
+        except Exception:
+            # ignore record-tracking failures
+            pass
         # Reveal the correct SAN to the client only after an incorrect attempt.
         # We intentionally do NOT include prev/next SAN or other PGN context.
         # expose any newly awarded badges explicitly so the frontend can

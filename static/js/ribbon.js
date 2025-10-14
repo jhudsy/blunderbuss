@@ -55,7 +55,9 @@
       if (elPuzzle){
         const prev = parseInt(elPuzzle.getAttribute('data-prev') || '0', 10)
         const now = parseInt(j.puzzle_streak || 0, 10)
-        elPuzzle.textContent = now
+        const best = parseInt(j.best_puzzle_streak || 0, 10)
+        // display current streak and best in brackets if best present
+        elPuzzle.textContent = now + (best ? ` (${best})` : '')
         elPuzzle.setAttribute('data-prev', String(now))
         if (now > prev){
           elPuzzle.classList.add('ribbon-pulse')

@@ -174,6 +174,12 @@ async function onDrop(source, target){
         // show inline toast for new badges
         showBadgeToast(j.awarded_badges)
       }
+      // Show congratulatory modal if the server reports a new record streak
+      try{
+        if (j.new_record_streak){
+          try{ showRecordModal(j.new_record_streak) } catch(e){ alert('New record! Streak: ' + j.new_record_streak) }
+        }
+      }catch(e){}
       // reveal 'See on lichess' link if we have game info
       try{ showSeeOnLichessLink(currentPuzzle) } catch(e){}
     } else {
@@ -259,6 +265,41 @@ async function onDrop(source, target){
   }catch(err){
     console.error('check_puzzle: async error', err)
   }
+}
+
+// Display a simple congratulatory modal for new puzzle-streak records
+function showRecordModal(newBest){
+  try{
+    // Use Bootstrap modal if available
+    if (typeof bootstrap !== 'undefined' && bootstrap.Modal){
+      let modalEl = document.getElementById('recordModal')
+      if (!modalEl){
+        modalEl = document.createElement('div')
+        modalEl.id = 'recordModal'
+        modalEl.className = 'modal'
+        modalEl.innerHTML = `
+          <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h5 class="modal-title">Congratulations!</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                <p>New record puzzle streak: <strong>${String(newBest)}</strong></p>
+              </div>
+            </div>
+          </div>`
+        document.body.appendChild(modalEl)
+      } else {
+        modalEl.querySelector('.modal-body p').innerHTML = `New record puzzle streak: <strong>${String(newBest)}</strong>`
+      }
+      const bs = new bootstrap.Modal(modalEl)
+      bs.show()
+    } else {
+      // Fallback: simple alert
+      alert('Congratulations! New record puzzle streak: ' + String(newBest))
+    }
+  }catch(e){ try{ alert('Congratulations! New record puzzle streak: ' + String(newBest)) }catch(e){} }
 }
 
 // remove only hint (blue) highlight classes
