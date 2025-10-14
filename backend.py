@@ -974,18 +974,29 @@ def puzzle_hint():
         # Derive the from-square by applying the SAN to the stored FEN
         try:
             board = chess.Board(p.fen)
-            san = (p.correct_san or '').strip()
-            # sanitize SAN: remove any leading move numbers
-            san = re.sub(r'^\d+\.*\s*', '', san)
+            raw_san = (p.correct_san or '').strip()
+            # sanitize SAN: remove any leading move numbers and trailing
+            # annotations like +, #, !, ? which python-chess may not accept
+            san = re.sub(r'^\d+\.*\s*', '', raw_san)
+            def _norm_san(s):
+                if not s:
+                    return ''
+                s = s.strip()
+                # strip trailing annotation characters (check/mate/ nags)
+                s = re.sub(r'[+#?!]+$', '', s).strip()
+                # remove unnecessary whitespace
+                return s
+            norm_san = _norm_san(san)
             move = None
             from_sq = None
             try:
-                move = board.parse_san(san)
+                # try parsing the normalized SAN first
+                move = board.parse_san(norm_san)
             except Exception:
                 # Try a sloppy SAN parse by iterating moves on the original board
                 for m in board.legal_moves:
                     try:
-                        if board.san(m) == san:
+                        if _norm_san(board.san(m)) == norm_san:
                             move = m
                             break
                     except Exception:
@@ -997,11 +1008,11 @@ def puzzle_hint():
                         flipped = chess.Board(p.fen)
                         flipped.turn = not flipped.turn
                         try:
-                            move = flipped.parse_san(san)
+                            move = flipped.parse_san(norm_san)
                         except Exception:
                             for m in flipped.legal_moves:
                                 try:
-                                    if flipped.san(m) == san:
+                                    if _norm_san(flipped.san(m)) == norm_san:
                                         move = m
                                         break
                                 except Exception:
@@ -1015,14 +1026,12 @@ def puzzle_hint():
                 m = re.search(r'([a-h][1-8])\s*$', san)
                 if m:
                     dst = m.group(1)
+                    # First, try to infer pawn origins or reasonable defaults
                     try:
                         dst_sq = chess.parse_square(dst)
                         piece = board.piece_at(dst_sq)
                         file = dst[0]
                         rank = int(dst[1])
-                        # If a pawn currently sits on the destination, prefer
-                        # plausible origins nearby. Otherwise, pick a conventional
-                        # origin: rank 2 for white-style pawn pushes, rank 7 for black.
                         candidates = []
                         if piece and piece.piece_type == chess.PAWN:
                             if piece.color:  # white pawn
@@ -1030,18 +1039,11 @@ def puzzle_hint():
                             else:
                                 candidates = [f"{file}{rank+1}", f"{file}{rank+2}"]
                         else:
-                            # Fallback: destination square was empty; infer origin
-                            # using the board's side-to-move. If white to move, a
-                            # pawn push to dst likely came from rank-1 or rank-2.
-                            # If black to move, origin is likely rank+1 or rank+2.
-                            try:
-                                if board.turn == chess.WHITE:
-                                    candidates = [f"{file}{rank-1}", f"{file}{rank-2}"]
-                                else:
-                                    candidates = [f"{file}{rank+1}", f"{file}{rank+2}"]
-                            except Exception:
-                                # As a last resort, pick plausible static defaults
-                                candidates = [f"{file}2", f"{file}3"]
+                            # Infer origin using the board's side-to-move when dst is empty
+                            if board.turn == chess.WHITE:
+                                candidates = [f"{file}{rank-1}", f"{file}{rank-2}"]
+                            else:
+                                candidates = [f"{file}{rank+1}", f"{file}{rank+2}"]
                         # pick the first candidate that is a valid square; don't require a piece
                         for c in candidates:
                             try:
@@ -1052,8 +1054,31 @@ def puzzle_hint():
                                 continue
                     except Exception:
                         from_sq = None
-                    except Exception:
-                        from_sq = None
+
+                    # Additional heuristic: if SAN contains a piece letter and
+                    # a destination (e.g. 'Nd3'), try to find a legal move whose
+                    # destination matches and whose origin piece type matches.
+                    if not from_sq:
+                        pd = re.match(r'^([KQRBN])?([a-h][1-8])', norm_san)
+                        if pd:
+                            piece_letter = pd.group(1)
+                            dst2 = pd.group(2)
+                            try:
+                                dst_sq2 = chess.parse_square(dst2)
+                                pt_map = {'K': chess.KING, 'Q': chess.QUEEN, 'R': chess.ROOK, 'B': chess.BISHOP, 'N': chess.KNIGHT}
+                                desired_pt = pt_map.get(piece_letter) if piece_letter else None
+                                for m2 in board.legal_moves:
+                                    if m2.to_square == dst_sq2:
+                                        if desired_pt:
+                                            pfrom = board.piece_at(m2.from_square)
+                                            if pfrom and pfrom.piece_type == desired_pt:
+                                                from_sq = chess.square_name(m2.from_square)
+                                                break
+                                        else:
+                                            from_sq = chess.square_name(m2.from_square)
+                                            break
+                            except Exception:
+                                pass
                 if not move and not from_sq:
                     # couldn't compute a fallback from-square
                     logger.debug('Hint heuristic failed for puzzle id=%s san=%r fen=%r', pid, san, p.fen)
