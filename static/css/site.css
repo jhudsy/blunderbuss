@@ -63,13 +63,14 @@
    can access the lower part of the board when it doesn't fit the initial
    viewport. Enable smooth native touch scrolling on iOS/Android. */
 @media (max-height: 600px) and (orientation: landscape) {
+  /* Let the board expand naturally and rely on the page's vertical
+     scrolling so the bottom of the board is reachable by scrolling the
+     whole page rather than a nested scroll area. */
   #board {
-    max-height: calc(100vh - 160px);
-    overflow: auto; /* allow scrolling to reach lower squares */
-    -webkit-overflow-scrolling: touch; /* smooth scrolling on iOS */
+    max-height: none;
+    overflow: visible; /* allow page scroll to reveal lower squares */
     display: block;
   }
-  /* ensure inner board scales but can scroll vertically when taller */
   .board {
     width: 100% !important;
     height: auto !important;
