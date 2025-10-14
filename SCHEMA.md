@@ -30,6 +30,12 @@ Fields:
 - settings_perftypes: str, Optional, default='blitz,rapid' — comma-separated performance types
 - settings_perftypes: str, Optional, default='["blitz","rapid"]' — JSON-encoded list of performance types (e.g., ["classical","rapid","blitz"]). Previously this field stored a CSV string; the repository now stores a JSON array for clarity and easier consumption by APIs.
  - settings_tags: str, Optional, default='["Blunder","Mistake","Inaccuracy"]' — JSON-encoded list of puzzle tags the user wants to see. Used by the selection logic to filter puzzles by `Puzzle.tag`.
+ - settings_max_puzzles: int, Optional, default=0 — max number of puzzles to retain for the user. 0 means unlimited.
+
+Additional user helpers and token handling
+----------------------------------------
+- `access_token_encrypted` and `refresh_token_encrypted` are the underlying columns used to persist OAuth tokens. The model exposes `access_token` and `refresh_token` properties which transparently encrypt/decrypt values using Fernet when an `ENCRYPTION_KEY` environment variable is provided; otherwise the properties fall back to plaintext storage for local development convenience.
+- Helper properties `perf_types` and `tag_filters` are provided on the `User` model to return normalized Python lists (lowercased) derived from the JSON-encoded `settings_perftypes` and `settings_tags` fields.
 
 Additional notes:
 - A new `Puzzle.severity` field stores the parsed classification of a puzzle (e.g. 'Blunder', 'Mistake', 'Inaccuracy') extracted from PGN comments. This is populated by the parser when importing PGN.
@@ -79,6 +85,9 @@ Evaluation / metadata:
 - time_control: str, Optional — PGN time control metadata
  - time_control: str, Optional — PGN time control metadata
  - time_control_type: str, Optional — derived classification from `time_control` (one of 'Bullet','Blitz','Rapid','Classical') when the PGN contains an X+Y seconds format. This is computed by the parser and stored on import.
+ - time_control: str, Optional — PGN time control metadata
+ - time_control_type: str, Optional — derived classification from `time_control` (one of 'Bullet','Blitz','Rapid','Classical') when the PGN contains an X+Y seconds format. This is computed by the parser and stored on import.
+ - severity: str, Optional — parsed human/evaluation classification for the puzzle (e.g. 'Blunder','Mistake','Inaccuracy') populated by the PGN parser on import.
 - white: str, Optional — White player's name (PGN header)
 - black: str, Optional — Black player's name
 - date: str, Optional — game date string
@@ -127,8 +136,8 @@ The following is an approximate translation of the Pony models to SQL for refere
 CREATE TABLE user (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT NOT NULL UNIQUE,
-  access_token TEXT,
-  refresh_token TEXT,
+  access_token_encrypted TEXT,
+  refresh_token_encrypted TEXT,
   token_expires_at REAL,
   xp INTEGER DEFAULT 0,
   correct_count INTEGER DEFAULT 0,
@@ -136,6 +145,8 @@ CREATE TABLE user (
   consecutive_correct INTEGER DEFAULT 0,
   settings_days INTEGER DEFAULT 30,
   settings_perftypes TEXT DEFAULT '["blitz","rapid"]',
+  settings_tags TEXT DEFAULT '["Blunder","Mistake","Inaccuracy"]',
+  settings_max_puzzles INTEGER DEFAULT 0,
   streak_days INTEGER DEFAULT 0,
   _import_total INTEGER DEFAULT 0,
   _import_done INTEGER DEFAULT 0,
@@ -164,6 +175,8 @@ CREATE TABLE puzzle (
   black TEXT,
   date TEXT,
   time_control TEXT
+  ,severity TEXT
+  ,time_control_type TEXT
 );
 
 CREATE TABLE badge (
