@@ -124,6 +124,175 @@ async function onDrop(source, target){
   const move = {from: source, to: target, promotion: 'q'}
   // capture the starting FEN so we can reset after a wrong move
   const startFEN = game.fen()
+  // Helper: send the move result to the server and handle the response/UI
+  async function sendCheckPuzzle(result, startFEN){
+    // send SAN to backend
+    const san = result.san
+    if (window.__CP_DEBUG) console.debug('starting fen', startFEN)
+    if (window.__CP_DEBUG) console.debug('check_puzzle: sending', { puzzleId: currentPuzzle && currentPuzzle.id, san })
+
+    try{
+      const r = await fetch('/check_puzzle', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({id: currentPuzzle.id, san, hint_used: hintUsedForCurrent})})
+      if (window.__CP_DEBUG) console.debug('check_puzzle: raw response', r)
+      if (!r.ok){
+        const t = await r.text().catch(e => '<no-body>')
+        console.error('check_puzzle: non-OK response', r.status, t)
+        throw new Error('check_puzzle non-OK: ' + r.status)
+      }
+      const j = await r.json().catch(e => { console.error('check_puzzle: JSON parse error', e); throw e })
+      if (window.__CP_DEBUG) console.debug('check_puzzle: response', j)
+      try{ if (window.__CP_DEBUG) console.debug('check_puzzle: response keys', Object.keys(j), 'stringified', JSON.stringify(j)) } catch(e){}
+
+      if (j.correct){
+        highlightSquareWithFade(source, 'green')
+        highlightSquareWithFade(target, 'green')
+        // brief inline feedback instead of modal
+        const infoEl = document.getElementById('info')
+        if (infoEl) infoEl.textContent = 'Correct! Click Next to continue.'
+        // update ribbon XP immediately from server response if present
+        try{
+          if (typeof j.xp !== 'undefined'){
+            const rx = document.getElementById('ribbonXP')
+            if (rx){
+              const prev = parseInt(rx.textContent) || 0
+              rx.textContent = j.xp
+              const delta = (j.xp || 0) - prev
+              if (delta > 0) animateXpIncrement(delta)
+            }
+          }
+        }catch(e){}
+        // refresh full ribbon state from server
+        try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
+        // enable Next after a short delay
+        setTimeout(()=>{ document.getElementById('next').disabled = false }, 800)
+        // disable Hint after an answer is given; it will be re-enabled on next puzzle load
+        try{ const hintBtn = document.getElementById('hint'); if (hintBtn) hintBtn.disabled = true } catch(e){}
+        // show badge modal only if new badges were awarded on this answer
+        if (j.awarded_badges && j.awarded_badges.length){
+          // show inline toast for new badges
+          showBadgeToast(j.awarded_badges)
+        }
+        // Show congratulatory toast if the server reports a new record streak
+        try{
+          if (j.new_record_streak){
+            try{ showRecordToast(j.new_record_streak) } catch(e){ try{ alert('New record! Streak: ' + j.new_record_streak) }catch(e){} }
+          }
+        }catch(e){}
+        // reveal 'See on lichess' link if we have game info
+        try{ showSeeOnLichessLink(currentPuzzle) } catch(e){}
+      } else {
+        if (window.__CP_DEBUG) console.debug('check_puzzle: incorrect branch entered', { startFEN })
+        // Orchestrate the reveal sequence for an incorrect answer (visual only)
+        highlightSquareWithFade(source, 'red')
+        highlightSquareWithFade(target, 'red')
+
+        // Start reveal sequence using nested setTimeouts (avoid async/await so logs always run)
+        setTimeout(() => {
+          // 1) after brief pause, reset board to the starting position (don't mutate global game yet)
+          try { if (window.__CP_DEBUG) console.log('here'); board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
+
+          // 2) wait a little more before revealing the correct move
+          setTimeout(() => {
+            // 3) reveal correct move if provided
+            if (window.__CP_DEBUG) console.debug('check_puzzle: hasOwnProperty(correct_san)?', j && Object.prototype.hasOwnProperty.call(j, 'correct_san'))
+            if (window.__CP_DEBUG) console.debug('check_puzzle: typeof correct_san', typeof j.correct_san, 'value:', j.correct_san)
+            if (j.correct_san){
+              if (window.__CP_DEBUG) console.debug('server provided correct_san (raw):', j.correct_san)
+              const cmc = document.getElementById('correctMoveContainer')
+              if (cmc) cmc.style.display = ''
+              // sanitize SAN from server (strip stray punctuation or leading move numbers)
+              let san = (j.correct_san || '').toString().trim()
+              if (window.__CP_DEBUG) console.debug('server provided correct_san (before sanitize):', j.correct_san, 'after trim:', san)
+              san = san.replace(/^\d+\.*\s*/, '')
+              san = san.replace(/\.{2,}/g, '')
+              san = san.replace(/[(),;:]/g, '')
+              san = san.trim()
+              if (window.__CP_DEBUG) console.debug('server provided correct_san (sanitized):', san)
+              try{
+                // compute the correct move from the starting position using a temp Chess instance
+                const temp = new Chess()
+                try{ temp.load(startFEN) } catch(e){ /* ignore */ }
+                const moveObj = temp.move(san, {sloppy: true})
+                if (window.__CP_DEBUG) console.debug('temp.move result:', moveObj)
+                if (moveObj){
+                  try{ revealCorrectMoveSquares(moveObj.from, moveObj.to) } catch(e){}
+                } else {
+                  const moves = temp.moves({verbose:true})
+                  for (let m of moves){
+                    if (m.san === san){
+                      if (window.__CP_DEBUG) console.debug('matched move in moves list:', m)
+                      try{ revealCorrectMoveSquares(m.from, m.to) } catch(e){ board.position(startFEN) }
+                      break
+                    }
+                  }
+                  if (window.__CP_DEBUG) console.debug('fallback scan complete, no direct temp.move result')
+                }
+                // ensure the global game is reset back to the starting position after reveal
+                try{ game.load(startFEN) } catch(e){ /* ignore */ }
+              }catch(e){ /* ignore reveal failures */ }
+            }
+            // show badges if any
+            if (j.awarded_badges && j.awarded_badges.length){
+              showBadgeToast(j.awarded_badges)
+            }
+            // 4) inline feedback and re-enable Next after delay (no modal)
+            const infoEl2 = document.getElementById('info')
+            if (infoEl2) infoEl2.textContent = 'Incorrect — the correct move is shown on the board. Click Next to continue.'
+            // update ribbon XP immediately if provided
+            try{
+              if (typeof j.xp !== 'undefined'){
+                const rx2 = document.getElementById('ribbonXP')
+                if (rx2){
+                  const prev2 = parseInt(rx2.textContent) || 0
+                  rx2.textContent = j.xp
+                  const delta2 = (j.xp || 0) - prev2
+                  if (delta2 > 0) animateXpIncrement(delta2)
+                }
+              }
+            }catch(e){}
+            // refresh ribbon from backend to get full state (streak etc.)
+            try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
+            setTimeout(()=>{ document.getElementById('next').disabled = false }, 800)
+            // disable Hint after an incorrect attempt as well
+            try{ const hintBtn = document.getElementById('hint'); if (hintBtn) hintBtn.disabled = true } catch(e){}
+            // reveal 'See on lichess' link if we have game info
+            try{ showSeeOnLichessLink(currentPuzzle) } catch(e){}
+          }, 250)
+        }, 800)
+      }
+    }catch(err){
+      console.error('check_puzzle: async error', err)
+    }
+  }
+
+  // detect pawn promotion: if a pawn moves to the last rank, prompt the user
+  try{
+    const pieceObj = game.get(source)
+    if (pieceObj && pieceObj.type === 'p'){
+      const isWhite = pieceObj.color === 'w'
+      const rank = target[1]
+      if ((isWhite && rank === '8') || (!isWhite && rank === '1')){
+        // present promotion selector, then perform the chosen promotion
+        showPromotionSelector(source, target, async function(promo){
+          if (!promo) return
+          // attempt the move with the selected promotion
+          const moveObj = { from: source, to: target, promotion: promo }
+          const res = game.move(moveObj)
+          if (res === null){
+            // illegal promotion; restore board
+            try{ board.position(startFEN) }catch(e){}
+            return
+          }
+          // update board to reflect the chosen promotion
+          try{ board.position(game.fen()) }catch(e){}
+          // send to server and handle UI
+          await sendCheckPuzzle(res, startFEN)
+        })
+        return 'snapback'
+      }
+    }
+  }catch(e){ /* ignore promotion detection failures */ }
+
   const result = game.move(move)
   if (result === null){
     return 'snapback'
@@ -265,6 +434,101 @@ async function onDrop(source, target){
   }catch(err){
     console.error('check_puzzle: async error', err)
   }
+}
+
+// Show a simple promotion selector overlay. Calls cb(piece) with one of 'q','r','b','n',
+// or null if cancelled.
+function showPromotionSelector(from, to, cb){
+  try{
+    // remove any existing selector
+    const prev = document.getElementById('promotionSelector')
+    if (prev) try{ prev.parentNode.removeChild(prev) }catch(e){}
+    const overlay = document.createElement('div')
+    overlay.id = 'promotionSelector'
+    overlay.style.position = 'fixed'
+    overlay.style.left = '0'
+    overlay.style.top = '0'
+    overlay.style.right = '0'
+    overlay.style.bottom = '0'
+    overlay.style.zIndex = '4000'
+    overlay.style.background = 'rgba(0,0,0,0.45)'
+    overlay.style.pointerEvents = 'auto'
+
+    const box = document.createElement('div')
+    box.style.position = 'absolute'
+    box.style.background = '#fff'
+    box.style.padding = '8px'
+    box.style.borderRadius = '8px'
+    box.style.display = 'flex'
+    box.style.gap = '6px'
+    box.style.boxShadow = '0 6px 18px rgba(0,0,0,0.2)'
+    box.style.alignItems = 'center'
+
+    // determine piece color from the moving pawn (default to white)
+    let colorPrefix = 'w'
+    try{ const p = game.get(from); if (p && p.color) colorPrefix = p.color }catch(e){}
+
+    const pieces = ['q','r','b','n']
+    for (let p of pieces){
+      const btn = document.createElement('button')
+      btn.type = 'button'
+      btn.className = 'btn btn-outline-primary'
+      btn.style.display = 'flex'
+      btn.style.alignItems = 'center'
+      btn.style.justifyContent = 'center'
+      btn.style.padding = '6px'
+
+      const img = document.createElement('img')
+      img.alt = p
+      img.src = `/static/img/chesspieces/${colorPrefix}${p.toUpperCase()}.png`
+      img.style.width = '36px'
+      img.style.height = '36px'
+      img.style.pointerEvents = 'none'
+      btn.appendChild(img)
+
+      btn.addEventListener('click', (e)=>{
+        try{ overlay.parentNode && overlay.parentNode.removeChild(overlay) }catch(e){}
+        try{ cb(p) }catch(e){}
+      })
+      box.appendChild(btn)
+    }
+
+    // cancel on backdrop click
+    overlay.addEventListener('click', (e)=>{ if (e.target === overlay){ try{ overlay.parentNode && overlay.parentNode.removeChild(overlay) }catch(e){}; try{ cb(null) }catch(e){} } })
+    overlay.appendChild(box)
+    document.body.appendChild(overlay)
+
+    // Position the box next to the promotion square if possible
+    try{
+      const sq = document.querySelector('.square-' + to)
+      if (sq){
+        const rect = sq.getBoundingClientRect()
+        const padding = 8
+        // approximate box width based on number of items
+        const perBtn = 48
+        const boxWidth = perBtn * pieces.length
+        // prefer to the right of the square
+        let left = rect.right + padding
+        // if not enough room on right, place to left
+        if (left + boxWidth > window.innerWidth - 10){
+          left = rect.left - boxWidth - padding
+        }
+        // clamp
+        if (left < 6) left = Math.max(6, rect.left)
+        // try to align top with square; if near bottom, adjust
+        let top = rect.top
+        const estHeight = 56
+        if (top + estHeight > window.innerHeight - 10) top = Math.max(6, window.innerHeight - estHeight - 10)
+        box.style.left = left + 'px'
+        box.style.top = top + 'px'
+      } else {
+        // fallback to centered
+        box.style.left = '50%'
+        box.style.top = '50%'
+        box.style.transform = 'translate(-50%,-50%)'
+      }
+    }catch(e){ /* ignore positioning failures and keep centered fallback */ }
+  }catch(e){ if (window.__CP_DEBUG) console.debug('showPromotionSelector failed', e); try{ cb(null) }catch(e){} }
 }
 
 // Display a simple congratulatory modal for new puzzle-streak records
