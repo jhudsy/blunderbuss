@@ -30,3 +30,39 @@
 .square-reveal-anim {
   animation: reveal-pulse var(--highlight-duration) ease-in-out both;
 }
+
+/* Responsive board layout tweaks */
+#board {
+  width: 100%;          /* occupy column width */
+  max-width: 520px;     /* avoid excessively large boards on wide screens */
+  margin: 0 auto 1rem auto;
+}
+
+/* Chessboard contained element (chessboard.js sets an inner .board) */
+.board {
+  width: 100% !important;
+  height: auto !important;
+}
+
+/* For small screens stack board above controls and avoid overlap */
+@media (max-width: 767.98px) {
+  .row {
+    flex-wrap: wrap;
+  }
+  .col-md-6 {
+    width: 100%;
+    max-width: 100%;
+  }
+  /* make board slightly smaller on very narrow portrait phones */
+  #board { max-width: calc(100vw - 2rem); }
+  /* ensure buttons stay visible below the board */
+  #info, #puzzleMeta, #hint, #next { margin-top: 0.5rem; }
+}
+
+/* Landscape phones: cap board height to viewport so page doesn't require excessive scrolling */
+@media (max-height: 600px) and (orientation: landscape) {
+  #board {
+    max-height: calc(100vh - 160px);
+    overflow: hidden;
+  }
+}
