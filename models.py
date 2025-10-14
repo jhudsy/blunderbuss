@@ -60,6 +60,13 @@ class User(db.Entity):
     # Maximum number of puzzles to keep for this user. 0 means unlimited.
     settings_max_puzzles = Optional(int, default=0)
     streak_days = Optional(int, default=0)
+    # longest calendar-day streak recorded for this user
+    best_streak_days = Optional(int, default=0)
+    # record when user first had activity (ISO date string)
+    _first_game_date = Optional(str)
+    # XP accumulated today (resets on day change) stored as int and the date it refers to
+    xp_today = Optional(int, default=0)
+    xp_today_date = Optional(str)
     _import_total = Optional(int, default=0)
     _import_done = Optional(int, default=0)
     _last_game_date = Optional(str)

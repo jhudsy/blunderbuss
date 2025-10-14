@@ -835,8 +835,23 @@ def user_information():
         days_streak = int(getattr(u, 'streak_days', 0) or 0)
         puzzle_streak = int(getattr(u, 'consecutive_correct', 0) or 0)
         best_puzzle_streak = int(getattr(u, 'best_puzzle_streak', 0) or 0)
+        best_day_streak = int(getattr(u, 'best_streak_days', 0) or 0)
         username_val = u.username
-    return jsonify({'xp': xp, 'badges': badges, 'streak': days_streak, 'puzzle_streak': puzzle_streak, 'best_puzzle_streak': best_puzzle_streak, 'username': username_val})
+        # xp today
+        xp_today = int(getattr(u, 'xp_today', 0) or 0)
+        xp_today_date = getattr(u, 'xp_today_date', None)
+        # compute average XP/day since first activity
+        avg_xp_per_day = None
+        try:
+            first_iso = getattr(u, '_first_game_date', None)
+            if first_iso:
+                from datetime import datetime as _dt
+                first_date = _dt.fromisoformat(first_iso).date()
+                days = max(1, (datetime.utcnow().date() - first_date).days)
+                avg_xp_per_day = int((xp or 0) / days)
+        except Exception:
+            avg_xp_per_day = None
+    return jsonify({'xp': xp, 'badges': badges, 'streak': days_streak, 'puzzle_streak': puzzle_streak, 'best_puzzle_streak': best_puzzle_streak, 'best_day_streak': best_day_streak, 'avg_xp_per_day': avg_xp_per_day, 'xp_today': xp_today, 'xp_today_date': xp_today_date, 'username': username_val})
 
 
 @app.route('/leaderboard')
@@ -924,11 +939,33 @@ def check_puzzle():
             gained = 1 if gained > 0 else 0
         # apply XP immediately so badge logic can see updated value
         u.xp = (u.xp or 0) + gained
+        # Track xp gained today: if xp_today_date is not today, reset
+        try:
+            today_iso = datetime.utcnow().date().isoformat()
+            if getattr(u, 'xp_today_date', None) != today_iso:
+                u.xp_today = 0
+                u.xp_today_date = today_iso
+            try:
+                u.xp_today = (getattr(u, 'xp_today', 0) or 0) + (gained or 0)
+            except Exception:
+                u.xp_today = (gained or 0)
+            # ensure we have a first activity date recorded
+            if not getattr(u, '_first_game_date', None):
+                u._first_game_date = datetime.utcnow().date().isoformat()
+        except Exception:
+            pass
         # Update user's daily streak (number of consecutive days with activity)
         # only when the current answer is correct. Do this before badge calculation
         # so day-streak badges may be awarded in the same transaction.
         if correct:
             _record_successful_activity(u)
+            # update best day streak if changed
+            try:
+                best_day = int(getattr(u, 'best_streak_days', 0) or 0)
+                if (getattr(u, 'streak_days', 0) or 0) > best_day:
+                    u.best_streak_days = (getattr(u, 'streak_days', 0) or 0)
+            except Exception:
+                pass
 
         if correct:
             u.correct_count = (u.correct_count or 0) + 1
