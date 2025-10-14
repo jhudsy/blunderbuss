@@ -372,7 +372,8 @@ function showSeeOnLichessLink(puzzle){
     if (!nextBtn) return
     container = document.createElement('span')
     container.id = 'seeOnLichessContainer'
-    container.style.marginLeft = '8px'
+    // avoid inline margins; rely on the parent's flex gap for spacing
+    container.style.marginLeft = ''
     nextBtn.parentNode.insertBefore(container, nextBtn.nextSibling)
   }
   // create or update link
@@ -381,9 +382,12 @@ function showSeeOnLichessLink(puzzle){
   if (!link){
     link = document.createElement('a')
     link.id = 'seeOnLichess'
-  // Use the same primary button styling as the 'Next' button for a
-  // consistent look-and-feel. Keep margin/spacing to match layout.
-  link.className = 'btn btn-primary mb-2'
+    // Match the Next button's classes so the appearance is identical
+    try{
+      const nextBtn2 = document.getElementById('next')
+      if (nextBtn2) link.className = nextBtn2.className
+      else link.className = 'btn btn-primary mb-2'
+    }catch(e){ link.className = 'btn btn-primary mb-2' }
     link.target = '_blank'
     link.rel = 'noopener'
     link.textContent = 'See on lichess'
