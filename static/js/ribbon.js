@@ -81,6 +81,8 @@
   function initRibbon(){
     // initial population
     refreshRibbon()
+    // Also ensure importer attach is called in case ribbon.js is loaded after importer
+    try{ if (window.importer && typeof window.importer.startImport === 'function') { /* importer will attach on DOMContentLoaded */ } }catch(e){}
     // expose for other code to call when needed
     window.refreshRibbon = refreshRibbon
     window.initRibbon = initRibbon

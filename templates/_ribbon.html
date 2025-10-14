@@ -25,6 +25,9 @@
       {% if cur != settings_url %}
         <a class="btn btn-sm btn-outline-secondary me-2" href="{{ settings_url }}">Settings</a>
       {% endif %}
+      {% if session.username %}
+        <button id="ribbonUpdatePuzzles" class="btn btn-sm btn-success me-2">Update puzzles</button>
+      {% endif %}
       {# Badges button removed: badge count link leads to /badges now #}
     </div>
     <div class="d-flex align-items-center">
@@ -40,3 +43,23 @@
     </div>
   </div>
 </div>
+
+    <!-- Import modal: shown when updating puzzles -->
+    <div class="modal fade" id="importModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Updating puzzles</h5>
+          </div>
+          <div class="modal-body text-center">
+            <div id="importSpinner" class="mb-2">
+              <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+            </div>
+            <div id="importProgress">Imported <strong id="importDone">0</strong> of <strong id="importTotal">?</strong></div>
+            <div id="importLast">Last game: <span id="importLastGame">-</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/js/importer.js"></script>

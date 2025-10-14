@@ -534,6 +534,12 @@ def login_callback():
 
     # Mark session as logged in and redirect to index (or importing UI)
     session['username'] = username
+    # Trigger an import shortly after login so the UI modal can show progress
+    try:
+        # enqueue background import; best-effort
+        import_games_task.delay(username, perftypes, days)
+    except Exception:
+        logger.exception('Failed to enqueue import task during login for user=%s', username)
     return redirect(url_for('index'))
     
 
@@ -562,6 +568,51 @@ def load_games():
     except Exception:
         logger.exception('Failed to import puzzles for user=%s', username)
         return jsonify({'error': 'import-failed'}), 500
+
+
+@app.route('/start_import', methods=['POST'])
+def start_import():
+    """Start an asynchronous import for the current user using Celery.
+
+    Returns JSON: { 'ok': True, 'task_id': '<id>' }
+    """
+    username = session.get('username')
+    if not username:
+        return jsonify({'error': 'not logged in'}), 401
+    with db_session:
+        u = User.get(username=username)
+        if not u:
+            return jsonify({'error': 'user not found'}), 404
+        perftypes = getattr(u, 'settings_perftypes', '[]')
+        try:
+            import json
+            perf_list = json.loads(perftypes) if perftypes else []
+            perf_arg = ','.join(perf_list) if isinstance(perf_list, list) else str(perftypes)
+        except Exception:
+            perf_arg = str(perftypes)
+        days = int(getattr(u, 'settings_days', 30) or 30)
+    try:
+        task = import_games_task.delay(username, perf_arg, days)
+        return jsonify({'ok': True, 'task_id': task.id}), 200
+    except Exception:
+        logger.exception('Failed to enqueue import task for user=%s', username)
+        return jsonify({'error': 'enqueue-failed'}), 500
+
+
+@app.route('/import_status')
+def import_status():
+    """Return import progress for the current user: total, done, last_game_date."""
+    username = session.get('username')
+    if not username:
+        return jsonify({'error': 'not logged in'}), 401
+    with db_session:
+        u = User.get(username=username)
+        if not u:
+            return jsonify({'error': 'user not found'}), 404
+        total = int(getattr(u, '_import_total', 0) or 0)
+        done = int(getattr(u, '_import_done', 0) or 0)
+        last_game = getattr(u, '_last_game_date', None)
+    return jsonify({'total': total, 'done': done, 'last_game_date': last_game})
 
 
 
