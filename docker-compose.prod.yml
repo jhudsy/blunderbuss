@@ -114,6 +114,9 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    # Read environment from the repository .env file so envsubst can replace
+    # $DOMAIN inside the template. Other services already use env_file: .env.
+    env_file: .env
     volumes:
       # Mount the template file read-only into the container. Leave the
       # /etc/nginx/conf.d directory itself writable so the entrypoint can
