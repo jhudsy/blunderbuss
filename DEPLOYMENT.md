@@ -227,6 +227,38 @@ To use it:
 The nginx config is templated at `deploy/nginx/conf.d/chesspuzzle.template` and
 is expanded at container start to produce the active nginx config.
 
+When to reload or recreate `nginx`
+---------------------------------
+
+The `nginx` container generates its runtime configuration from the template
+and reads files (certificates, webroot) from mounted volumes at startup. If
+you change the template, update `.env` values used by the template, modify
+certificates in the `certs` volume, or recreate the `web` service, you should
+reload or recreate the `nginx` container so it picks up the changes and
+re-resolves upstream endpoints.
+
+Recommended commands:
+
+```bash
+# Reload nginx without recreating (fast, when certs or files in volumes changed)
+docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
+
+# Recreate nginx only (applies new template/.env or container config)
+docker compose -f docker-compose.prod.yml up -d --force-recreate --no-deps nginx
+
+# Recreate both web and nginx together to ensure nginx resolves the new
+# web container endpoint immediately after web was updated/redeployed
+docker compose -f docker-compose.prod.yml up -d --force-recreate web nginx
+```
+
+Notes:
+- Use `--no-deps` with care; it ensures only `nginx` is recreated and avoids
+  restarting upstream services unnecessarily.
+- If you changed the template or `.env` entries the entrypoint runs `envsubst`
+  at container start — that requires recreating the container so the generated
+  `chesspuzzle.conf` is written with current values.
+
+
 Quick production setup checklist
 -------------------------------
 - Copy the example secrets file and edit or generate real values:
