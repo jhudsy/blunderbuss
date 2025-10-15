@@ -1000,12 +1000,12 @@ def check_puzzle():
         p.repetitions = reps
         p.interval = interval
         p.ease_factor = ease
-        # Store timestamps as ISO strings (with timezone) to keep storage
-        # consistent across DB drivers/processes.
+        # Store timestamps as timezone-aware datetimes (UTC). Pony/DB will
+        # persist these as timestamptz when using Postgres.
         last_dt = datetime.now(timezone.utc)
         next_dt = last_dt + timedelta(days=interval)
-        p.last_reviewed = last_dt.isoformat()
-        p.next_review = next_dt.isoformat()
+        p.last_reviewed = last_dt
+        p.next_review = next_dt
         if correct:
             p.successes = (p.successes or 0) + 1
         else:
