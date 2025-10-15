@@ -40,4 +40,4 @@ if [ -f /app/scripts/wait_for_db.py ]; then
   }
 fi
 
-exec gunicorn -b 0.0.0.0:5000 --workers "${GUNICORN_WORKERS}" backend:app
+exec gunicorn -b 0.0.0.0:5000 --workers "${GUNICORN_WORKERS}" pre_import:app
