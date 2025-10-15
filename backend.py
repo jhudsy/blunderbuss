@@ -1036,10 +1036,10 @@ def check_puzzle():
                 u._first_game_date = datetime.utcnow().date().isoformat()
         except Exception:
             pass
-        # Update user's daily streak (number of consecutive days with activity)
-        # only when the current answer is correct. Do this before badge calculation
-        # so day-streak badges may be awarded in the same transaction.
+        # Update user counters and streaks when the answer is correct.
+        # Perform streak updates first so badge calculation can observe up-to-date state.
         if correct:
+            # Update daily streak and record last activity timestamp
             _record_successful_activity(u)
             # update best day streak if changed
             try:
@@ -1049,13 +1049,14 @@ def check_puzzle():
             except Exception:
                 pass
 
-        if correct:
+            # increment cumulative correct counter
             u.correct_count = (u.correct_count or 0) + 1
             # If a hint was used, do NOT increase the puzzle streak (consecutive_correct)
             # but do not reset it either on correct answer. If no hint used, increment as usual.
             if not hint_used:
                 u.consecutive_correct = consec + 1
         else:
+            # reset consecutive puzzle-correct streak on failure
             u.consecutive_correct = 0
 
         # Now determine which badges (if any) should be awarded. badge_updates
@@ -1068,10 +1069,7 @@ def check_puzzle():
                 exists = Badge.get(user=u, name=b)
                 if not exists:
                     Badge(user=u, name=b)
-        # Update user's daily streak (number of consecutive days with activity)
-        # only when the current answer is correct.
-        if correct:
-            _record_successful_activity(u)
+        # (streak updated earlier before badge calculation)
         # prepare response while DB session is active to avoid session-is-over errors
         resp = {
             'correct': correct,
