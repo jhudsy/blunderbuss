@@ -36,6 +36,13 @@ async function loadPuzzle(){
     return
   }
   currentPuzzle = data
+  // Remove any leftover 'See on lichess' link from a previous puzzle. If
+  // the newly loaded puzzle has game info, showSeeOnLichessLink() will
+  // recreate the link as needed; otherwise removing avoids a stale button.
+  try{
+    const old = document.getElementById('seeOnLichessContainer')
+    if (old && old.parentNode) old.parentNode.removeChild(old)
+  }catch(e){}
   // clear any square highlights from previous puzzle
   clearAllHighlights()
 
