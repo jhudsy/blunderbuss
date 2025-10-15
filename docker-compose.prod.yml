@@ -115,7 +115,10 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./deploy/nginx/conf.d:/etc/nginx/conf.d:ro
+      # Mount the template file read-only into the container. Leave the
+      # /etc/nginx/conf.d directory itself writable so the entrypoint can
+      # create the generated chesspuzzle.conf from the template.
+      - ./deploy/nginx/conf.d/chesspuzzle.template:/etc/nginx/conf.d/chesspuzzle.template:ro
       - certs:/etc/letsencrypt
       - webroot:/var/www/certbot
     depends_on:
