@@ -1,18 +1,48 @@
 
-#Production docker-compose file with an nginx reverse proxy and Let's Encrypt (certbot) support.
+# Production docker-compose file with an nginx reverse proxy and Let's Encrypt
+# (certbot) support.
 #
-#Usage notes:
-#- Populate `.env` with DOMAIN and LETSENCRYPT_EMAIL (and other secrets like SECRET_KEY).
-#- First-time cert obtain (run once):
-#  docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot \
-#    certbot certonly --webroot -w /var/www/certbot \
-#    --email "$LETSENCRYPT_EMAIL" --agree-tos --no-eff-email -d "$DOMAIN"
+# Usage notes (first-time certificate obtain):
+# - Always run the commands from the repository root so compose uses the
+#   same project and named volumes (important: volumes are project-scoped).
+# - Populate `.env` with at least:
+#     DOMAIN=your.domain.tld
+#     LETSENCRYPT_EMAIL=you@example.com
 #
-#After obtaining certs, start the stack:
-#  docker compose -f docker-compose.prod.yml up -d
+# Two common, safe ways to obtain the first cert:
 #
-#This file expects `deploy/nginx/conf.d/chesspuzzle.template` to exist and will
-#substitute the $DOMAIN environment variable into it at nginx startup.
+# Option A (recommended quick path) - standalone mode
+# - Stop nginx (if running) so certbot can bind port 80, then run certbot in
+#   standalone mode. This is simple and avoids temporarily changing nginx config.
+#   Example:
+#     docker compose -f docker-compose.prod.yml stop nginx
+#     docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot \
+#       certbot certonly --standalone --preferred-challenges http \
+#       --agree-tos --no-eff-email --email "$LETSENCRYPT_EMAIL" -d "$DOMAIN"
+#
+# Option B - webroot mode (keep using nginx to serve the challenge)
+# - Use when you prefer the ACME HTTP-01 challenge to be served from the
+#   configured webroot. Ensure nginx is serving the webroot path (port 80
+#   reachable) before running certbot. Example (if nginx is already configured
+#   to serve the webroot):
+#     docker compose -f docker-compose.prod.yml up -d nginx
+#     docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot \
+#       certbot certonly --webroot -w /var/www/certbot \
+#       --email "$LETSENCRYPT_EMAIL" --agree-tos --no-eff-email -d "$DOMAIN"
+#
+# Notes:
+# - If you use Option B but nginx fails to start because certs are missing,
+#   start nginx in HTTP-only mode (remove/comment the 443 server block temporarily)
+#   or run a temporary simple HTTP server that mounts the same named volume so
+#   certbot's webroot files are visible to the CA (see README/deploy for tips).
+# - Let's Encrypt must be able to reach your host on port 80 (firewall/cloud
+#   security groups must allow inbound TCP 80).
+#
+# After obtaining certs, start the full stack:
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# This file expects `deploy/nginx/conf.d/chesspuzzle.template` to exist and will
+# substitute the $DOMAIN environment variable into it at nginx startup.
 
 services:
   web:
