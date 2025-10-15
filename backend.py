@@ -193,10 +193,12 @@ def _record_successful_activity(u):
 
     This consolidates duplicated logic that was previously copy-pasted in
     `/check_puzzle`. It expects `u` to be a PonyORM User entity and will
-    modify `u.streak_days` and `u._last_game_date` in-place.
+    modify `u.streak_days` and `u._last_successful_activity_date` in-place.
     """
     try:
-        last_iso = getattr(u, '_last_game_date', None)
+        # Use the dedicated successful-activity timestamp for streaks. _last_game_date
+        # stores the last imported game's date and should not affect user streaks.
+        last_iso = getattr(u, '_last_successful_activity_date', None)
         from datetime import datetime as _dt, timedelta as _td
         today = _dt.utcnow().date()
         if last_iso:
@@ -221,7 +223,7 @@ def _record_successful_activity(u):
         # If anything unexpected happens, ensure we at least have a sensible default
         u.streak_days = getattr(u, 'streak_days', 0) or 0
     # Record this successful activity timestamp for future streak calculations
-    u._last_game_date = datetime.utcnow().isoformat()
+    u._last_successful_activity_date = datetime.utcnow().isoformat()
 
 
 def parse_perf_types(stored_value):

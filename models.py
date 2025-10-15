@@ -75,6 +75,9 @@ class User(db.Entity):
     # Make nullable=True so code can clear the error by assigning None.
     _import_error = Optional(str, nullable=True)
     _last_game_date = Optional(str)
+    # record when the user last successfully solved a puzzle (ISO date string)
+    # This is distinct from _last_game_date which stores the last imported game's date.
+    _last_successful_activity_date = Optional(str)
 
     # access_token property: transparently encrypts/decrypts when ENCRYPTION_FERNET is configured
     @property
