@@ -78,8 +78,17 @@
     // start import (server will enqueue a Celery task)
     await startImport()
     // poll until done and update modal each poll
-    await pollImportUntilDone(updateModal)
+    const final = await pollImportUntilDone(updateModal)
     hideModal(bs)
+    // After the import finishes, load a puzzle so the UI doesn't remain on
+    // the default starting board. Use a short delay to allow the modal hide
+    // animation to complete.
+    try{
+      if (final && final.status !== 'failed'){
+        if (typeof window.loadPuzzle === 'function') setTimeout(()=>{ try{ window.loadPuzzle() }catch(e){} }, 600)
+        else setTimeout(()=>{ try{ window.location.reload() }catch(e){} }, 600)
+      }
+    }catch(e){}
   }
 
   function attach(){
@@ -93,7 +102,16 @@
       fetch('/import_status', { credentials: 'same-origin' }).then(r=>r.ok?r.json():null).then(s=>{
         if (s && (s.status || 'idle') === 'in_progress'){
           const bs = showModal()
-          pollImportUntilDone(updateModal).then(()=>hideModal(bs))
+          // Poll until done; when finished, hide the modal and load a puzzle
+          pollImportUntilDone(updateModal).then((final)=>{
+            hideModal(bs)
+            try{
+              if (final && final.status !== 'failed'){
+                if (typeof window.loadPuzzle === 'function') setTimeout(()=>{ try{ window.loadPuzzle() }catch(e){} }, 600)
+                else setTimeout(()=>{ try{ window.location.reload() }catch(e){} }, 600)
+              }
+            }catch(e){}
+          })
         }
       }).catch(()=>{})
     }catch(e){}
