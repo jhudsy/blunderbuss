@@ -234,8 +234,20 @@ class Badge(db.Entity):
 
 
 def init_db(path='sqlite:///db.sqlite', create_tables=True):
-    # If database already bound, skip re-binding (idempotent)
+    # If database already bound, ensure mappings are generated for this process
+    # (idempotent). It's possible a previous caller bound the provider but did
+    # not generate mappings in this process; ensure we generate mappings so
+    # PonyORM queries work correctly in every process.
     if getattr(db, 'provider', None) is not None:
+        # If schema/mapping hasn't been generated in this process, generate it
+        # now. Respect create_tables flag so table creation only happens when
+        # explicitly requested.
+        try:
+            if getattr(db, 'schema', None) is None:
+                db.generate_mapping(create_tables=create_tables)
+        except Exception:
+            # Propagate exceptions so callers can see binding/mapping failures
+            raise
         return db
 
     # Priority 1: Use DATABASE_URL env var (Postgres URI or other supported PonyORM URL)
@@ -329,6 +341,6 @@ def init_db(path='sqlite:///db.sqlite', create_tables=True):
             # or add/remove fields, you'll need to recreate the DB or run a schema migration.
         db.bind('sqlite', filename=sqlite_path, create_db=True)
 
-    if create_tables:
-        db.generate_mapping(create_tables=True)
+    # Generate mapping for this process (creates tables only when requested)
+    db.generate_mapping(create_tables=create_tables)
     return db
