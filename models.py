@@ -225,13 +225,12 @@ class Badge(db.Entity):
     # can raise UnrepeatableReadError when an attribute's in-memory value has
     # tzinfo while a later read returns a naive datetime (or vice-versa).
     #
-    # To avoid that class of errors, store awarded_at as a naive UTC
-    # datetime (UTC offset zero) so reads/writes remain consistent across
-    # transactions and drivers. Use a lambda so the default is evaluated at
-    # insertion time.
-    # Store awarded_at as an ISO-8601 string including timezone (UTC) so
-    # reads/writes remain consistent across DB drivers and processes.
-    awarded_at = Optional(str, default=lambda: datetime.now(timezone.utc).isoformat())
+    # To avoid that class of errors we store `awarded_at` as a naive UTC
+    # datetime (UTC offset zero). Use a lambda so the default is evaluated
+    # at insertion time. When exposing the value via JSON/APIs we convert the
+    # naive UTC datetime to an ISO-8601 string with an explicit UTC offset
+    # so frontends receive a stable textual representation.
+    awarded_at = Optional(datetime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     # optional persistent metadata so badges can be managed by an admin UI
     icon = Optional(str)
     description = Optional(str)
@@ -241,7 +240,10 @@ class Badge(db.Entity):
         return {
             'id': self.id,
             'name': self.name,
-            'awarded_at': self.awarded_at if self.awarded_at else None,
+            # Return an ISO-8601 string with explicit UTC offset so clients
+            # receive a stable textual representation regardless of how the
+            # DB driver returns datetimes in Python.
+            'awarded_at': (self.awarded_at.replace(tzinfo=timezone.utc).isoformat() if self.awarded_at else None),
             'icon': self.icon,
             'description': self.description,
         }
