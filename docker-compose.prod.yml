@@ -14,8 +14,6 @@
 #This file expects `deploy/nginx/conf.d/chesspuzzle.template` to exist and will
 #substitute the $DOMAIN environment variable into it at nginx startup.
 
-version: '3.8'
-
 services:
   web:
     build: .
