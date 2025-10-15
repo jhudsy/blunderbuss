@@ -191,11 +191,12 @@ class Puzzle(db.Entity):
     repetitions = Optional(int, default=0)
     interval = Optional(int, default=0)  # days
     ease_factor = Optional(float, default=2.5)
-    # Store review timestamps as ISO-8601 strings with timezone info so
-    # DB drivers that strip tzinfo won't cause mismatches. Use ISO strings
-    # everywhere and parse to aware datetimes when needed.
-    next_review = Optional(str, nullable=True)
-    last_reviewed = Optional(str, nullable=True)
+    # Store review timestamps as timezone-aware datetimes (UTC). Using
+    # explicit timezone-aware datetimes allows Postgres to persist them as
+    # TIMESTAMP WITH TIME ZONE (timestamptz) and avoids ambiguity when
+    # reading across processes and drivers.
+    next_review = Optional(datetime, nullable=True)
+    last_reviewed = Optional(datetime, nullable=True)
     successes = Optional(int, default=0)
     failures = Optional(int, default=0)
     # eval metadata
@@ -225,12 +226,10 @@ class Badge(db.Entity):
     # can raise UnrepeatableReadError when an attribute's in-memory value has
     # tzinfo while a later read returns a naive datetime (or vice-versa).
     #
-    # To avoid that class of errors we store `awarded_at` as a naive UTC
-    # datetime (UTC offset zero). Use a lambda so the default is evaluated
-    # at insertion time. When exposing the value via JSON/APIs we convert the
-    # naive UTC datetime to an ISO-8601 string with an explicit UTC offset
-    # so frontends receive a stable textual representation.
-    awarded_at = Optional(datetime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    # We store `awarded_at` as a timezone-aware datetime (UTC). Use a
+    # lambda so the default is evaluated at insertion time. When exposing
+    # the value via JSON/APIs we convert it to an ISO-8601 string.
+    awarded_at = Optional(datetime, default=lambda: datetime.now(timezone.utc))
     # optional persistent metadata so badges can be managed by an admin UI
     icon = Optional(str)
     description = Optional(str)
@@ -240,10 +239,9 @@ class Badge(db.Entity):
         return {
             'id': self.id,
             'name': self.name,
-            # Return an ISO-8601 string with explicit UTC offset so clients
-            # receive a stable textual representation regardless of how the
-            # DB driver returns datetimes in Python.
-            'awarded_at': (self.awarded_at.replace(tzinfo=timezone.utc).isoformat() if self.awarded_at else None),
+            # Return an ISO-8601 string with timezone info so clients receive
+            # a stable textual representation (e.g. 2025-10-15T20:34:46.982007+00:00).
+            'awarded_at': (self.awarded_at.isoformat() if self.awarded_at else None),
             'icon': self.icon,
             'description': self.description,
         }

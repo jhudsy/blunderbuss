@@ -30,7 +30,7 @@ Fields:
 - settings_perftypes: str, Optional, default='blitz,rapid' — comma-separated performance types
 - settings_perftypes: str, Optional, default='["blitz","rapid"]' — JSON-encoded list of performance types (e.g., ["classical","rapid","blitz"]). Previously this field stored a CSV string; the repository now stores a JSON array for clarity and easier consumption by APIs.
  - settings_tags: str, Optional, default='["Blunder","Mistake","Inaccuracy"]' — JSON-encoded list of puzzle tags the user wants to see. Used by the selection logic to filter puzzles by `Puzzle.tag`.
-- awarded_at: datetime, Optional, default=datetime.now(timezone.utc).replace(tzinfo=None) — award timestamp stored as naive UTC in the DB; APIs expose an ISO-8601 string with explicit UTC offset
+- awarded_at: timestamptz (timestamp with time zone), Optional, default=datetime.now(timezone.utc) — award timestamp stored as timezone-aware UTC in the DB; APIs expose an ISO-8601 string
 
 ## Relationships (cardinality)
 - User 1 — * Puzzle: a user can have many puzzles; each puzzle references a single user (Required).
@@ -85,8 +85,8 @@ CREATE TABLE puzzle (
   repetitions INTEGER DEFAULT 0,
   interval INTEGER DEFAULT 0,
   ease_factor REAL DEFAULT 2.5,
-  next_review DATETIME,
-  last_reviewed DATETIME,
+  next_review TIMESTAMP WITH TIME ZONE,
+  last_reviewed TIMESTAMP WITH TIME ZONE,
   successes INTEGER DEFAULT 0,
   failures INTEGER DEFAULT 0,
   pre_eval REAL,
