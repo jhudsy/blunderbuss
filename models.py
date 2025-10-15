@@ -1,6 +1,6 @@
 import os
 from pony.orm import Database, Required, Optional, Set
-from datetime import datetime
+from datetime import datetime, timezone
 
 """PonyORM models and initialization.
 
@@ -217,7 +217,7 @@ class Puzzle(db.Entity):
 class Badge(db.Entity):
     user = Required(User)
     name = Required(str)
-    awarded_at = Optional(datetime, default=datetime.utcnow)
+    awarded_at = Optional(datetime, default=lambda: datetime.now(timezone.utc))
     # optional persistent metadata so badges can be managed by an admin UI
     icon = Optional(str)
     description = Optional(str)

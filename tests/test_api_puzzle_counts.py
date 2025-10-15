@@ -2,7 +2,7 @@ import json
 from backend import app, init_db
 from pony.orm import db_session
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def setup_module(module):
@@ -19,7 +19,7 @@ def test_api_puzzle_counts_returns_counts():
     # create a user and puzzles directly in DB
     from pony.orm import db_session
     from models import User, Puzzle
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     with db_session:
         u = User.get(username='counts_user')
         if not u:

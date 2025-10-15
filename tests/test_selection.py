@@ -1,7 +1,7 @@
 import json
 import tempfile
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from pony.orm import Database, Required, Optional, db_session, set_sql_debug, Set
 
@@ -37,7 +37,7 @@ def setup_in_memory_db():
 
 def test_select_puzzle_respects_tags():
     db, User, Puzzle = setup_in_memory_db()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     with db_session:
         u = User(username='alice', settings_tags=json.dumps(['Blunder']))
         # puzzles: one blunder (should be selectable), one mistake (should be filtered out)

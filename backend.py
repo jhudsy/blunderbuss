@@ -16,7 +16,7 @@ import requests
 import time
 import base64
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from models import init_db, User, Puzzle, Badge
 from badges import get_badge_meta, catalog
@@ -223,7 +223,7 @@ def _record_successful_activity(u):
         # If anything unexpected happens, ensure we at least have a sensible default
         u.streak_days = getattr(u, 'streak_days', 0) or 0
     # Record this successful activity timestamp for future streak calculations
-    u._last_successful_activity_date = datetime.utcnow().isoformat()
+    u._last_successful_activity_date = datetime.now(timezone.utc).isoformat()
 
 
 def parse_perf_types(stored_value):
@@ -929,9 +929,9 @@ def user_information():
         try:
             first_iso = getattr(u, '_first_game_date', None)
             if first_iso:
-                from datetime import datetime as _dt
+                from datetime import datetime as _dt, timezone as _tz
                 first_date = _dt.fromisoformat(first_iso).date()
-                days = max(1, (datetime.utcnow().date() - first_date).days)
+                days = max(1, (datetime.now(_tz.utc).date() - first_date).days)
                 avg_xp_per_day = int((xp or 0) / days)
         except Exception:
             avg_xp_per_day = None
@@ -999,7 +999,7 @@ def check_puzzle():
         p.repetitions = reps
         p.interval = interval
         p.ease_factor = ease
-        p.last_reviewed = datetime.utcnow()
+        p.last_reviewed = datetime.now(timezone.utc)
         p.next_review = p.last_reviewed + timedelta(days=interval)
         if correct:
             p.successes = (p.successes or 0) + 1
@@ -1025,7 +1025,7 @@ def check_puzzle():
         u.xp = (u.xp or 0) + gained
         # Track xp gained today: if xp_today_date is not today, reset
         try:
-            today_iso = datetime.utcnow().date().isoformat()
+            today_iso = datetime.now(timezone.utc).date().isoformat()
             if getattr(u, 'xp_today_date', None) != today_iso:
                 u.xp_today = 0
                 u.xp_today_date = today_iso
@@ -1035,7 +1035,7 @@ def check_puzzle():
                 u.xp_today = (gained or 0)
             # ensure we have a first activity date recorded
             if not getattr(u, '_first_game_date', None):
-                u._first_game_date = datetime.utcnow().date().isoformat()
+                u._first_game_date = datetime.now(timezone.utc).date().isoformat()
         except Exception:
             pass
         # Update user counters and streaks when the answer is correct.

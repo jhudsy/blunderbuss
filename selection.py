@@ -4,7 +4,7 @@ Provides simple weighted-random selection, due filtering, and a cooldown-based
 recent-review filter to avoid showing the same puzzle repeatedly.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 
 
@@ -24,7 +24,7 @@ def choose_weighted(lst):
 
 
 def filter_recent(puzzles, cooldown_minutes=10):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     cutoff = now - timedelta(minutes=cooldown_minutes)
     # exclude puzzles reviewed after cutoff
     return [p for p in puzzles if (not getattr(p, 'last_reviewed', None)) or p.last_reviewed <= cutoff]
@@ -32,7 +32,7 @@ def filter_recent(puzzles, cooldown_minutes=10):
 
 def select_puzzle(user, all_puzzles, due_only=True, cooldown_minutes=10):
     # prioritize due items
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if due_only:
         due = [p for p in all_puzzles if (p.next_review is None or p.next_review <= now)]
     else:

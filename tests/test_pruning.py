@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pony.orm import Database, Required, Optional, db_session, Set
 
 # We'll recreate a minimal in-memory mapping to test pruning behaviour
@@ -24,7 +24,7 @@ def setup_in_memory_db():
 
 def test_pruning_orders_by_date():
     db, User, Puzzle = setup_in_memory_db()
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     with db_session:
         u = User(username='bob', settings_max_puzzles=2)
         # create three puzzles with different dates: oldest, middle, newest

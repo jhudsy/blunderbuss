@@ -6,7 +6,7 @@ load_dotenv()
 from pgn_parser import extract_puzzles_from_pgn
 from models import init_db, User, Puzzle
 from pony.orm import db_session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import requests
 import logging
 from dotenv import load_dotenv
@@ -47,7 +47,7 @@ if os.environ.get('CELERY_EAGER', '0') == '1' or CELERY_BROKER.startswith('memor
 @celery_app.task(bind=True)
 def import_games_task(self, username, perftypes, days):
     init_db()
-    since_ms = int((datetime.utcnow() - timedelta(days=days)).timestamp() * 1000)
+    since_ms = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
     # Read the user's access token from the DB rather than passing it via the broker
     with db_session:
         u = User.get(username=username)
@@ -143,7 +143,7 @@ def import_games_task(self, username, perftypes, days):
             u = User.get(username=username)
             if not u:
                 u = User(username=username)
-            u._last_game_date = datetime.utcnow().isoformat()
+            u._last_game_date = datetime.now(timezone.utc).isoformat()
             u._import_status = 'finished'
             # Enforce per-user maximum puzzles setting (0 => unlimited)
             try:
