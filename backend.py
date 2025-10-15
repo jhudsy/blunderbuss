@@ -713,7 +713,8 @@ def get_puzzle():
     resp = {
         'id': chosen.id,
         'fen': chosen.fen,
-        'next_review': (chosen.next_review.isoformat() if chosen.next_review else None),
+        # next_review is stored as an ISO string (or None)
+        'next_review': chosen.next_review if chosen.next_review else None,
         'game_id': getattr(chosen, 'game_id', None),
         'move_number': getattr(chosen, 'move_number', None),
     }
@@ -999,8 +1000,12 @@ def check_puzzle():
         p.repetitions = reps
         p.interval = interval
         p.ease_factor = ease
-        p.last_reviewed = datetime.now(timezone.utc)
-        p.next_review = p.last_reviewed + timedelta(days=interval)
+        # Store timestamps as ISO strings (with timezone) to keep storage
+        # consistent across DB drivers/processes.
+        last_dt = datetime.now(timezone.utc)
+        next_dt = last_dt + timedelta(days=interval)
+        p.last_reviewed = last_dt.isoformat()
+        p.next_review = next_dt.isoformat()
         if correct:
             p.successes = (p.successes or 0) + 1
         else:

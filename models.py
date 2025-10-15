@@ -191,8 +191,11 @@ class Puzzle(db.Entity):
     repetitions = Optional(int, default=0)
     interval = Optional(int, default=0)  # days
     ease_factor = Optional(float, default=2.5)
-    next_review = Optional(datetime, nullable=True)
-    last_reviewed = Optional(datetime, nullable=True)
+    # Store review timestamps as ISO-8601 strings with timezone info so
+    # DB drivers that strip tzinfo won't cause mismatches. Use ISO strings
+    # everywhere and parse to aware datetimes when needed.
+    next_review = Optional(str, nullable=True)
+    last_reviewed = Optional(str, nullable=True)
     successes = Optional(int, default=0)
     failures = Optional(int, default=0)
     # eval metadata
@@ -217,7 +220,18 @@ class Puzzle(db.Entity):
 class Badge(db.Entity):
     user = Required(User)
     name = Required(str)
-    awarded_at = Optional(datetime, default=lambda: datetime.now(timezone.utc))
+    # Many DB drivers (especially sqlite) store DATETIME without preserving
+    # tzinfo and may return naive datetimes when reading from the DB. PonyORM
+    # can raise UnrepeatableReadError when an attribute's in-memory value has
+    # tzinfo while a later read returns a naive datetime (or vice-versa).
+    #
+    # To avoid that class of errors, store awarded_at as a naive UTC
+    # datetime (UTC offset zero) so reads/writes remain consistent across
+    # transactions and drivers. Use a lambda so the default is evaluated at
+    # insertion time.
+    # Store awarded_at as an ISO-8601 string including timezone (UTC) so
+    # reads/writes remain consistent across DB drivers and processes.
+    awarded_at = Optional(str, default=lambda: datetime.now(timezone.utc).isoformat())
     # optional persistent metadata so badges can be managed by an admin UI
     icon = Optional(str)
     description = Optional(str)
@@ -227,7 +241,7 @@ class Badge(db.Entity):
         return {
             'id': self.id,
             'name': self.name,
-            'awarded_at': self.awarded_at.isoformat() if self.awarded_at else None,
+            'awarded_at': self.awarded_at if self.awarded_at else None,
             'icon': self.icon,
             'description': self.description,
         }
