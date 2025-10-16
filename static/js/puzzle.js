@@ -302,18 +302,17 @@ async function onDrop(source, target){
             if (res && res.flags && (String(res.flags).indexOf('k') !== -1 || String(res.flags).indexOf('q') !== -1)){
               // animate king move then rook move (small delay for nicer effect)
               try{ board.move(res.from + '-' + res.to) } catch(e){}
-              // compute rook squares for castle
               try{
                 const color = res.color || (game.turn() === 'w' ? 'b' : 'w')
-                let rookFrom, rookTo
-                if (String(res.flags).indexOf('k') !== -1){
-                  rookFrom = (color === 'w') ? 'h1' : 'h8'
-                  rookTo = (color === 'w') ? 'f1' : 'f8'
+                const inf = inferRookMoveFromFEN(startFEN, game.fen(), color)
+                if (inf){
+                  setTimeout(()=>{ try{ board.move(inf.rookFrom + '-' + inf.rookTo) }catch(e){} }, 60)
                 } else {
-                  rookFrom = (color === 'w') ? 'a1' : 'a8'
-                  rookTo = (color === 'w') ? 'd1' : 'd8'
+                  // fallback to standard squares
+                  let rookFrom = (String(res.flags).indexOf('k') !== -1) ? ((color === 'w') ? 'h1' : 'h8') : ((color === 'w') ? 'a1' : 'a8')
+                  let rookTo = (String(res.flags).indexOf('k') !== -1) ? ((color === 'w') ? 'f1' : 'f8') : ((color === 'w') ? 'd1' : 'd8')
+                  setTimeout(()=>{ try{ board.move(rookFrom + '-' + rookTo) }catch(e){} }, 60)
                 }
-                setTimeout(()=>{ try{ board.move(rookFrom + '-' + rookTo) }catch(e){} }, 60)
               }catch(e){}
             }
           }catch(e){}
@@ -338,15 +337,14 @@ async function onDrop(source, target){
       try{ board.move(result.from + '-' + result.to) } catch(e){}
       try{
         const color = result.color || (game.turn() === 'w' ? 'b' : 'w')
-        let rookFrom, rookTo
-        if (String(result.flags).indexOf('k') !== -1){
-          rookFrom = (color === 'w') ? 'h1' : 'h8'
-          rookTo = (color === 'w') ? 'f1' : 'f8'
+        const inf = inferRookMoveFromFEN(startFEN, game.fen(), color)
+        if (inf){
+          setTimeout(()=>{ try{ board.move(inf.rookFrom + '-' + inf.rookTo) }catch(e){} }, 60)
         } else {
-          rookFrom = (color === 'w') ? 'a1' : 'a8'
-          rookTo = (color === 'w') ? 'd1' : 'd8'
+          let rookFrom = (String(result.flags).indexOf('k') !== -1) ? ((color === 'w') ? 'h1' : 'h8') : ((color === 'w') ? 'a1' : 'a8')
+          let rookTo = (String(result.flags).indexOf('k') !== -1) ? ((color === 'w') ? 'f1' : 'f8') : ((color === 'w') ? 'd1' : 'd8')
+          setTimeout(()=>{ try{ board.move(rookFrom + '-' + rookTo) }catch(e){} }, 60)
         }
-        setTimeout(()=>{ try{ board.move(rookFrom + '-' + rookTo) }catch(e){} }, 60)
       }catch(e){}
     }
   }catch(e){}
@@ -839,6 +837,40 @@ function revealCorrectMoveSquares(from, to){
       if (toEl) toEl.classList.remove('square-reveal-anim','square-highlight-green')
     }, ms + 200)
   }catch(e){ /* noop */ }
+}
+
+// Infer rook from/to squares for a castling move by comparing rooks
+// present in the start and end FENs. Returns {rookFrom, rookTo} or null
+// if not inferrable.
+function inferRookMoveFromFEN(startFEN, endFEN, color){
+  try{
+    const before = new Chess()
+    const after = new Chess()
+    before.load(startFEN)
+    after.load(endFEN)
+    const files = ['a','b','c','d','e','f','g','h']
+    const ranks = ['1','2','3','4','5','6','7','8']
+    const beforeRooks = []
+    const afterRooks = []
+    for (let r of ranks){
+      for (let f of files){
+        const sq = f + r
+        try{
+          const p1 = before.get(sq)
+          if (p1 && p1.type === 'r' && p1.color === color) beforeRooks.push(sq)
+        }catch(e){}
+        try{
+          const p2 = after.get(sq)
+          if (p2 && p2.type === 'r' && p2.color === color) afterRooks.push(sq)
+        }catch(e){}
+      }
+    }
+    // find rook square that disappeared and appeared
+    const rookFrom = beforeRooks.find(sq => afterRooks.indexOf(sq) === -1)
+    const rookTo = afterRooks.find(sq => beforeRooks.indexOf(sq) === -1)
+    if (rookFrom && rookTo) return { rookFrom, rookTo }
+    return null
+  }catch(e){ return null }
 }
 
 window.addEventListener('DOMContentLoaded', ()=>{
