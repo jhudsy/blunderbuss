@@ -9,6 +9,8 @@ let game = new Chess()
 let currentPuzzle = null
 let hintUsedForCurrent = false
 let allowMoves = true
+// Temporary state used to trigger a small castling rook animation on snap end
+let __castlingPending = null
 // result modal removed; use inline UI feedback instead
 
 async function loadPuzzle(){
@@ -297,7 +299,13 @@ async function onDrop(source, target){
           }
           // update board to reflect the chosen promotion
           try{ board.position(game.fen()) }catch(e){}
-          // Let chessboard.js update the board (onSnapEnd will call board.position(game.fen()))
+            // If this move is a castle, mark it so onSnapEnd can play a small rook animation
+            try{
+              if (res && res.flags && (String(res.flags).indexOf('k') !== -1 || String(res.flags).indexOf('q') !== -1)){
+                __castlingPending = { startFEN: startFEN, endFEN: game.fen(), move: res }
+              }
+            }catch(e){}
+            // Let chessboard.js update the board (onSnapEnd will call board.position(game.fen()))
           // lock moves and send to server and handle UI
           try{ allowMoves = false }catch(e){}
           await sendCheckPuzzle(res, startFEN)
@@ -313,6 +321,12 @@ async function onDrop(source, target){
   }
   // lock moves and send SAN to backend
   try{ allowMoves = false }catch(e){}
+  // if this move is a castle, mark pending animation for onSnapEnd
+  try{
+    if (result && result.flags && (String(result.flags).indexOf('k') !== -1 || String(result.flags).indexOf('q') !== -1)){
+      __castlingPending = { startFEN: startFEN, endFEN: game.fen(), move: result }
+    }
+  }catch(e){}
   // Rely on chessboard.js to set the final position after the snap (onSnapEnd)
   const san = result.san
   if (window.__CP_DEBUG) console.debug('starting fen', startFEN)
@@ -828,7 +842,50 @@ window.addEventListener('DOMContentLoaded', ()=>{
     },
     // for castling, en passant, pawn promotion — ensure UI matches game state
     onSnapEnd: function(){
-      try{ board.position(game.fen()) }catch(e){}
+      try{
+        // If we have a pending castling animation, animate a subtle rook slide
+        if (__castlingPending){
+          const pending = __castlingPending
+          __castlingPending = null
+          try{
+            const mv = pending.move
+            if (mv && mv.flags && (String(mv.flags).indexOf('k') !== -1 || String(mv.flags).indexOf('q') !== -1)){
+              // infer rook squares by comparing rook locations before/after
+              const before = new Chess(); before.load(pending.startFEN)
+              const after = new Chess(); after.load(pending.endFEN)
+              const files = ['a','b','c','d','e','f','g','h']
+              const ranks = ['1','2','3','4','5','6','7','8']
+              const beforeRooks = []
+              const afterRooks = []
+              for (let r of ranks){
+                for (let f of files){
+                  const sq = f + r
+                  try{ const p1 = before.get(sq); if (p1 && p1.type === 'r' && p1.color === mv.color) beforeRooks.push(sq) }catch(e){}
+                  try{ const p2 = after.get(sq); if (p2 && p2.type === 'r' && p2.color === mv.color) afterRooks.push(sq) }catch(e){}
+                }
+              }
+              const rookFrom = beforeRooks.find(sq => afterRooks.indexOf(sq) === -1)
+              const rookTo = afterRooks.find(sq => beforeRooks.indexOf(sq) === -1)
+              if (rookFrom && rookTo){
+                // create a temporary position where the king is in its final square but the rook remains
+                const tmp = new Chess(); tmp.load(pending.startFEN)
+                try{ tmp.remove(mv.from) }catch(e){}
+                try{ tmp.put({type:'k',color:mv.color}, mv.to) }catch(e){}
+                // set this position so the king looks moved but rook hasn't slid yet
+                try{ board.position(tmp.fen()) }catch(e){}
+                // animate rook slide, then restore final position
+                setTimeout(()=>{
+                  try{ board.move(rookFrom + '-' + rookTo) }catch(e){}
+                  setTimeout(()=>{ try{ board.position(pending.endFEN) }catch(e){} }, 220)
+                }, 60)
+                return
+              }
+            }
+          }catch(e){ /* fallthrough to default */ }
+        }
+        // default behavior: show final game FEN
+        try{ board.position(game.fen()) }catch(e){}
+      }catch(e){}
     },
     pieceTheme: '/static/img/chesspieces/{piece}.png'
   })
