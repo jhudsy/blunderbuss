@@ -297,6 +297,26 @@ async function onDrop(source, target){
           }
           // update board to reflect the chosen promotion
           try{ board.position(game.fen()) }catch(e){}
+          // If the move was a castle, animate the rook as well so UI matches
+          try{
+            if (res && res.flags && (String(res.flags).indexOf('k') !== -1 || String(res.flags).indexOf('q') !== -1)){
+              // animate king move then rook move (small delay for nicer effect)
+              try{ board.move(res.from + '-' + res.to) } catch(e){}
+              // compute rook squares for castle
+              try{
+                const color = res.color || (game.turn() === 'w' ? 'b' : 'w')
+                let rookFrom, rookTo
+                if (String(res.flags).indexOf('k') !== -1){
+                  rookFrom = (color === 'w') ? 'h1' : 'h8'
+                  rookTo = (color === 'w') ? 'f1' : 'f8'
+                } else {
+                  rookFrom = (color === 'w') ? 'a1' : 'a8'
+                  rookTo = (color === 'w') ? 'd1' : 'd8'
+                }
+                setTimeout(()=>{ try{ board.move(rookFrom + '-' + rookTo) }catch(e){} }, 60)
+              }catch(e){}
+            }
+          }catch(e){}
           // lock moves and send to server and handle UI
           try{ allowMoves = false }catch(e){}
           await sendCheckPuzzle(res, startFEN)
@@ -312,6 +332,24 @@ async function onDrop(source, target){
   }
   // lock moves and send SAN to backend
   try{ allowMoves = false }catch(e){}
+  // If the move was a castle, animate the rook as well so UI matches
+  try{
+    if (result && result.flags && (String(result.flags).indexOf('k') !== -1 || String(result.flags).indexOf('q') !== -1)){
+      try{ board.move(result.from + '-' + result.to) } catch(e){}
+      try{
+        const color = result.color || (game.turn() === 'w' ? 'b' : 'w')
+        let rookFrom, rookTo
+        if (String(result.flags).indexOf('k') !== -1){
+          rookFrom = (color === 'w') ? 'h1' : 'h8'
+          rookTo = (color === 'w') ? 'f1' : 'f8'
+        } else {
+          rookFrom = (color === 'w') ? 'a1' : 'a8'
+          rookTo = (color === 'w') ? 'd1' : 'd8'
+        }
+        setTimeout(()=>{ try{ board.move(rookFrom + '-' + rookTo) }catch(e){} }, 60)
+      }catch(e){}
+    }
+  }catch(e){}
   const san = result.san
   if (window.__CP_DEBUG) console.debug('starting fen', startFEN)
   if (window.__CP_DEBUG) console.debug('check_puzzle: sending', { puzzleId: currentPuzzle && currentPuzzle.id, san })
