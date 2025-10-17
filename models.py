@@ -59,6 +59,10 @@ class User(db.Entity):
     settings_tags = Optional(str, default='["Blunder","Mistake","Inaccuracy"]')
     # Maximum number of puzzles to keep for this user. 0 means unlimited.
     settings_max_puzzles = Optional(int, default=0)
+    # Whether to use the spaced-repetition algorithm when selecting puzzles.
+    # New users default to using spaced repetition (True). Stored as a boolean
+    # so templates and backend logic can easily inspect the preference.
+    settings_use_spaced = Optional(bool, default=True)
     streak_days = Optional(int, default=0)
     # longest calendar-day streak recorded for this user
     best_streak_days = Optional(int, default=0)

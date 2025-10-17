@@ -11,6 +11,8 @@ Each webpage should include a menu allowing the user to
 - login
 - logout
 - go to their settings and see their achievements
+ - go to their settings and see their achievements
+ - in Settings there is a new checkbox "Use spaced repetition" (default ON for new users). When enabled puzzles are selected using the spaced repetition algorithm; when disabled puzzles are selected at random subject to the same time-control and tag filters.
 - see the leaderboard
 - solve puzzles
 

@@ -18,9 +18,11 @@ The backend exposes the following routes:
      - /check_puzzle. Accepts a user's move and returns whether it was correct; the response may include awarded badges or XP deltas.
 - User settings
      - /settings. The user can change the number of days that puzzles are taken from lichess for and the type of games (any of "blitz, rapid, classical") as well as the type of errors that will be reviewed (Blunder, Inaccuracy or Mistake) and the maximum number of puzzles to be stored for that user. If more puzzles are imported than this maximum, older puzzles are removed.
+     - A new boolean setting `use_spaced` controls whether puzzles are selected using the spaced-repetition algorithm or chosen at random. The setting is exposed on the `/settings` page and can be POSTed as JSON (field name `use_spaced`) alongside the other settings. New users default to `use_spaced = true`.
   
      Notes:
      - Settings perftypes are now stored as a JSON array (e.g. ["blitz","rapid"]). The settings endpoint accepts a JSON list when POSTing.
+      - The settings endpoint also accepts `use_spaced` (boolean) in the JSON POST body and will persist it to the user's record.
      - The app respects the `LOG_LEVEL` or `CHESSPUZZLE_LOG_LEVEL` environment variable to control logging verbosity (e.g. `LOG_LEVEL=DEBUG`).
 - Information
      - /user_information. Returns how many XP the user has, the user's badges, how many days streak the user has.

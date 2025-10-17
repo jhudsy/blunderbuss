@@ -48,6 +48,11 @@
           <label class="form-label">Maximum puzzles to keep (0 = unlimited)</label>
           <input type="number" name="max_puzzles" id="max_puzzles" class="form-control" value="{{ max_puzzles|default(0) }}" min="0">
         </div>
+        <div class="mb-3 form-check">
+          <input class="form-check-input" type="checkbox" id="use_spaced" name="use_spaced">
+          <label class="form-check-label" for="use_spaced">Use spaced repetition</label>
+          <div class="form-text">When enabled (default for new users), puzzles are selected using the spaced repetition algorithm. When disabled puzzles are selected at random.</div>
+        </div>
         <div class="mb-3">
           <label id="tagLabel" class="form-label">Puzzle tags</label>
           <div id="tagCheckboxes" class="form-check" role="group" aria-labelledby="tagLabel">
@@ -119,6 +124,12 @@
       if (serverTags.map(s=>String(s).toLowerCase()).includes('inaccuracy')) document.getElementById('tag_inaccuracy').checked = true;
     }
   } catch(e) { /* ignore templating/runtime issues */ }
+  // Pre-check spaced-repetition checkbox (new users default to enabled)
+  try {
+    const useSpaced = {{ use_spaced|tojson|default('true') }};
+    const el = document.getElementById('use_spaced');
+    if (el) el.checked = !!useSpaced;
+  } catch(e) { }
       });
 
   // helper to fetch counts from backend and update UI
@@ -156,7 +167,7 @@
         const maxP = document.getElementById('max_puzzles').value;
   const checked = Array.from(document.querySelectorAll('#perfCheckboxes input[type=checkbox]:checked')).map(i=>i.value);
   const tagChecked = Array.from(document.querySelectorAll('#tagCheckboxes input[type=checkbox]:checked')).map(i=>i.value);
-      const payload = { days: days, perf: checked, cooldown: cooldown, tags: tagChecked, max_puzzles: maxP };
+  const payload = { days: days, perf: checked, cooldown: cooldown, tags: tagChecked, max_puzzles: maxP, use_spaced: !!document.getElementById('use_spaced').checked };
         const r = await fetch('/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)});
         const toastEl = document.getElementById('saveToast');
         const toastBody = document.getElementById('saveToastBody');

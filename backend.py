@@ -703,7 +703,18 @@ def get_puzzle():
 
         if not all_puzzles:
             return jsonify({'error': 'no puzzles'}), 404
-        chosen = select_puzzle(u, all_puzzles, due_only=True, cooldown_minutes=10)
+        # Respect the user's preference for spaced repetition. If the user has
+        # turned off spaced repetition, select puzzles at random (subject to
+        # the same perf/tag filters and cooldown). Otherwise use due-only
+        # selection which implements the spaced-repetition algorithm.
+        use_spaced = getattr(u, 'settings_use_spaced', True)
+        if use_spaced:
+            chosen = select_puzzle(u, all_puzzles, due_only=True, cooldown_minutes=10)
+        else:
+            # pick randomly (but still apply cooldown filter)
+            from selection import filter_recent, choose_weighted
+            candidates = filter_recent(all_puzzles, cooldown_minutes=10)
+            chosen = choose_weighted(candidates)
         if not chosen:
             return jsonify({'error': 'no available puzzles'}), 404
     logger.debug('Selected puzzle id=%s for user=%s', getattr(chosen, 'id', None), username)
@@ -826,6 +837,12 @@ def settings():
             import json
             u.settings_perftypes = json.dumps(perf_list)
             u.settings_tags = json.dumps(tags_list)
+            # spaced repetition preference: boolean checkbox from frontend
+            try:
+                use_spaced = bool(data.get('use_spaced', True))
+            except Exception:
+                use_spaced = True
+            u.settings_use_spaced = use_spaced
             # persist user maximum puzzle limit (0 means unlimited)
             try:
                 max_p = int(data.get('max_puzzles', getattr(u, 'settings_max_puzzles', 0) or 0))
@@ -853,7 +870,9 @@ def settings():
             max_puzzles_warning = False
             if max_p and max_p > 0 and max_p < 10:
                 max_puzzles_warning = True
-            return render_template('settings.html', days=getattr(u, 'settings_days', 30), perf=perf_list, cooldown=getattr(u, 'cooldown_minutes', 10), tags=tags_list, max_puzzles=max_p, max_puzzles_warning=max_puzzles_warning)
+            # pass the user's spaced-repetition preference to the template
+            use_spaced = getattr(u, 'settings_use_spaced', True)
+            return render_template('settings.html', days=getattr(u, 'settings_days', 30), perf=perf_list, cooldown=getattr(u, 'cooldown_minutes', 10), tags=tags_list, max_puzzles=max_p, max_puzzles_warning=max_puzzles_warning, use_spaced=use_spaced)
 
 
 
