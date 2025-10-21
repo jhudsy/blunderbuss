@@ -717,6 +717,11 @@ def get_puzzle():
             chosen = choose_weighted(candidates)
         if not chosen:
             return jsonify({'error': 'no available puzzles'}), 404
+    
+    # Clear attempt tracking for the new puzzle
+    puzzle_attempts_key = f'puzzle_attempts_{chosen.id}'
+    session.pop(puzzle_attempts_key, None)
+    
     logger.debug('Selected puzzle id=%s for user=%s', getattr(chosen, 'id', None), username)
     # Do NOT include move details (correct_san, move_number) or surrounding PGN context
     # in the API response returned to the frontend. Those details are logged
@@ -849,6 +854,13 @@ def settings():
             except Exception:
                 max_p = 0
             u.settings_max_puzzles = max_p
+            # persist max attempts setting (range 1-3, default 3)
+            try:
+                max_attempts = int(data.get('max_attempts', getattr(u, 'settings_max_attempts', 3) or 3))
+                max_attempts = max(1, min(3, max_attempts))  # enforce range
+            except Exception:
+                max_attempts = 3
+            u.settings_max_attempts = max_attempts
             u.cooldown_minutes = cooldown
             return jsonify({'status': 'ok'})
         else:
@@ -872,7 +884,8 @@ def settings():
                 max_puzzles_warning = True
             # pass the user's spaced-repetition preference to the template
             use_spaced = getattr(u, 'settings_use_spaced', True)
-            return render_template('settings.html', days=getattr(u, 'settings_days', 30), perf=perf_list, cooldown=getattr(u, 'cooldown_minutes', 10), tags=tags_list, max_puzzles=max_p, max_puzzles_warning=max_puzzles_warning, use_spaced=use_spaced)
+            max_attempts = getattr(u, 'settings_max_attempts', 3) or 3
+            return render_template('settings.html', days=getattr(u, 'settings_days', 30), perf=perf_list, cooldown=getattr(u, 'cooldown_minutes', 10), tags=tags_list, max_puzzles=max_p, max_puzzles_warning=max_puzzles_warning, use_spaced=use_spaced, max_attempts=max_attempts)
 
 
 
@@ -996,6 +1009,11 @@ def check_puzzle():
     username = session.get('username')
     if not username:
         return jsonify({'error': 'not logged in'}), 401
+    
+    # Track attempts per puzzle using session storage
+    puzzle_attempts_key = f'puzzle_attempts_{pid}'
+    current_attempt = session.get(puzzle_attempts_key, 0) + 1
+    
     with db_session:
         if pid is None:
             # fallback: pick any puzzle belonging to the user (tests sometimes
@@ -1037,9 +1055,19 @@ def check_puzzle():
         consec = int(getattr(u, 'consecutive_correct', 0) or 0)
         # determine if a hint was used (server-side session record takes priority)
         hint_used = _is_hint_used(pid)
+        
+        # Get user's max_attempts setting (default 3, range 1-3)
+        max_attempts = getattr(u, 'settings_max_attempts', 3) or 3
+        max_attempts = max(1, min(3, max_attempts))  # enforce range
 
         # compute gained XP based on pre-existing consecutive count
         gained = xp_for_answer(correct, cooldown_minutes=cd, consecutive_correct=consec)
+        
+        # Apply attempt penalty: halve XP for each incorrect attempt
+        # Attempt 1: full XP, Attempt 2: 50%, Attempt 3: 25%
+        if not correct and current_attempt > 1:
+            gained = gained // (2 ** (current_attempt - 1))
+        
         # If a hint was used, enforce the rule: only 1 XP can be gained for the puzzle
         # and the puzzle streak should not increase. We implement this by capping
         # the gained XP and preventing increment of consecutive_correct below.
@@ -1084,6 +1112,8 @@ def check_puzzle():
         else:
             # reset consecutive puzzle-correct streak on failure
             u.consecutive_correct = 0
+            # Store current attempt count in session
+            session[puzzle_attempts_key] = current_attempt
 
         # Now determine which badges (if any) should be awarded. badge_updates
         # expects the user's counters (xp, correct_count, consecutive_correct,
@@ -1105,7 +1135,10 @@ def check_puzzle():
             'correct': correct,
             'new_weight': p.weight,
             'xp': u.xp,
-            'badges': existing_badge_names
+            'badges': existing_badge_names,
+            'current_attempt': current_attempt,
+            'max_attempts': max_attempts,
+            'attempts_remaining': max(0, max_attempts - current_attempt)
         }
         # Check and update best puzzle streak record when appropriate
         try:
@@ -1129,10 +1162,18 @@ def check_puzzle():
         if new_badges:
             resp['awarded_badges'] = new_badges
 
+        # Reveal correct answer if incorrect OR if max attempts reached
         if not correct:
             resp['correct_san'] = p.correct_san
-        # Clear hint record for this puzzle now that it has been answered
-        _clear_hint_used(pid)
+            # Check if max attempts reached
+            if current_attempt >= max_attempts:
+                resp['max_attempts_reached'] = True
+        
+        # Clear attempt tracking and hint record when puzzle is solved or max attempts reached
+        if correct or (not correct and current_attempt >= max_attempts):
+            session.pop(puzzle_attempts_key, None)
+            _clear_hint_used(pid)
+        
         return jsonify(resp)
 
 

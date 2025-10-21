@@ -14,11 +14,12 @@ The backend exposes the following routes:
      - /logout
      - (progress polling endpoint previously existed; UI polling removed)
 - For presenting a puzzle
-     - /get_puzzle. Selects a puzzle using spaced repetition and returns the puzzle's ID and FEN (move details are not exposed to the client).
-     - /check_puzzle. Accepts a user's move and returns whether it was correct; the response may include awarded badges or XP deltas.
+     - /get_puzzle. Selects a puzzle using spaced repetition and returns the puzzle's ID and FEN (move details are not exposed to the client). Clears attempt tracking for the new puzzle.
+     - /check_puzzle. Accepts a user's move and returns whether it was correct; the response may include awarded badges or XP deltas. Also returns `current_attempt`, `max_attempts`, `attempts_remaining`, and `max_attempts_reached` to support the multiple attempts feature. XP is automatically reduced by half for each incorrect attempt (attempt 1: full XP, attempt 2: 50%, attempt 3: 25%).
 - User settings
      - /settings. The user can change the number of days that puzzles are taken from lichess for and the type of games (any of "blitz, rapid, classical") as well as the type of errors that will be reviewed (Blunder, Inaccuracy or Mistake) and the maximum number of puzzles to be stored for that user. If more puzzles are imported than this maximum, older puzzles are removed.
      - A new boolean setting `use_spaced` controls whether puzzles are selected using the spaced-repetition algorithm or chosen at random. The setting is exposed on the `/settings` page and can be POSTed as JSON (field name `use_spaced`) alongside the other settings. New users default to `use_spaced = true`.
+     - A new integer setting `max_attempts` (range 1-3, default 3) controls the maximum number of incorrect attempts allowed per puzzle before the solution is automatically revealed. Each incorrect attempt halves the XP reward for that puzzle.
   
      Notes:
      - Settings perftypes are now stored as a JSON array (e.g. ["blitz","rapid"]). The settings endpoint accepts a JSON list when POSTing.

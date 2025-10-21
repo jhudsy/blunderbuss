@@ -63,6 +63,9 @@ class User(db.Entity):
     # New users default to using spaced repetition (True). Stored as a boolean
     # so templates and backend logic can easily inspect the preference.
     settings_use_spaced = Optional(bool, default=True)
+    # Maximum number of incorrect attempts allowed before revealing solution.
+    # Range: 1-3. Each incorrect attempt halves the XP reward.
+    settings_max_attempts = Optional(int, default=3)
     streak_days = Optional(int, default=0)
     # longest calendar-day streak recorded for this user
     best_streak_days = Optional(int, default=0)

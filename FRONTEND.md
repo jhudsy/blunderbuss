@@ -30,6 +30,34 @@ The user should also get feedback showing how much XP they have earned for getti
 
 The UI should be attractive and utilise Bootstrap.
 
+## Multiple attempts feature
+
+The application supports configurable maximum incorrect attempts per puzzle. Users
+can set this in Settings via a slider (range 1-3, default 3). Key behaviors:
+
+- **Attempt tracking**: The backend tracks incorrect attempts per puzzle using session
+  storage. The count resets when a new puzzle is loaded or when the puzzle is solved.
+
+- **XP penalty**: For each incorrect attempt, the XP reward is halved:
+  - Attempt 1: Full XP
+  - Attempt 2: 50% XP (halved once)
+  - Attempt 3: 25% XP (halved twice)
+
+- **Max attempts reached**: When the user exhausts all attempts:
+  - The correct solution is revealed automatically
+  - Further moves are disabled
+  - The "Next" button is enabled to proceed to the next puzzle
+  - A message indicates maximum attempts were reached
+
+- **Before max attempts**: If attempts remain after an incorrect move:
+  - The board resets to the starting position
+  - A message shows how many attempts remain
+  - The user can try again immediately
+  - Moves remain enabled
+
+- **Settings UI**: A range slider (1-3) in Settings allows users to configure their
+  maximum attempts preference. The current value is displayed next to the slider.
+
 ## Hint functionality
 
 The puzzle UI includes a "Hint" button that helps users by highlighting the source
