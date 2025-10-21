@@ -32,3 +32,27 @@ If you want, I can add an example migration script that re-saves tokens in-place
 
 If you need help scaffolding Alembic migrations for this project, I can add a
 basic Alembic setup and an example migration.
+
+## Recent schema changes
+
+### Multiple attempts feature (settings_max_attempts)
+
+**Date**: October 2025
+
+**Change**: Added `settings_max_attempts` column to User table (Optional int, default 3, range 1-3).
+
+**Migration**:
+```bash
+docker compose run --rm web python scripts/migrate_add_max_attempts.py
+```
+
+**Details**:
+- This field controls the maximum number of incorrect attempts allowed per puzzle
+- Each incorrect attempt halves the XP reward
+- Default value is 3 (new users automatically get this default)
+- The migration is idempotent and will skip if the column already exists
+- For a clean slate (destructive), you can use `python scripts/create_tables.py --drop`
+
+**Compatibility**: 
+- Existing users without this field will have `NULL` initially, which will be treated as 3 (the default) by the backend
+- The migration adds the column with a DEFAULT value, so all users get 3 automatically

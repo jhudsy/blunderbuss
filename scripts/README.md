@@ -2,6 +2,51 @@
 
 This folder contains administrative helper scripts for the ChessPuzzle project.
 
+create_tables.py
+----------------
+Purpose:
+- Initialize database tables for the ChessPuzzle application.
+- Optionally drop all existing tables before recreating them (brute-force migration).
+
+Flags:
+- `--drop` : Drop all existing tables before creating new ones (DESTRUCTIVE, requires confirmation).
+
+Usage:
+
+- Create tables (idempotent, won't recreate existing tables):
+
+```bash
+docker compose run --rm web python scripts/create_tables.py
+```
+
+- Drop all tables and recreate (requires typing 'yes' to confirm):
+
+```bash
+docker compose run --rm web python scripts/create_tables.py --drop
+```
+
+Notes:
+- The `--drop` option is useful for development or when schema changes require table recreation.
+- Always backup your database before using `--drop` in production.
+- Supports both PostgreSQL and SQLite.
+
+migrate_add_max_attempts.py
+---------------------------
+Purpose:
+- Add the `settings_max_attempts` column to the User table for existing databases.
+- This migration is required when upgrading from a version without the multiple attempts feature.
+
+Usage:
+
+```bash
+docker compose run --rm web python scripts/migrate_add_max_attempts.py
+```
+
+Notes:
+- The migration is idempotent: if the column already exists, it will skip gracefully.
+- Default value for new column is 3 (range 1-3).
+- This field controls maximum incorrect attempts per puzzle before solution reveal.
+
 clear_puzzles.py
 ----------------
 Purpose:
