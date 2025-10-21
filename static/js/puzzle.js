@@ -188,19 +188,8 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
     
   } else {
     // Handle incorrect answer
-    if (window.__CP_DEBUG) console.debug('check_puzzle: incorrect branch entered', { startFEN })
-    
     highlightSquareWithFade(source, 'red')
     highlightSquareWithFade(target, 'red')
-    
-    // DEBUG: Log attempt tracking values
-    console.log('Attempt tracking:', {
-      maxAttemptsReached,
-      attemptsRemaining,
-      current_attempt: j.current_attempt,
-      max_attempts: j.max_attempts,
-      rawResponse: j
-    });
     
     // If attempts remain, allow another try
     if (!maxAttemptsReached && attemptsRemaining > 0) {
