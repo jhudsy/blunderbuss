@@ -13,6 +13,116 @@ let allowMoves = true
 let __castlingPending = null
 // result modal removed; use inline UI feedback instead
 
+// ============================================================================
+// UI Helper Functions
+// ============================================================================
+
+/**
+ * Enable or disable the Next button with optional delay
+ */
+function setNextButtonEnabled(enabled, delay = 0) {
+  const action = () => {
+    try {
+      const btn = document.getElementById('next');
+      if (btn) btn.disabled = !enabled;
+    } catch(e) {}
+  };
+  if (delay > 0) setTimeout(action, delay);
+  else action();
+}
+
+/**
+ * Enable or disable the Hint button
+ */
+function setHintButtonEnabled(enabled) {
+  try {
+    const btn = document.getElementById('hint');
+    if (btn) btn.disabled = !enabled;
+  } catch(e) {}
+}
+
+/**
+ * Update the ribbon XP display and animate if increased
+ */
+function updateRibbonXP(newXP) {
+  try {
+    if (typeof newXP !== 'undefined') {
+      const rx = document.getElementById('ribbonXP');
+      if (rx) {
+        const prev = parseInt(rx.textContent) || 0;
+        rx.textContent = newXP;
+        const delta = (newXP || 0) - prev;
+        if (delta > 0) animateXpIncrement(delta);
+      }
+    }
+  } catch(e) {}
+}
+
+/**
+ * Refresh the ribbon state from the server
+ */
+function refreshRibbonState() {
+  try { 
+    if (window.refreshRibbon) window.refreshRibbon();
+  } catch(e) {}
+}
+
+/**
+ * Reset the chess board to a given FEN position
+ */
+function resetBoard(fen) {
+  try {
+    board.position(fen);
+  } catch (e) {
+    console.error('Error resetting board position:', e);
+  }
+  try {
+    game.load(fen);
+  } catch (e) {
+    // Ignore load errors
+  }
+}
+
+/**
+ * Update all UI elements after receiving an answer
+ */
+function updateUIAfterAnswer(options = {}) {
+  const {
+    xp,
+    enableNext = false,
+    enableHint = false,
+    nextDelay = 800,
+    showBadges = null,
+    showRecordStreak = null,
+    showLichessLink = false
+  } = options;
+  
+  if (xp !== undefined) updateRibbonXP(xp);
+  refreshRibbonState();
+  setNextButtonEnabled(enableNext, nextDelay);
+  setHintButtonEnabled(enableHint);
+  
+  if (showBadges && showBadges.length) {
+    showBadgeToast(showBadges);
+  }
+  
+  if (showRecordStreak) {
+    try {
+      showRecordToast(showRecordStreak);
+    } catch(e) {
+      try { alert('New record! Streak: ' + showRecordStreak); } catch(e) {}
+    }
+  }
+  
+  if (showLichessLink) {
+    try { showSeeOnLichessLink(currentPuzzle); } catch(e) {}
+  }
+}
+
+// ============================================================================
+// Main Functions
+// ============================================================================
+
 async function loadPuzzle(){
   const res = await fetch('/get_puzzle')
   if (res.status === 401){
@@ -104,23 +214,28 @@ async function loadPuzzle(){
   // hide any previously revealed correct move
   const cmc = document.getElementById('correctMoveContainer')
   if (cmc) { cmc.style.display = 'none'; document.getElementById('correctMoveText').textContent = '' }
-    // Ensure Next is disabled until the puzzle is answered
-      try{ document.getElementById('next').disabled = true } catch(e){}
-      // reset hint state
-      hintUsedForCurrent = false
-        // allow moves for the newly loaded puzzle
-        allowMoves = true
-      try{
-        const hintBtn = document.getElementById('hint')
-        const nextBtn = document.getElementById('next')
-        if (hintBtn){
-          // mirror Next button styling so the buttons look consistent
-          if (nextBtn) hintBtn.className = nextBtn.className
-          hintBtn.disabled = false
-        }
-      } catch(e){}
-    // refresh ribbon XP/streak for this user if the ribbon helper is present
-    try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
+  
+  // Ensure Next is disabled until the puzzle is answered
+  setNextButtonEnabled(false);
+  
+  // Reset hint state
+  hintUsedForCurrent = false
+  
+  // Allow moves for the newly loaded puzzle
+  allowMoves = true
+  
+  try{
+    const hintBtn = document.getElementById('hint')
+    const nextBtn = document.getElementById('next')
+    if (hintBtn){
+      // Mirror Next button styling so the buttons look consistent
+      if (nextBtn) hintBtn.className = nextBtn.className
+      hintBtn.disabled = false
+    }
+  } catch(e){}
+  
+  // Refresh ribbon XP/streak for this user
+  refreshRibbonState();
 }
 
 /**
@@ -149,42 +264,16 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
     const infoEl = document.getElementById('info')
     if (infoEl) infoEl.textContent = 'Correct! Click Next to continue.'
     
-    // Update ribbon XP immediately from server response if present
-    try{
-      if (typeof j.xp !== 'undefined'){
-        const rx = document.getElementById('ribbonXP')
-        if (rx){
-          const prev = parseInt(rx.textContent) || 0
-          rx.textContent = j.xp
-          const delta = (j.xp || 0) - prev
-          if (delta > 0) animateXpIncrement(delta)
-        }
-      }
-    }catch(e){}
-    
-    // Refresh full ribbon state from server
-    try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
-    
-    // Enable Next after a short delay
-    setTimeout(()=>{ document.getElementById('next').disabled = false }, 800)
-    
-    // Disable Hint after an answer is given
-    try{ const hintBtn = document.getElementById('hint'); if (hintBtn) hintBtn.disabled = true } catch(e){}
-    
-    // Show badge toast only if new badges were awarded on this answer
-    if (j.awarded_badges && j.awarded_badges.length){
-      showBadgeToast(j.awarded_badges)
-    }
-    
-    // Show congratulatory toast if the server reports a new record streak
-    try{
-      if (j.new_record_streak){
-        try{ showRecordToast(j.new_record_streak) } catch(e){ try{ alert('New record! Streak: ' + j.new_record_streak) }catch(e){} }
-      }
-    }catch(e){}
-    
-    // Reveal 'See on lichess' link if we have game info
-    try{ showSeeOnLichessLink(currentPuzzle) } catch(e){}
+    // Update all UI elements
+    updateUIAfterAnswer({
+      xp: j.xp,
+      enableNext: true,
+      enableHint: false,
+      nextDelay: 800,
+      showBadges: j.awarded_badges,
+      showRecordStreak: j.new_record_streak,
+      showLichessLink: true
+    });
     
   } else {
     // Handle incorrect answer
@@ -199,8 +288,7 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
       }
       // Re-enable moves after a brief delay
       setTimeout(() => {
-        try { board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
-        try { game.load(startFEN) } catch (e) { /* ignore */ }
+        resetBoard(startFEN);
         allowMoves = true;
       }, 1000);
       return;
@@ -210,7 +298,7 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
     // Start reveal sequence using nested setTimeouts
     setTimeout(() => {
       // 1) Reset board to the starting position
-      try { board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
+      resetBoard(startFEN);
 
       // 2) Wait a little more before revealing the correct move
       setTimeout(() => {
@@ -259,12 +347,7 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
           }catch(e){ /* ignore reveal failures */ }
         }
         
-        // Show badges if any
-        if (j.awarded_badges && j.awarded_badges.length){
-          showBadgeToast(j.awarded_badges)
-        }
-        
-        // 4) Inline feedback and re-enable Next after delay
+        // Show badges if any and update UI
         const infoEl2 = document.getElementById('info')
         if (infoEl2) {
           if (maxAttemptsReached) {
@@ -274,29 +357,15 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
           }
         }
         
-        // Update ribbon XP immediately if provided
-        try{
-          if (typeof j.xp !== 'undefined'){
-            const rx2 = document.getElementById('ribbonXP')
-            if (rx2){
-              const prev2 = parseInt(rx2.textContent) || 0
-              rx2.textContent = j.xp
-              const delta2 = (j.xp || 0) - prev2
-              if (delta2 > 0) animateXpIncrement(delta2)
-            }
-          }
-        }catch(e){}
-        
-        // Refresh ribbon from backend to get full state
-        try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
-        
-        setTimeout(()=>{ document.getElementById('next').disabled = false }, 800)
-        
-        // Disable Hint after an incorrect attempt as well
-        try{ const hintBtn = document.getElementById('hint'); if (hintBtn) hintBtn.disabled = true } catch(e){}
-        
-        // Reveal 'See on lichess' link if we have game info
-        try{ showSeeOnLichessLink(currentPuzzle) } catch(e){}
+        // Update all UI elements after incorrect answer
+        updateUIAfterAnswer({
+          xp: j.xp,
+          enableNext: true,
+          enableHint: false,
+          nextDelay: 800,
+          showBadges: j.awarded_badges,
+          showLichessLink: true
+        });
       }, 250)
     }, 800)
   }
@@ -406,47 +475,8 @@ async function onDrop(source, target){
     if (window.__CP_DEBUG) console.debug('check_puzzle: response', j)
     try{ if (window.__CP_DEBUG) console.debug('check_puzzle: response keys', Object.keys(j), 'stringified', JSON.stringify(j)) } catch(e){}
 
-    if (j.correct){
-      highlightSquareWithFade(source, 'green')
-      highlightSquareWithFade(target, 'green')
-      // brief inline feedback instead of modal
-      const infoEl = document.getElementById('info')
-      if (infoEl) infoEl.textContent = 'Correct! Click Next to continue.'
-      // update ribbon XP immediately from server response if present
-      try{
-        if (typeof j.xp !== 'undefined'){
-          const rx = document.getElementById('ribbonXP')
-          if (rx){
-            const prev = parseInt(rx.textContent) || 0
-            rx.textContent = j.xp
-            const delta = (j.xp || 0) - prev
-            if (delta > 0) animateXpIncrement(delta)
-          }
-        }
-      }catch(e){}
-      // refresh full ribbon state from server
-      try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
-      // enable Next after a short delay
-  setTimeout(()=>{ document.getElementById('next').disabled = false }, 800)
-  // disable Hint after an answer is given; it will be re-enabled on next puzzle load
-  try{ const hintBtn = document.getElementById('hint'); if (hintBtn) hintBtn.disabled = true } catch(e){}
-      // show badge modal only if new badges were awarded on this answer
-      if (j.awarded_badges && j.awarded_badges.length){
-        // show inline toast for new badges
-        showBadgeToast(j.awarded_badges)
-      }
-      // Show congratulatory toast if the server reports a new record streak
-      try{
-        if (j.new_record_streak){
-          try{ showRecordToast(j.new_record_streak) } catch(e){ try{ alert('New record! Streak: ' + j.new_record_streak) }catch(e){} }
-        }
-      }catch(e){}
-      // reveal 'See on lichess' link if we have game info
-      try{ showSeeOnLichessLink(currentPuzzle) } catch(e){}
-    } else {
-      // Use the consolidated response handler
-      handleCheckPuzzleResponse(j, source, target, startFEN)
-    }
+    // Use the consolidated response handler for all responses
+    handleCheckPuzzleResponse(j, source, target, startFEN)
   }catch(err){
     console.error('check_puzzle: async error', err)
   }

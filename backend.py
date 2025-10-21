@@ -294,6 +294,73 @@ app.config.update({
 _configure_logging()
 
 
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+def get_user_int_attr(user, attr, default=0):
+    """Safely get an integer attribute from a user object with default."""
+    try:
+        value = getattr(user, attr, default)
+        return int(value or default)
+    except (ValueError, TypeError):
+        return default
+
+
+def get_user_str_attr(user, attr, default=''):
+    """Safely get a string attribute from a user object with default."""
+    value = getattr(user, attr, default)
+    return str(value or default)
+
+
+def update_user_xp(user, gained_xp):
+    """Update user XP and daily XP tracking."""
+    user.xp = (user.xp or 0) + gained_xp
+    
+    try:
+        today_iso = datetime.now(timezone.utc).date().isoformat()
+        
+        # Reset daily XP if it's a new day
+        if getattr(user, 'xp_today_date', None) != today_iso:
+            user.xp_today = 0
+            user.xp_today_date = today_iso
+        
+        # Add to today's XP
+        user.xp_today = get_user_int_attr(user, 'xp_today', 0) + (gained_xp or 0)
+        
+        # Record first activity date if not set
+        if not getattr(user, '_first_game_date', None):
+            user._first_game_date = today_iso
+    except Exception as e:
+        app.logger.warning(f"Error updating XP tracking: {e}")
+
+
+def update_user_streaks(user, hint_used=False):
+    """Update user streak counters after a correct answer."""
+    _record_successful_activity(user)
+    
+    # Update best day streak if current is higher
+    try:
+        current_streak = get_user_int_attr(user, 'streak_days', 0)
+        best_streak = get_user_int_attr(user, 'best_streak_days', 0)
+        if current_streak > best_streak:
+            user.best_streak_days = current_streak
+    except Exception as e:
+        app.logger.warning(f"Error updating best streak: {e}")
+    
+    # Increment cumulative correct counter
+    user.correct_count = (user.correct_count or 0) + 1
+    
+    # Only increment puzzle streak if no hint was used
+    if not hint_used:
+        current = get_user_int_attr(user, 'consecutive_correct', 0)
+        user.consecutive_correct = current + 1
+
+
+# ============================================================================
+# Routes
+# ============================================================================
+
 @app.route('/')
 def index():
     # The front page is now the puzzle UI. Redirect to the puzzle page.
@@ -1049,18 +1116,19 @@ def check_puzzle():
             p.failures = (p.failures or 0) + 1
         # update selection weight (lower weight for well-known items)
         p.weight = max(0.1, 5.0 / (1 + reps))
-        # award xp and badges (scale XP with user's cooldown and streak)
+        
+        # Award xp and badges (scale XP with user's cooldown and streak)
         u = p.user
-        cd = getattr(u, 'cooldown_minutes', 10) or 10
-        consec = int(getattr(u, 'consecutive_correct', 0) or 0)
-        # determine if a hint was used (server-side session record takes priority)
+        cd = get_user_int_attr(u, 'cooldown_minutes', 10)
+        consec = get_user_int_attr(u, 'consecutive_correct', 0)
+        
+        # Determine if a hint was used (server-side session record takes priority)
         hint_used = _is_hint_used(pid)
         
         # Get user's max_attempts setting (default 3, range 1-3)
-        max_attempts = getattr(u, 'settings_max_attempts', 3) or 3
-        max_attempts = max(1, min(3, max_attempts))  # enforce range
+        max_attempts = max(1, min(3, get_user_int_attr(u, 'settings_max_attempts', 3)))
 
-        # compute gained XP based on pre-existing consecutive count
+        # Compute gained XP based on pre-existing consecutive count
         gained = xp_for_answer(correct, cooldown_minutes=cd, consecutive_correct=consec)
         
         # Apply attempt penalty: halve XP for each incorrect attempt
@@ -1069,46 +1137,16 @@ def check_puzzle():
             gained = gained // (2 ** (current_attempt - 1))
         
         # If a hint was used, enforce the rule: only 1 XP can be gained for the puzzle
-        # and the puzzle streak should not increase. We implement this by capping
-        # the gained XP and preventing increment of consecutive_correct below.
+        # and the puzzle streak should not increase.
         if hint_used:
             gained = 1 if gained > 0 else 0
-        # apply XP immediately so badge logic can see updated value
-        u.xp = (u.xp or 0) + gained
-        # Track xp gained today: if xp_today_date is not today, reset
-        try:
-            today_iso = datetime.now(timezone.utc).date().isoformat()
-            if getattr(u, 'xp_today_date', None) != today_iso:
-                u.xp_today = 0
-                u.xp_today_date = today_iso
-            try:
-                u.xp_today = (getattr(u, 'xp_today', 0) or 0) + (gained or 0)
-            except Exception:
-                u.xp_today = (gained or 0)
-            # ensure we have a first activity date recorded
-            if not getattr(u, '_first_game_date', None):
-                u._first_game_date = datetime.now(timezone.utc).date().isoformat()
-        except Exception:
-            pass
-        # Update user counters and streaks when the answer is correct.
-        # Perform streak updates first so badge calculation can observe up-to-date state.
+        
+        # Apply XP and update tracking
+        update_user_xp(u, gained)
+        
+        # Update user counters and streaks when the answer is correct
         if correct:
-            # Update daily streak and record last activity timestamp
-            _record_successful_activity(u)
-            # update best day streak if changed
-            try:
-                best_day = int(getattr(u, 'best_streak_days', 0) or 0)
-                if (getattr(u, 'streak_days', 0) or 0) > best_day:
-                    u.best_streak_days = (getattr(u, 'streak_days', 0) or 0)
-            except Exception:
-                pass
-
-            # increment cumulative correct counter
-            u.correct_count = (u.correct_count or 0) + 1
-            # If a hint was used, do NOT increase the puzzle streak (consecutive_correct)
-            # but do not reset it either on correct answer. If no hint used, increment as usual.
-            if not hint_used:
-                u.consecutive_correct = consec + 1
+            update_user_streaks(u, hint_used)
         else:
             # reset consecutive puzzle-correct streak on failure
             u.consecutive_correct = 0
