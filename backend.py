@@ -1168,6 +1168,12 @@ def check_puzzle():
             # Check if max attempts reached
             if current_attempt >= max_attempts:
                 resp['max_attempts_reached'] = True
+            else:
+                resp['max_attempts_reached'] = False
+        
+        # DEBUG: Log attempt tracking
+        if not correct:
+            app.logger.info(f"Attempt tracking - puzzle {pid}: attempt={current_attempt}, max={max_attempts}, remaining={resp['attempts_remaining']}, max_reached={resp.get('max_attempts_reached', False)}")
         
         # Clear attempt tracking and hint record when puzzle is solved or max attempts reached
         if correct or (not correct and current_attempt >= max_attempts):

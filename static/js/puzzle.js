@@ -212,6 +212,15 @@ async function onDrop(source, target){
         const maxAttemptsReached = j.max_attempts_reached || false;
         const attemptsRemaining = j.attempts_remaining || 0;
         
+        // DEBUG: Log attempt tracking values
+        console.log('Attempt tracking:', {
+          maxAttemptsReached,
+          attemptsRemaining,
+          current_attempt: j.current_attempt,
+          max_attempts: j.max_attempts,
+          rawResponse: j
+        });
+        
         // If attempts remain, allow another try
         if (!maxAttemptsReached && attemptsRemaining > 0) {
           const infoEl = document.getElementById('info');
