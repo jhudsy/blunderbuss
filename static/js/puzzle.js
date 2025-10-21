@@ -123,6 +123,196 @@ async function loadPuzzle(){
     try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
 }
 
+/**
+ * Handle the response from /check_puzzle endpoint
+ * @param {object} j - JSON response from server
+ * @param {string} source - Source square (e.g. 'e2')
+ * @param {string} target - Target square (e.g. 'e4')
+ * @param {string} startFEN - FEN string of the position before the move
+ */
+function handleCheckPuzzleResponse(j, source, target, startFEN) {
+  // Check if max attempts reached before locking board
+  const maxAttemptsReached = j.max_attempts_reached || false;
+  const attemptsRemaining = j.attempts_remaining || 0;
+  const hasAttemptsLeft = !j.correct && !maxAttemptsReached && attemptsRemaining > 0;
+  
+  // Only lock board interactions if answer is correct OR max attempts reached
+  if (!hasAttemptsLeft) {
+    try{ allowMoves = false }catch(e){}
+  }
+  
+  if (j.correct) {
+    // Handle correct answer
+    highlightSquareWithFade(source, 'green')
+    highlightSquareWithFade(target, 'green')
+    
+    const infoEl = document.getElementById('info')
+    if (infoEl) infoEl.textContent = 'Correct! Click Next to continue.'
+    
+    // Update ribbon XP immediately from server response if present
+    try{
+      if (typeof j.xp !== 'undefined'){
+        const rx = document.getElementById('ribbonXP')
+        if (rx){
+          const prev = parseInt(rx.textContent) || 0
+          rx.textContent = j.xp
+          const delta = (j.xp || 0) - prev
+          if (delta > 0) animateXpIncrement(delta)
+        }
+      }
+    }catch(e){}
+    
+    // Refresh full ribbon state from server
+    try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
+    
+    // Enable Next after a short delay
+    setTimeout(()=>{ document.getElementById('next').disabled = false }, 800)
+    
+    // Disable Hint after an answer is given
+    try{ const hintBtn = document.getElementById('hint'); if (hintBtn) hintBtn.disabled = true } catch(e){}
+    
+    // Show badge toast only if new badges were awarded on this answer
+    if (j.awarded_badges && j.awarded_badges.length){
+      showBadgeToast(j.awarded_badges)
+    }
+    
+    // Show congratulatory toast if the server reports a new record streak
+    try{
+      if (j.new_record_streak){
+        try{ showRecordToast(j.new_record_streak) } catch(e){ try{ alert('New record! Streak: ' + j.new_record_streak) }catch(e){} }
+      }
+    }catch(e){}
+    
+    // Reveal 'See on lichess' link if we have game info
+    try{ showSeeOnLichessLink(currentPuzzle) } catch(e){}
+    
+  } else {
+    // Handle incorrect answer
+    if (window.__CP_DEBUG) console.debug('check_puzzle: incorrect branch entered', { startFEN })
+    
+    highlightSquareWithFade(source, 'red')
+    highlightSquareWithFade(target, 'red')
+    
+    // DEBUG: Log attempt tracking values
+    console.log('Attempt tracking:', {
+      maxAttemptsReached,
+      attemptsRemaining,
+      current_attempt: j.current_attempt,
+      max_attempts: j.max_attempts,
+      rawResponse: j
+    });
+    
+    // If attempts remain, allow another try
+    if (!maxAttemptsReached && attemptsRemaining > 0) {
+      const infoEl = document.getElementById('info');
+      if (infoEl) {
+        infoEl.textContent = `Incorrect. You have ${attemptsRemaining} attempt${attemptsRemaining > 1 ? 's' : ''} remaining.`;
+      }
+      // Re-enable moves after a brief delay
+      setTimeout(() => {
+        try { board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
+        try { game.load(startFEN) } catch (e) { /* ignore */ }
+        allowMoves = true;
+      }, 1000);
+      return;
+    }
+
+    // Max attempts reached - reveal solution and disable further moves
+    // Start reveal sequence using nested setTimeouts
+    setTimeout(() => {
+      // 1) Reset board to the starting position
+      try { board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
+
+      // 2) Wait a little more before revealing the correct move
+      setTimeout(() => {
+        // 3) Reveal correct move if provided
+        if (window.__CP_DEBUG) console.debug('check_puzzle: hasOwnProperty(correct_san)?', j && Object.prototype.hasOwnProperty.call(j, 'correct_san'))
+        if (window.__CP_DEBUG) console.debug('check_puzzle: typeof correct_san', typeof j.correct_san, 'value:', j.correct_san)
+        
+        if (j.correct_san){
+          if (window.__CP_DEBUG) console.debug('server provided correct_san (raw):', j.correct_san)
+          const cmc = document.getElementById('correctMoveContainer')
+          if (cmc) cmc.style.display = ''
+          
+          // Sanitize SAN from server
+          let san = (j.correct_san || '').toString().trim()
+          if (window.__CP_DEBUG) console.debug('server provided correct_san (before sanitize):', j.correct_san, 'after trim:', san)
+          san = san.replace(/^\d+\.*\s*/, '')
+          san = san.replace(/\.{2,}/g, '')
+          san = san.replace(/[(),;:]/g, '')
+          san = san.trim()
+          if (window.__CP_DEBUG) console.debug('server provided correct_san (sanitized):', san)
+          
+          try{
+            // Compute the correct move from the starting position
+            const temp = new Chess()
+            try{ temp.load(startFEN) } catch(e){ /* ignore */ }
+            const moveObj = temp.move(san, {sloppy: true})
+            if (window.__CP_DEBUG) console.debug('temp.move result:', moveObj)
+            
+            if (moveObj){
+              try{ revealCorrectMoveSquares(moveObj.from, moveObj.to) } catch(e){}
+            } else {
+              // Fallback: scan moves list
+              const moves = temp.moves({verbose:true})
+              for (let m of moves){
+                if (m.san === san){
+                  if (window.__CP_DEBUG) console.debug('matched move in moves list:', m)
+                  try{ revealCorrectMoveSquares(m.from, m.to) } catch(e){ board.position(startFEN) }
+                  break
+                }
+              }
+              if (window.__CP_DEBUG) console.debug('fallback scan complete, no direct temp.move result')
+            }
+            
+            // Ensure the global game is reset back to the starting position after reveal
+            try{ game.load(startFEN) } catch(e){ /* ignore */ }
+          }catch(e){ /* ignore reveal failures */ }
+        }
+        
+        // Show badges if any
+        if (j.awarded_badges && j.awarded_badges.length){
+          showBadgeToast(j.awarded_badges)
+        }
+        
+        // 4) Inline feedback and re-enable Next after delay
+        const infoEl2 = document.getElementById('info')
+        if (infoEl2) {
+          if (maxAttemptsReached) {
+            infoEl2.textContent = 'Maximum attempts reached — the correct move is shown on the board. Click Next to continue.';
+          } else {
+            infoEl2.textContent = 'Incorrect — the correct move is shown on the board. Click Next to continue.';
+          }
+        }
+        
+        // Update ribbon XP immediately if provided
+        try{
+          if (typeof j.xp !== 'undefined'){
+            const rx2 = document.getElementById('ribbonXP')
+            if (rx2){
+              const prev2 = parseInt(rx2.textContent) || 0
+              rx2.textContent = j.xp
+              const delta2 = (j.xp || 0) - prev2
+              if (delta2 > 0) animateXpIncrement(delta2)
+            }
+          }
+        }catch(e){}
+        
+        // Refresh ribbon from backend to get full state
+        try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
+        
+        setTimeout(()=>{ document.getElementById('next').disabled = false }, 800)
+        
+        // Disable Hint after an incorrect attempt as well
+        try{ const hintBtn = document.getElementById('hint'); if (hintBtn) hintBtn.disabled = true } catch(e){}
+        
+        // Reveal 'See on lichess' link if we have game info
+        try{ showSeeOnLichessLink(currentPuzzle) } catch(e){}
+      }, 250)
+    }, 800)
+  }
+}
+
   // import-related UI removed
 async function onDrop(source, target){
   // guard: ensure we have a loaded puzzle
@@ -155,168 +345,8 @@ async function onDrop(source, target){
       if (window.__CP_DEBUG) console.debug('check_puzzle: response', j)
       try{ if (window.__CP_DEBUG) console.debug('check_puzzle: response keys', Object.keys(j), 'stringified', JSON.stringify(j)) } catch(e){}
 
-  // Check if max attempts reached before locking board
-  const maxAttemptsReached = j.max_attempts_reached || false;
-  const attemptsRemaining = j.attempts_remaining || 0;
-  const hasAttemptsLeft = !j.correct && !maxAttemptsReached && attemptsRemaining > 0;
-  
-  // Only lock board interactions if answer is correct OR max attempts reached
-  if (!hasAttemptsLeft) {
-    try{ allowMoves = false }catch(e){}
-  }
-  
-  if (j.correct){
-        highlightSquareWithFade(source, 'green')
-        highlightSquareWithFade(target, 'green')
-        // brief inline feedback instead of modal
-        const infoEl = document.getElementById('info')
-        if (infoEl) infoEl.textContent = 'Correct! Click Next to continue.'
-        // update ribbon XP immediately from server response if present
-        try{
-          if (typeof j.xp !== 'undefined'){
-            const rx = document.getElementById('ribbonXP')
-            if (rx){
-              const prev = parseInt(rx.textContent) || 0
-              rx.textContent = j.xp
-              const delta = (j.xp || 0) - prev
-              if (delta > 0) animateXpIncrement(delta)
-            }
-          }
-        }catch(e){}
-        // refresh full ribbon state from server
-        try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
-        // enable Next after a short delay
-        setTimeout(()=>{ document.getElementById('next').disabled = false }, 800)
-        // disable Hint after an answer is given; it will be re-enabled on next puzzle load
-        try{ const hintBtn = document.getElementById('hint'); if (hintBtn) hintBtn.disabled = true } catch(e){}
-        // show badge modal only if new badges were awarded on this answer
-        if (j.awarded_badges && j.awarded_badges.length){
-          // show inline toast for new badges
-          showBadgeToast(j.awarded_badges)
-        }
-        // Show congratulatory toast if the server reports a new record streak
-        try{
-          if (j.new_record_streak){
-            try{ showRecordToast(j.new_record_streak) } catch(e){ try{ alert('New record! Streak: ' + j.new_record_streak) }catch(e){} }
-          }
-        }catch(e){}
-        // reveal 'See on lichess' link if we have game info
-        try{ showSeeOnLichessLink(currentPuzzle) } catch(e){}
-      } else {
-        if (window.__CP_DEBUG) console.debug('check_puzzle: incorrect branch entered', { startFEN })
-        // Orchestrate the reveal sequence for an incorrect answer (visual only)
-        highlightSquareWithFade(source, 'red')
-        highlightSquareWithFade(target, 'red')
-        
-        // Check if max attempts reached
-        const maxAttemptsReached = j.max_attempts_reached || false;
-        const attemptsRemaining = j.attempts_remaining || 0;
-        
-        // DEBUG: Log attempt tracking values
-        console.log('Attempt tracking:', {
-          maxAttemptsReached,
-          attemptsRemaining,
-          current_attempt: j.current_attempt,
-          max_attempts: j.max_attempts,
-          rawResponse: j
-        });
-        
-        // If attempts remain, allow another try
-        if (!maxAttemptsReached && attemptsRemaining > 0) {
-          const infoEl = document.getElementById('info');
-          if (infoEl) {
-            infoEl.textContent = `Incorrect. You have ${attemptsRemaining} attempt${attemptsRemaining > 1 ? 's' : ''} remaining.`;
-          }
-          // Re-enable moves after a brief delay
-          setTimeout(() => {
-            try { board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
-            try { game.load(startFEN) } catch (e) { /* ignore */ }
-            allowMoves = true;
-          }, 1000);
-          return;
-        }
-
-        // Max attempts reached - reveal solution and disable further moves
-        // Start reveal sequence using nested setTimeouts (avoid async/await so logs always run)
-        setTimeout(() => {
-          // 1) after brief pause, reset board to the starting position (don't mutate global game yet)
-          try { board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
-
-          // 2) wait a little more before revealing the correct move
-          setTimeout(() => {
-            // 3) reveal correct move if provided
-            if (window.__CP_DEBUG) console.debug('check_puzzle: hasOwnProperty(correct_san)?', j && Object.prototype.hasOwnProperty.call(j, 'correct_san'))
-            if (window.__CP_DEBUG) console.debug('check_puzzle: typeof correct_san', typeof j.correct_san, 'value:', j.correct_san)
-            if (j.correct_san){
-              if (window.__CP_DEBUG) console.debug('server provided correct_san (raw):', j.correct_san)
-              const cmc = document.getElementById('correctMoveContainer')
-              if (cmc) cmc.style.display = ''
-              // sanitize SAN from server (strip stray punctuation or leading move numbers)
-              let san = (j.correct_san || '').toString().trim()
-              if (window.__CP_DEBUG) console.debug('server provided correct_san (before sanitize):', j.correct_san, 'after trim:', san)
-              san = san.replace(/^\d+\.*\s*/, '')
-              san = san.replace(/\.{2,}/g, '')
-              san = san.replace(/[(),;:]/g, '')
-              san = san.trim()
-              if (window.__CP_DEBUG) console.debug('server provided correct_san (sanitized):', san)
-              try{
-                // compute the correct move from the starting position using a temp Chess instance
-                const temp = new Chess()
-                try{ temp.load(startFEN) } catch(e){ /* ignore */ }
-                const moveObj = temp.move(san, {sloppy: true})
-                if (window.__CP_DEBUG) console.debug('temp.move result:', moveObj)
-                if (moveObj){
-                  try{ revealCorrectMoveSquares(moveObj.from, moveObj.to) } catch(e){}
-                } else {
-                  const moves = temp.moves({verbose:true})
-                  for (let m of moves){
-                    if (m.san === san){
-                      if (window.__CP_DEBUG) console.debug('matched move in moves list:', m)
-                      try{ revealCorrectMoveSquares(m.from, m.to) } catch(e){ board.position(startFEN) }
-                      break
-                    }
-                  }
-                  if (window.__CP_DEBUG) console.debug('fallback scan complete, no direct temp.move result')
-                }
-                // ensure the global game is reset back to the starting position after reveal
-                try{ game.load(startFEN) } catch(e){ /* ignore */ }
-              }catch(e){ /* ignore reveal failures */ }
-            }
-            // show badges if any
-            if (j.awarded_badges && j.awarded_badges.length){
-              showBadgeToast(j.awarded_badges)
-            }
-            // 4) inline feedback and re-enable Next after delay (no modal)
-            const infoEl2 = document.getElementById('info')
-            if (infoEl2) {
-              if (maxAttemptsReached) {
-                infoEl2.textContent = 'Maximum attempts reached — the correct move is shown on the board. Click Next to continue.';
-              } else {
-                infoEl2.textContent = 'Incorrect — the correct move is shown on the board. Click Next to continue.';
-              }
-            }
-            // update ribbon XP immediately if provided
-            try{
-              if (typeof j.xp !== 'undefined'){
-                const rx2 = document.getElementById('ribbonXP')
-                if (rx2){
-                  const prev2 = parseInt(rx2.textContent) || 0
-                  rx2.textContent = j.xp
-                  const delta2 = (j.xp || 0) - prev2
-                  if (delta2 > 0) animateXpIncrement(delta2)
-                }
-              }
-            }catch(e){}
-            // refresh ribbon from backend to get full state (streak etc.)
-            try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
-            setTimeout(()=>{ document.getElementById('next').disabled = false }, 800)
-            // disable Hint after an incorrect attempt as well
-            try{ const hintBtn = document.getElementById('hint'); if (hintBtn) hintBtn.disabled = true } catch(e){}
-            // reveal 'See on lichess' link if we have game info
-            try{ showSeeOnLichessLink(currentPuzzle) } catch(e){}
-          }, 250)
-        }, 800)
-      }
+      // Use the consolidated response handler
+      handleCheckPuzzleResponse(j, source, target, startFEN)
     }catch(err){
       console.error('check_puzzle: async error', err)
     }
@@ -425,113 +455,8 @@ async function onDrop(source, target){
       // reveal 'See on lichess' link if we have game info
       try{ showSeeOnLichessLink(currentPuzzle) } catch(e){}
     } else {
-      if (window.__CP_DEBUG) console.debug('check_puzzle: incorrect branch entered', { startFEN })
-      // Orchestrate the reveal sequence for an incorrect answer (visual only)
-      highlightSquareWithFade(source, 'red')
-      highlightSquareWithFade(target, 'red')
-      
-      // Check if max attempts reached
-      const maxAttemptsReached = j.max_attempts_reached || false;
-      const attemptsRemaining = j.attempts_remaining || 0;
-      
-      // DEBUG: Log attempt tracking values
-      console.log('Attempt tracking (main path):', {
-        maxAttemptsReached,
-        attemptsRemaining,
-        current_attempt: j.current_attempt,
-        max_attempts: j.max_attempts,
-        rawResponse: j
-      });
-      
-      // If attempts remain, allow another try
-      if (!maxAttemptsReached && attemptsRemaining > 0) {
-        const infoEl = document.getElementById('info');
-        if (infoEl) {
-          infoEl.textContent = `Incorrect. You have ${attemptsRemaining} attempt${attemptsRemaining > 1 ? 's' : ''} remaining.`;
-        }
-        // Re-enable moves after a brief delay
-        setTimeout(() => {
-          try { board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
-          try { game.load(startFEN) } catch (e) { /* ignore */ }
-          allowMoves = true;
-        }, 1000);
-        return;
-      }
-
-      // Max attempts reached - reveal solution and disable further moves
-      // Start reveal sequence using nested setTimeouts (avoid async/await so logs always run)
-      setTimeout(() => {
-        // 1) after brief pause, reset board to the starting position (don't mutate global game yet)
-        try { board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
-
-        // 2) wait a little more before revealing the correct move
-        setTimeout(() => {
-          // 3) reveal correct move if provided
-          if (window.__CP_DEBUG) console.debug('check_puzzle: hasOwnProperty(correct_san)?', j && Object.prototype.hasOwnProperty.call(j, 'correct_san'))
-          if (window.__CP_DEBUG) console.debug('check_puzzle: typeof correct_san', typeof j.correct_san, 'value:', j.correct_san)
-          if (j.correct_san){
-            if (window.__CP_DEBUG) console.debug('server provided correct_san (raw):', j.correct_san)
-            const cmc = document.getElementById('correctMoveContainer')
-            if (cmc) cmc.style.display = ''
-            // sanitize SAN from server (strip stray punctuation or leading move numbers)
-            let san = (j.correct_san || '').toString().trim()
-            if (window.__CP_DEBUG) console.debug('server provided correct_san (before sanitize):', j.correct_san, 'after trim:', san)
-            san = san.replace(/^\d+\.*\s*/, '')
-            san = san.replace(/\.{2,}/g, '')
-            san = san.replace(/[(),;:]/g, '')
-            san = san.trim()
-            if (window.__CP_DEBUG) console.debug('server provided correct_san (sanitized):', san)
-            try{
-              // compute the correct move from the starting position using a temp Chess instance
-              const temp = new Chess()
-              try{ temp.load(startFEN) } catch(e){ /* ignore */ }
-              const moveObj = temp.move(san, {sloppy: true})
-              if (window.__CP_DEBUG) console.debug('temp.move result:', moveObj)
-              if (moveObj){
-                try{ revealCorrectMoveSquares(moveObj.from, moveObj.to) } catch(e){}
-              } else {
-                const moves = temp.moves({verbose:true})
-                for (let m of moves){
-                  if (m.san === san){
-                    if (window.__CP_DEBUG) console.debug('matched move in moves list:', m)
-                    try{ revealCorrectMoveSquares(m.from, m.to) } catch(e){ board.position(startFEN) }
-                    break
-                  }
-                }
-                if (window.__CP_DEBUG) console.debug('fallback scan complete, no direct temp.move result')
-              }
-              // ensure the global game is reset back to the starting position after reveal
-              try{ game.load(startFEN) } catch(e){ /* ignore */ }
-            }catch(e){ /* ignore reveal failures */ }
-          }
-          // show badges if any
-          if (j.awarded_badges && j.awarded_badges.length){
-            showBadgeToast(j.awarded_badges)
-          }
-          // 4) inline feedback and re-enable Next after delay (no modal)
-          const infoEl2 = document.getElementById('info')
-          if (infoEl2) infoEl2.textContent = 'Incorrect — the correct move is shown on the board. Click Next to continue.'
-          // update ribbon XP immediately if provided
-          try{
-            if (typeof j.xp !== 'undefined'){
-              const rx2 = document.getElementById('ribbonXP')
-              if (rx2){
-                const prev2 = parseInt(rx2.textContent) || 0
-                rx2.textContent = j.xp
-                const delta2 = (j.xp || 0) - prev2
-                if (delta2 > 0) animateXpIncrement(delta2)
-              }
-            }
-          }catch(e){}
-          // refresh ribbon from backend to get full state (streak etc.)
-          try{ if (window.refreshRibbon) window.refreshRibbon() } catch(e){}
-          setTimeout(()=>{ document.getElementById('next').disabled = false }, 800)
-          // disable Hint after an incorrect attempt as well
-          try{ const hintBtn = document.getElementById('hint'); if (hintBtn) hintBtn.disabled = true } catch(e){}
-          // reveal 'See on lichess' link if we have game info
-          try{ showSeeOnLichessLink(currentPuzzle) } catch(e){}
-        }, 250)
-      }, 800)
+      // Use the consolidated response handler
+      handleCheckPuzzleResponse(j, source, target, startFEN)
     }
   }catch(err){
     console.error('check_puzzle: async error', err)
