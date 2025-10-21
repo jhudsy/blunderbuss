@@ -1089,19 +1089,23 @@ def check_puzzle():
         # expects the user's counters (xp, correct_count, consecutive_correct,
         # streak_days) to reflect the latest answer.
         new_badges = badge_updates(u, correct)
+        # Collect existing badge names BEFORE creating new ones to avoid
+        # UnrepeatableReadError when SQLite loses timezone info on datetime fields
+        existing_badge_names = [b.name for b in u.badges]
         if new_badges:
             for b in new_badges:
                 # avoid duplicates
                 exists = Badge.get(user=u, name=b)
                 if not exists:
                     Badge(user=u, name=b)
+                    existing_badge_names.append(b)
         # (streak updated earlier before badge calculation)
         # prepare response while DB session is active to avoid session-is-over errors
         resp = {
             'correct': correct,
             'new_weight': p.weight,
             'xp': u.xp,
-            'badges': [b.name for b in u.badges]
+            'badges': existing_badge_names
         }
         # Check and update best puzzle streak record when appropriate
         try:
