@@ -429,7 +429,36 @@ async function onDrop(source, target){
       // Orchestrate the reveal sequence for an incorrect answer (visual only)
       highlightSquareWithFade(source, 'red')
       highlightSquareWithFade(target, 'red')
+      
+      // Check if max attempts reached
+      const maxAttemptsReached = j.max_attempts_reached || false;
+      const attemptsRemaining = j.attempts_remaining || 0;
+      
+      // DEBUG: Log attempt tracking values
+      console.log('Attempt tracking (main path):', {
+        maxAttemptsReached,
+        attemptsRemaining,
+        current_attempt: j.current_attempt,
+        max_attempts: j.max_attempts,
+        rawResponse: j
+      });
+      
+      // If attempts remain, allow another try
+      if (!maxAttemptsReached && attemptsRemaining > 0) {
+        const infoEl = document.getElementById('info');
+        if (infoEl) {
+          infoEl.textContent = `Incorrect. You have ${attemptsRemaining} attempt${attemptsRemaining > 1 ? 's' : ''} remaining.`;
+        }
+        // Re-enable moves after a brief delay
+        setTimeout(() => {
+          try { board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
+          try { game.load(startFEN) } catch (e) { /* ignore */ }
+          allowMoves = true;
+        }, 1000);
+        return;
+      }
 
+      // Max attempts reached - reveal solution and disable further moves
       // Start reveal sequence using nested setTimeouts (avoid async/await so logs always run)
       setTimeout(() => {
         // 1) after brief pause, reset board to the starting position (don't mutate global game yet)
