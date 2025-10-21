@@ -41,11 +41,35 @@ def get_db_connection():
             return psycopg2.connect(database_url), 'postgres'
         else:
             raise ValueError(f'Unsupported DATABASE_URL: {database_url}')
-    else:
-        # Fall back to SQLite
-        import sqlite3
-        db_file = os.environ.get('DATABASE_FILE', 'db.sqlite')
-        return sqlite3.connect(db_file), 'sqlite'
+    
+    # Check for individual PostgreSQL environment variables
+    pg_host = os.environ.get('PG_HOST') or os.environ.get('POSTGRES_HOST')
+    pg_db = os.environ.get('PG_DATABASE') or os.environ.get('POSTGRES_DB')
+    pg_user = os.environ.get('PG_USER') or os.environ.get('POSTGRES_USER')
+    pg_password = os.environ.get('PG_PASSWORD') or os.environ.get('POSTGRES_PASSWORD')
+    pg_port = os.environ.get('PG_PORT') or os.environ.get('POSTGRES_PORT') or '5432'
+    
+    if pg_host and pg_db:
+        # Build PostgreSQL connection
+        import psycopg2
+        print(f'Connecting to PostgreSQL: host={pg_host}, database={pg_db}, user={pg_user}, port={pg_port}')
+        conn_params = {
+            'host': pg_host,
+            'database': pg_db,
+            'port': pg_port
+        }
+        if pg_user:
+            conn_params['user'] = pg_user
+        if pg_password:
+            conn_params['password'] = pg_password
+        
+        return psycopg2.connect(**conn_params), 'postgres'
+    
+    # Fall back to SQLite
+    import sqlite3
+    db_file = os.environ.get('DATABASE_FILE', 'db.sqlite')
+    print(f'No PostgreSQL configuration found, using SQLite: {db_file}')
+    return sqlite3.connect(db_file), 'sqlite'
 
 def check_column_exists(cursor, provider_type, table_name, column_name):
     """Check if a column exists in a table."""
