@@ -203,7 +203,7 @@ async function onDrop(source, target){
         // Start reveal sequence using nested setTimeouts (avoid async/await so logs always run)
         setTimeout(() => {
           // 1) after brief pause, reset board to the starting position (don't mutate global game yet)
-          try { if (window.__CP_DEBUG) console.log('here'); board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
+          try { board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
 
           // 2) wait a little more before revealing the correct move
           setTimeout(() => {
@@ -390,7 +390,7 @@ async function onDrop(source, target){
       // Start reveal sequence using nested setTimeouts (avoid async/await so logs always run)
       setTimeout(() => {
         // 1) after brief pause, reset board to the starting position (don't mutate global game yet)
-        try { if (window.__CP_DEBUG) console.log('here'); board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
+        try { board.position(startFEN) } catch (e) { console.error('Error resetting board position:', e) }
 
         // 2) wait a little more before revealing the correct move
         setTimeout(() => {
