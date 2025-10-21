@@ -74,13 +74,13 @@ def get_db_connection():
 def check_column_exists(cursor, provider_type, table_name, column_name):
     """Check if a column exists in a table."""
     if provider_type == 'postgres':
-        # PostgreSQL
+        # PostgreSQL - check with lowercase table name (PonyORM default)
         cursor.execute("""
             SELECT column_name 
             FROM information_schema.columns 
             WHERE table_name = %s 
             AND column_name = %s
-        """, (table_name, column_name))
+        """, (table_name.lower(), column_name))
         return cursor.fetchone() is not None
     elif provider_type == 'sqlite':
         # SQLite
@@ -118,9 +118,9 @@ def migrate():
     
     try:
         if provider_type == 'postgres':
-            # PostgreSQL
+            # PostgreSQL - use lowercase unquoted table name (PonyORM default)
             cursor.execute("""
-                ALTER TABLE "User" 
+                ALTER TABLE "user" 
                 ADD COLUMN settings_max_attempts INTEGER DEFAULT 3
             """)
             print('Added column to PostgreSQL table')
