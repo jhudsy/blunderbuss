@@ -155,8 +155,16 @@ async function onDrop(source, target){
       if (window.__CP_DEBUG) console.debug('check_puzzle: response', j)
       try{ if (window.__CP_DEBUG) console.debug('check_puzzle: response keys', Object.keys(j), 'stringified', JSON.stringify(j)) } catch(e){}
 
-  // lock board interactions once we have a definitive answer
-  try{ allowMoves = false }catch(e){}
+  // Check if max attempts reached before locking board
+  const maxAttemptsReached = j.max_attempts_reached || false;
+  const attemptsRemaining = j.attempts_remaining || 0;
+  const hasAttemptsLeft = !j.correct && !maxAttemptsReached && attemptsRemaining > 0;
+  
+  // Only lock board interactions if answer is correct OR max attempts reached
+  if (!hasAttemptsLeft) {
+    try{ allowMoves = false }catch(e){}
+  }
+  
   if (j.correct){
         highlightSquareWithFade(source, 'green')
         highlightSquareWithFade(target, 'green')
