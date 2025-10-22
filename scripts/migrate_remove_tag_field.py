@@ -49,11 +49,13 @@ def column_exists_sqlite(table_name, column_name):
 
 def column_exists_postgres(table_name, column_name):
     """Check if a column exists in PostgreSQL. Must be called within db_session."""
-    result = db.execute("""
+    # Use string formatting since PonyORM's execute doesn't support parameterized queries
+    # for information_schema queries. Table and column names are safe since they're hardcoded.
+    result = db.execute(f"""
         SELECT column_name 
         FROM information_schema.columns 
-        WHERE table_name = $1 AND column_name = $2
-    """, (table_name, column_name))
+        WHERE table_name = '{table_name}' AND column_name = '{column_name}'
+    """)
     return len(list(result)) > 0
 
 
