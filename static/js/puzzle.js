@@ -162,7 +162,7 @@ async function loadPuzzle(){
   clearAllHighlights()
   
   // Reset click-to-move state
-  selectedSquare = null
+  clearClickToMoveSelection()
 
   game = new Chess()
   game.load(currentPuzzle.fen)
@@ -614,13 +614,26 @@ function showRecordToast(newBest){
   }catch(e){ try{ alert('Congratulations! New record puzzle streak: ' + String(newBest)) }catch(e){} }
 }
 
-// remove only hint (blue) highlight classes and click-to-move (yellow) highlight
+// remove only hint (blue) highlight classes
+// NOTE: Does NOT clear click-to-move selection - that's managed separately
 function clearHintHighlights(){
   try{
-    const els = document.querySelectorAll('.square-highlight-blue, .highlight1-32417')
-    els.forEach(el=>{ try{ el.classList.remove('square-highlight-blue', 'highlight1-32417') }catch(e){} })
-    // Also clear click-to-move selection
-    selectedSquare = null
+    const els = document.querySelectorAll('.square-highlight-blue')
+    els.forEach(el=>{ try{ el.classList.remove('square-highlight-blue') }catch(e){} })
+  }catch(e){}
+}
+
+// Clear click-to-move selection and yellow highlight
+function clearClickToMoveSelection(){
+  try{
+    if (selectedSquare) {
+      const boardEl = document.getElementById('board')
+      if (boardEl) {
+        const el = boardEl.querySelector('.square-' + selectedSquare)
+        if (el) el.classList.remove('highlight1-32417')
+      }
+      selectedSquare = null
+    }
   }catch(e){}
 }
 
