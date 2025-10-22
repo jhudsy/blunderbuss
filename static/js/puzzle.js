@@ -940,15 +940,25 @@ window.addEventListener('DOMContentLoaded', ()=>{
     if (!boardEl) return
     
     const squares = boardEl.querySelectorAll('.square-55d63')
+    if (window.__CP_DEBUG) console.debug('Click-to-move: found', squares.length, 'squares')
+    
     squares.forEach(squareEl => {
       squareEl.addEventListener('click', function(e) {
-        if (!allowMoves) return
+        if (window.__CP_DEBUG) console.debug('Click-to-move: square clicked')
+        if (!allowMoves) {
+          if (window.__CP_DEBUG) console.debug('Click-to-move: moves not allowed')
+          return
+        }
         
         // Extract square coordinates from the class name (e.g., 'square-e2')
         const classList = Array.from(squareEl.classList)
         const squareClass = classList.find(c => c.startsWith('square-') && c.length === 9)
-        if (!squareClass) return
+        if (!squareClass) {
+          if (window.__CP_DEBUG) console.debug('Click-to-move: no square class found')
+          return
+        }
         const square = squareClass.substring(7) // Extract 'e2' from 'square-e2'
+        if (window.__CP_DEBUG) console.debug('Click-to-move: clicked square', square)
         
         const piece = game.get(square)
         
@@ -959,6 +969,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
             selectedSquare = square
             // Highlight the selected square
             squareEl.classList.add('square-highlight-blue')
+            if (window.__CP_DEBUG) console.debug('Click-to-move: selected', square)
           }
         } 
         // Second click: make the move or deselect
@@ -972,6 +983,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
           // If clicking the same square, deselect
           if (square === selectedSquare) {
             selectedSquare = null
+            if (window.__CP_DEBUG) console.debug('Click-to-move: deselected')
             return
           }
           
@@ -979,19 +991,20 @@ window.addEventListener('DOMContentLoaded', ()=>{
           if (piece && piece.color === game.turn()) {
             selectedSquare = square
             squareEl.classList.add('square-highlight-blue')
+            if (window.__CP_DEBUG) console.debug('Click-to-move: reselected', square)
             return
           }
           
           // Otherwise, attempt to move from selectedSquare to this square
+          if (window.__CP_DEBUG) console.debug('Click-to-move: attempting move', selectedSquare, '->', square)
+          
+          // Use chessboard.js move() to animate the piece, then trigger onDrop
           const moveNotation = selectedSquare + '-' + square
+          board.move(moveNotation)
           
-          // Use chessboard.js's move() method to animate the piece
-          const moveResult = board.move(moveNotation)
-          
-          // If the animation succeeded, trigger onDrop to validate and submit the move
-          if (moveResult) {
-            onDrop(selectedSquare, square)
-          }
+          // Trigger onDrop to validate and handle the move
+          // onDrop will validate the move, update the game state, and submit to server
+          onDrop(selectedSquare, square)
           
           selectedSquare = null
         }
