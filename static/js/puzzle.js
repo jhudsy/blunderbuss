@@ -1051,18 +1051,30 @@ window.addEventListener('DOMContentLoaded', ()=>{
         // Otherwise, attempt to move from selectedSquare to this square
         if (window.__CP_DEBUG) console.debug('Click-to-move: attempting move', selectedSquare, '->', square)
         
-        // Animate the piece movement using chessboard.js
+        // Check if the move is legal before animating
+        // Get all legal moves from the selected square
+        const legalMoves = game.moves({square: selectedSquare, verbose: true})
+        const isLegal = legalMoves.some(m => m.to === square)
+        
+        if (!isLegal) {
+          if (window.__CP_DEBUG) console.debug('Click-to-move: illegal move, keeping selection')
+          // Keep the piece selected so user can try a different square
+          // Re-add highlight since it was removed above
+          if (prevSquareEl) {
+            prevSquareEl.classList.add('highlight1-32417')
+          }
+          return
+        }
+        
+        // Move is legal - animate it and then validate/submit
         const moveNotation = selectedSquare + '-' + square
         board.move(moveNotation)
         
         // Trigger onDrop to validate and handle the move
-        // onDrop will validate the move, update the game state, and submit to server
-        // It returns 'snapback' for illegal moves or nothing for legal moves
-        // Note: We need to handle the async result properly
-        const result = onDrop(selectedSquare, square)
+        // onDrop will update the game state and submit to server
+        onDrop(selectedSquare, square)
         
-        // onDrop is async, but for now we'll clear the selection immediately
-        // If the move is invalid, onDrop will handle the snapback animation
+        // Clear selection after successful move animation
         selectedSquare = null
       }
     }
