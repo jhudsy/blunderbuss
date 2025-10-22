@@ -76,10 +76,11 @@ def migrate_tag_to_severity():
     print("Starting migration: Remove tag field from Puzzle model")
     print(f"Database provider: {get_db_provider()}")
     
-    # Check if tag column exists
-    if not column_exists('puzzle', 'tag'):
-        print("✓ Tag column does not exist - migration already completed or not needed")
-        return
+    # Check if tag column exists (must be done inside db_session)
+    with db_session:
+        if not column_exists('puzzle', 'tag'):
+            print("✓ Tag column does not exist - migration already completed or not needed")
+            return
     
     print("✓ Tag column exists - proceeding with migration")
     
