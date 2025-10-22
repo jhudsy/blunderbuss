@@ -983,8 +983,9 @@ window.addEventListener('DOMContentLoaded', ()=>{
           return
         }
         
-        if (window.__CP_DEBUG) console.debug('Click-to-move: treating as click on', square)
+        if (window.__CP_DEBUG) console.debug('Click-to-move: treating as click on', square, 'selectedSquare before call =', selectedSquare)
         handleSquareClick(square, squareEl)
+        if (window.__CP_DEBUG) console.debug('Click-to-move: after handleSquareClick, selectedSquare =', selectedSquare)
       }, 150)
     }, true) // Use capture phase
     
