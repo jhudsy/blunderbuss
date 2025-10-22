@@ -941,13 +941,16 @@ window.addEventListener('DOMContentLoaded', ()=>{
     
     if (window.__CP_DEBUG) console.debug('Click-to-move: setting up event delegation on board')
     
-    // Track pointerdown and pointerup to detect clicks vs drags
-    // Using pointer events for cross-device compatibility (mouse, touch, pen)
-    let pointerdownSquare = null
-    let pointerdownTime = 0
+    // Use pointerdown with a timeout to detect clicks (not drags)
+    // This approach works even if pointerup is prevented by chessboard.js
+    let lastPointerdownSquare = null
+    let lastPointerdownTime = 0
+    let pointerMoved = false
     
     boardEl.addEventListener('pointerdown', function(e) {
-      pointerdownTime = Date.now()
+      const now = Date.now()
+      pointerMoved = false
+      
       // Find the square that was pressed
       let squareEl = e.target
       let attempts = 0
@@ -955,43 +958,45 @@ window.addEventListener('DOMContentLoaded', ()=>{
         squareEl = squareEl.parentElement
         attempts++
       }
-      if (squareEl && squareEl.classList.contains('square-55d63')) {
-        pointerdownSquare = squareEl.getAttribute('data-square')
-        if (window.__CP_DEBUG) console.debug('Click-to-move: pointerdown on', pointerdownSquare)
+      
+      if (!squareEl || !squareEl.classList.contains('square-55d63')) {
+        if (window.__CP_DEBUG) console.debug('Click-to-move: pointerdown not on a square')
+        return
       }
+      
+      const square = squareEl.getAttribute('data-square')
+      if (window.__CP_DEBUG) console.debug('Click-to-move: pointerdown on', square)
+      
+      lastPointerdownSquare = square
+      lastPointerdownTime = now
+      
+      // Use a timeout to check if this was a click (not a drag)
+      // If pointer hasn't moved after 150ms, treat it as a click
+      setTimeout(() => {
+        if (lastPointerdownSquare !== square || pointerMoved) {
+          if (window.__CP_DEBUG) console.debug('Click-to-move: detected drag, not click')
+          return
+        }
+        
+        if (!allowMoves) {
+          if (window.__CP_DEBUG) console.debug('Click-to-move: moves not allowed')
+          return
+        }
+        
+        if (window.__CP_DEBUG) console.debug('Click-to-move: treating as click on', square)
+        handleSquareClick(square, squareEl)
+      }, 150)
     }, true) // Use capture phase
     
-    boardEl.addEventListener('pointerup', function(e) {
-      const pointerupTime = Date.now()
-      const elapsed = pointerupTime - pointerdownTime
-      
-      if (window.__CP_DEBUG) console.debug('Click-to-move: pointerup, elapsed:', elapsed + 'ms')
-      
-      // Only treat as click if pointerup is quick (< 200ms) and on same square
-      if (elapsed > 200 || !pointerdownSquare) {
-        if (window.__CP_DEBUG) console.debug('Click-to-move: not a click (too slow or no pointerdown)')
-        pointerdownSquare = null
-        return
-      }
-      
-      if (!allowMoves) {
-        if (window.__CP_DEBUG) console.debug('Click-to-move: moves not allowed')
-        pointerdownSquare = null
-        return
-      }
-      
-      // Get the square from pointerdown
-      const square = pointerdownSquare
-      pointerdownSquare = null
-      
-      if (!square) {
-        if (window.__CP_DEBUG) console.debug('Click-to-move: no square identified')
-        return
-      }
-      
-      if (window.__CP_DEBUG) console.debug('Click-to-move: clicked square', square)
-      
+    // Track pointer movement to distinguish clicks from drags
+    boardEl.addEventListener('pointermove', function(e) {
+      pointerMoved = true
+    }, true)
+    
+    // Separate function to handle the click logic
+    function handleSquareClick(square, squareEl) {
       const piece = game.get(square)
+      const boardEl = document.getElementById('board')
       
       // First click: select a piece
       if (!selectedSquare) {
@@ -999,7 +1004,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
         if (piece && piece.color === game.turn()) {
           selectedSquare = square
           // Highlight the selected square
-          squareEl.classList.add('square-highlight-blue')
+          if (squareEl) squareEl.classList.add('square-highlight-blue')
           if (window.__CP_DEBUG) console.debug('Click-to-move: selected', square)
         } else {
           if (window.__CP_DEBUG) console.debug('Click-to-move: no valid piece to select', piece)
@@ -1023,7 +1028,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
         // If clicking another piece of the same color, select it instead
         if (piece && piece.color === game.turn()) {
           selectedSquare = square
-          squareEl.classList.add('square-highlight-blue')
+          if (squareEl) squareEl.classList.add('square-highlight-blue')
           if (window.__CP_DEBUG) console.debug('Click-to-move: reselected', square)
           return
         }
@@ -1041,7 +1046,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
         
         selectedSquare = null
       }
-    }, true) // Use capture phase for pointerup too
+    }
   }
   
   // Setup click handlers after board is created
