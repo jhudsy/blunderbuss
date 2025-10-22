@@ -128,31 +128,44 @@ def inject_puzzle(
         print(f"✓ Updated puzzle ID {existing.id} for user '{username}'")
         return True
     
-    # Create new puzzle
-    puzzle = Puzzle(
-        user=user,
-        game_id=game_id,
-        move_number=move_number,
-        fen=fen,
-        correct_san=correct_san,
-        weight=weight,
-        repetitions=0,
-        interval=0,
-        ease_factor=2.5,
-        next_review=datetime.now(timezone.utc),
-        last_reviewed=None,
-        successes=0,
-        failures=0,
-        pre_eval=pre_eval,
-        post_eval=post_eval,
-        tag=tag,
-        severity=severity,
-        white=white,
-        black=black,
-        date=date,
-        time_control=time_control,
-        time_control_type=time_control_type,
-    )
+    # Create new puzzle - only include optional fields that are not None
+    puzzle_data = {
+        'user': user,
+        'game_id': game_id,
+        'move_number': move_number,
+        'fen': fen,
+        'correct_san': correct_san,
+        'weight': weight,
+        'repetitions': 0,
+        'interval': 0,
+        'ease_factor': 2.5,
+        'next_review': datetime.now(timezone.utc),
+        'last_reviewed': None,
+        'successes': 0,
+        'failures': 0,
+    }
+    
+    # Add optional fields only if they are not None
+    if pre_eval is not None:
+        puzzle_data['pre_eval'] = pre_eval
+    if post_eval is not None:
+        puzzle_data['post_eval'] = post_eval
+    if tag:
+        puzzle_data['tag'] = tag
+    if severity:
+        puzzle_data['severity'] = severity
+    if white:
+        puzzle_data['white'] = white
+    if black:
+        puzzle_data['black'] = black
+    if date:
+        puzzle_data['date'] = date
+    if time_control:
+        puzzle_data['time_control'] = time_control
+    if time_control_type:
+        puzzle_data['time_control_type'] = time_control_type
+    
+    puzzle = Puzzle(**puzzle_data)
     commit()
     
     print(f"✓ Successfully injected puzzle ID {puzzle.id} for user '{username}'")
