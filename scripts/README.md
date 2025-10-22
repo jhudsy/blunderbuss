@@ -30,6 +30,74 @@ Notes:
 - Always backup your database before using `--drop` in production.
 - Supports both PostgreSQL and SQLite.
 
+inject_puzzle.py
+----------------
+Purpose:
+- Manually inject a puzzle for a specific user into the database.
+- Useful for testing, adding custom puzzles, or seeding specific scenarios.
+
+Features:
+- Interactive mode: prompts for all required values step-by-step.
+- Command-line mode: accepts all parameters as arguments for scripting.
+- Validates FEN positions and SAN moves using python-chess.
+- Supports optional metadata (evaluations, tags, player names, etc.).
+- Updates existing puzzles if game_id and move_number match.
+
+Usage:
+
+Interactive mode (recommended for manual use):
+
+```bash
+docker compose run --rm web python scripts/inject_puzzle.py
+```
+
+Command-line mode (all parameters):
+
+```bash
+docker compose run --rm web python scripts/inject_puzzle.py \
+  --username alice \
+  --fen "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 5" \
+  --correct-san "Bxf7+" \
+  --game-id "tactics001" \
+  --move-number 5 \
+  --tag "Blunder" \
+  --pre-eval -2.5 \
+  --post-eval 1.0
+```
+
+Simple puzzle injection:
+
+```bash
+docker compose run --rm web python scripts/inject_puzzle.py \
+  -u bob \
+  -f "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" \
+  -s "e4" \
+  -g "opening001" \
+  -m 1
+```
+
+Arguments:
+- `-u, --username` : Username to inject puzzle for (required)
+- `-f, --fen` : FEN position string (required)
+- `-s, --correct-san` : Correct move in SAN notation (required)
+- `-g, --game-id` : Unique game identifier (required)
+- `-m, --move-number` : Move number in the game (required)
+- `--pre-eval` : Pre-move evaluation (optional)
+- `--post-eval` : Post-move evaluation (optional)
+- `--tag` : Puzzle tag: Blunder, Mistake, Inaccuracy, Error (optional)
+- `--severity` : Severity classification (optional)
+- `--white` : White player name (optional)
+- `--black` : Black player name (optional)
+- `--date` : Game date (optional)
+- `--time-control` : Time control, e.g., "180+0" (optional)
+- `--time-control-type` : Time control type: Bullet, Blitz, Rapid, Classical (optional)
+- `--weight` : Initial puzzle weight, default 1.0 (optional)
+
+Notes:
+- The script validates FEN and SAN moves before injection.
+- If a puzzle with the same game_id and move_number exists, you'll be prompted to update it.
+- Newly injected puzzles are immediately available for the user with spaced repetition scheduling.
+
 migrate_add_max_attempts.py
 ---------------------------
 Purpose:
