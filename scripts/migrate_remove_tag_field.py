@@ -40,31 +40,35 @@ def get_db_provider():
     return db.provider.dialect
 
 
+def column_exists_sqlite(table_name, column_name):
+    """Check if a column exists in SQLite. Must be called within db_session."""
+    result = db.execute(f"PRAGMA table_info({table_name})")
+    columns = [row[1] for row in result]
+    return column_name in columns
+
+
+def column_exists_postgres(table_name, column_name):
+    """Check if a column exists in PostgreSQL. Must be called within db_session."""
+    result = db.execute("""
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = $1 AND column_name = $2
+    """, (table_name, column_name))
+    return len(list(result)) > 0
+
+
 def column_exists(table_name, column_name):
     """
-    Check if a column exists in a table.
+    Check if a column exists in a table. Must be called within db_session.
     
     Returns True if the column exists, False otherwise.
     """
     provider = get_db_provider()
     
     if provider == 'SQLite':
-        # SQLite: Query sqlite_master for table info
-        cursor = db.get_connection().cursor()
-        cursor.execute(f"PRAGMA table_info({table_name})")
-        columns = [row[1] for row in cursor.fetchall()]
-        return column_name in columns
-    
+        return column_exists_sqlite(table_name, column_name)
     elif provider == 'PostgreSQL':
-        # PostgreSQL: Query information_schema
-        cursor = db.get_connection().cursor()
-        cursor.execute("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = %s AND column_name = %s
-        """, (table_name, column_name))
-        return cursor.fetchone() is not None
-    
+        return column_exists_postgres(table_name, column_name)
     else:
         raise ValueError(f"Unsupported database provider: {provider}")
 
