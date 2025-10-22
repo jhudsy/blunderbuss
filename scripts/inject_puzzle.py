@@ -11,15 +11,15 @@ Usage:
     # Command-line mode with all parameters
     python scripts/inject_puzzle.py --username john_doe --fen "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" --correct-san "e4" --game-id "test123" --move-number 1
 
-    # With optional metadata
+    # With optional metadata (note: severity is automatically set to match tag)
     python scripts/inject_puzzle.py -u john_doe -f "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" -s "e4" -g "test123" -m 1 --tag "Blunder" --pre-eval -2.5 --post-eval 1.0 --white "Player1" --black "Player2"
 
 Examples:
     # Simple tactical puzzle
     python scripts/inject_puzzle.py -u alice -f "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 5" -s "Bxf7+" -g "tactics001" -m 5
 
-    # Endgame puzzle with evaluation
-    python scripts/inject_puzzle.py -u bob -f "8/8/4k3/8/8/4K3/8/8 w - - 0 1" -s "Kd4" -g "endgame001" -m 1 --pre-eval 0.0 --post-eval 2.0
+    # Endgame puzzle with evaluation and tag (severity will be automatically set to "Mistake")
+    python scripts/inject_puzzle.py -u bob -f "8/8/4k3/8/8/4K3/8/8 w - - 0 1" -s "Kd4" -g "endgame001" -m 1 --pre-eval 0.0 --post-eval 2.0 --tag "Mistake"
 """
 
 import sys
@@ -75,7 +75,15 @@ def inject_puzzle(
     time_control_type=None,
     weight=1.0,
 ):
-    """Inject a puzzle for the specified user."""
+    """Inject a puzzle for the specified user.
+    
+    Note: severity is automatically set to match tag if tag is provided and severity is not.
+    Both fields store the same classification: Blunder, Mistake, or Inaccuracy.
+    """
+    
+    # If tag is provided but severity is not, set severity to match tag
+    if tag and not severity:
+        severity = tag
     
     # Find the user
     user = User.get(username=username)
@@ -112,7 +120,9 @@ def inject_puzzle(
             existing.post_eval = post_eval
         if tag:
             existing.tag = tag
-        if severity:
+            # Also update severity to match tag
+            existing.severity = tag
+        elif severity:
             existing.severity = severity
         if white:
             existing.white = white
@@ -241,7 +251,7 @@ def interactive_mode():
     post_eval = float(post_eval_str) if post_eval_str else None
     
     tag = input("Tag (Blunder/Mistake/Inaccuracy): ").strip() or None
-    severity = input("Severity (optional): ").strip() or None
+    # Note: severity will be automatically set to match tag
     white = input("White player name: ").strip() or None
     black = input("Black player name: ").strip() or None
     date = input("Game date: ").strip() or None
@@ -262,7 +272,7 @@ def interactive_mode():
         pre_eval=pre_eval,
         post_eval=post_eval,
         tag=tag,
-        severity=severity,
+        severity=None,  # Will be automatically set to match tag
         white=white,
         black=black,
         date=date,
@@ -298,8 +308,7 @@ Examples:
     # Optional metadata
     parser.add_argument('--pre-eval', type=float, help='Pre-move evaluation')
     parser.add_argument('--post-eval', type=float, help='Post-move evaluation')
-    parser.add_argument('--tag', choices=['Blunder', 'Mistake', 'Inaccuracy', 'Error'], help='Puzzle tag')
-    parser.add_argument('--severity', help='Severity classification')
+    parser.add_argument('--tag', choices=['Blunder', 'Mistake', 'Inaccuracy', 'Error'], help='Puzzle tag (severity is automatically set to match tag)')
     parser.add_argument('--white', help='White player name')
     parser.add_argument('--black', help='Black player name')
     parser.add_argument('--date', help='Game date')
@@ -329,7 +338,7 @@ Examples:
             pre_eval=args.pre_eval,
             post_eval=args.post_eval,
             tag=args.tag,
-            severity=args.severity,
+            severity=None,  # Will be automatically set to match tag
             white=args.white,
             black=args.black,
             date=args.date,
