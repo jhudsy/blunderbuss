@@ -1036,15 +1036,15 @@ window.addEventListener('DOMContentLoaded', ()=>{
         // Otherwise, attempt to move from selectedSquare to this square
         if (window.__CP_DEBUG) console.debug('Click-to-move: attempting move', selectedSquare, '->', square)
         
-        // Use chessboard.js move() to animate the piece, then trigger onDrop
-        const moveNotation = selectedSquare + '-' + square
-        board.move(moveNotation)
-        
         // Trigger onDrop to validate and handle the move
-        // onDrop will validate the move, update the game state, and submit to server
-        onDrop(selectedSquare, square)
+        // onDrop will validate the move, update the game state, animate, and submit to server
+        // It returns 'snapback' for illegal moves or nothing for legal moves
+        const result = onDrop(selectedSquare, square)
         
-        selectedSquare = null
+        // Only clear selection if the move was successful (not snapback)
+        if (result !== 'snapback') {
+          selectedSquare = null
+        }
       }
     }
   }
