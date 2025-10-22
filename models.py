@@ -209,7 +209,6 @@ class Puzzle(db.Entity):
     # eval metadata
     pre_eval = Optional(float)
     post_eval = Optional(float)
-    tag = Optional(str)
     # severity records the human/eval classification (e.g. 'Blunder', 'Mistake', 'Inaccuracy')
     severity = Optional(str)
     # SAN context for debugging / UI

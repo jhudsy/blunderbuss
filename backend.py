@@ -807,7 +807,7 @@ def get_puzzle():
         'move_number': getattr(chosen, 'move_number', None),
     }
     # include optional metadata fields if present on the Puzzle (seeded from PGN)
-    for fld in ('white','black','date','time_control','time_control_type','pre_eval','post_eval','tag'):
+    for fld in ('white','black','date','time_control','time_control_type','pre_eval','post_eval','severity'):
         val = getattr(chosen, fld, None)
         if val is not None:
             resp[fld] = val
@@ -996,8 +996,8 @@ def api_puzzle_counts():
                 if not t or str(t).strip().lower() not in perf_list:
                     ok = False
             if ok and tags_list:
-                tag = getattr(p, 'tag', None)
-                if not tag or str(tag).strip().lower() not in tags_list:
+                severity = getattr(p, 'severity', None)
+                if not severity or str(severity).strip().lower() not in tags_list:
                     ok = False
             if ok:
                 filtered.append(p)

@@ -60,7 +60,7 @@ docker compose run --rm web python scripts/inject_puzzle.py \
   --correct-san "Bxf7+" \
   --game-id "tactics001" \
   --move-number 5 \
-  --tag "Blunder" \
+  --severity "Blunder" \
   --pre-eval -2.5 \
   --post-eval 1.0
 ```
@@ -84,8 +84,7 @@ Arguments:
 - `-m, --move-number` : Move number in the game (required)
 - `--pre-eval` : Pre-move evaluation (optional)
 - `--post-eval` : Post-move evaluation (optional)
-- `--tag` : Puzzle tag: Blunder, Mistake, Inaccuracy, Error (optional)
-- `--severity` : Severity classification (optional)
+- `--severity` : Puzzle severity classification: Blunder, Mistake, Inaccuracy (optional)
 - `--white` : White player name (optional)
 - `--black` : Black player name (optional)
 - `--date` : Game date (optional)
@@ -114,6 +113,26 @@ Notes:
 - The migration is idempotent: if the column already exists, it will skip gracefully.
 - Default value for new column is 3 (range 1-3).
 - This field controls maximum incorrect attempts per puzzle before solution reveal.
+
+migrate_remove_tag_field.py
+---------------------------
+Purpose:
+- Remove the legacy `tag` field from the Puzzle table.
+- Copies any existing tag data to the `severity` field before dropping the column.
+- This migration is required when upgrading from a version that had both `tag` and `severity` fields.
+
+Usage:
+
+```bash
+docker compose run --rm web python scripts/migrate_remove_tag_field.py
+```
+
+Notes:
+- The migration is idempotent: if the tag column doesn't exist, it will skip gracefully.
+- Data from `tag` is copied to `severity` where `severity` is NULL before dropping the column.
+- Supports both PostgreSQL and SQLite.
+- For SQLite, the entire table must be recreated (no DROP COLUMN support in older versions).
+- After migration, ensure your application code no longer references the `tag` field.
 
 clear_puzzles.py
 ----------------

@@ -129,7 +129,6 @@ def import_games_task(self, username, perftypes, days):
                         time_control_type=p.get('time_control_type'),
                         pre_eval=p.get('pre_eval'),
                         post_eval=p.get('post_eval'),
-                        tag=p.get('tag'),
                         severity=p.get('tag'),
                     )
                     u._import_done = (getattr(u, '_import_done', 0) or 0) + 1

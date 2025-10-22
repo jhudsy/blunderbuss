@@ -29,7 +29,7 @@ Fields:
 - settings_days: int, Optional, default=30 — spaced-repetition window
 - settings_perftypes: str, Optional, default='blitz,rapid' — comma-separated performance types
 - settings_perftypes: str, Optional, default='["blitz","rapid"]' — JSON-encoded list of performance types (e.g., ["classical","rapid","blitz"]). Previously this field stored a CSV string; the repository now stores a JSON array for clarity and easier consumption by APIs.
- - settings_tags: str, Optional, default='["Blunder","Mistake","Inaccuracy"]' — JSON-encoded list of puzzle tags the user wants to see. Used by the selection logic to filter puzzles by `Puzzle.tag`.
+ - settings_tags: str, Optional, default='["Blunder","Mistake","Inaccuracy"]' — JSON-encoded list of puzzle severity filters the user wants to see. Used by the selection logic to filter puzzles by `Puzzle.severity`.
 - awarded_at: timestamptz (timestamp with time zone), Optional, default=datetime.now(timezone.utc) — award timestamp stored as timezone-aware UTC in the DB; APIs expose an ISO-8601 string
 
 ## Relationships (cardinality)
@@ -91,13 +91,12 @@ CREATE TABLE puzzle (
   failures INTEGER DEFAULT 0,
   pre_eval REAL,
   post_eval REAL,
-  tag TEXT,
+  severity TEXT,
   white TEXT,
   black TEXT,
   date TEXT,
-  time_control TEXT
-  ,severity TEXT
-  ,time_control_type TEXT
+  time_control TEXT,
+  time_control_type TEXT
 );
 
 CREATE TABLE badge (

@@ -105,7 +105,7 @@ def select_puzzle(user, all_puzzles, due_only=True, cooldown_minutes=10):
         except Exception:
             tag_filters = []
     if tag_filters:
-        due = [p for p in due if getattr(p, 'tag', None) and str(getattr(p, 'tag')).strip().lower() in tag_filters]
+        due = [p for p in due if getattr(p, 'severity', None) and str(getattr(p, 'severity')).strip().lower() in tag_filters]
 
     due = filter_recent(due, cooldown_minutes=cooldown_minutes)
     chosen = choose_weighted(due)
