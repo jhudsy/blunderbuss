@@ -328,14 +328,14 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
             if (window.__CP_DEBUG) console.debug('temp.move result:', moveObj)
             
             if (moveObj){
-              try{ revealCorrectMoveSquares(moveObj.from, moveObj.to) } catch(e){}
+              try{ revealCorrectMoveSquares(moveObj.from, moveObj.to, moveObj.promotion) } catch(e){}
             } else {
               // Fallback: scan moves list
               const moves = temp.moves({verbose:true})
               for (let m of moves){
                 if (m.san === san){
                   if (window.__CP_DEBUG) console.debug('matched move in moves list:', m)
-                  try{ revealCorrectMoveSquares(m.from, m.to) } catch(e){ board.position(startFEN) }
+                  try{ revealCorrectMoveSquares(m.from, m.to, m.promotion) } catch(e){ board.position(startFEN) }
                   break
                 }
               }
@@ -811,10 +811,29 @@ function highlightSquareWithFade(square, color){
 }
 
 // Reveal the correct move by highlighting the from/to squares with a pulsing animation
-function revealCorrectMoveSquares(from, to){
+function revealCorrectMoveSquares(from, to, promotion){
   try{
-    // animate the move using chessboard.js
-    try { board.move(from + '-' + to) } catch(e) { /* ignore animation failure */ }
+    // If this is a promotion move, we need to update the board position
+    // to show the promoted piece, not just animate the pawn moving
+    if (promotion) {
+      // Get current position, make the move manually with promotion
+      const currentPos = board.position()
+      const piece = currentPos[from]
+      if (piece) {
+        // Remove piece from source square
+        delete currentPos[from]
+        // Add promoted piece to destination square
+        // promotion is like 'q', 'r', 'n', 'b'
+        const color = piece.charAt(0) // 'w' or 'b'
+        currentPos[to] = color + promotion.toUpperCase()
+        // Update board position to show the promotion
+        board.position(currentPos, true) // true = animate
+      }
+    } else {
+      // Normal move: animate using chessboard.js
+      try { board.move(from + '-' + to) } catch(e) { /* ignore animation failure */ }
+    }
+    
     const fromEl = document.querySelector('.square-' + from)
     const toEl = document.querySelector('.square-' + to)
     // apply highlight classes if elements exist
