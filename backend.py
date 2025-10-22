@@ -1156,17 +1156,20 @@ def check_puzzle():
         # Now determine which badges (if any) should be awarded. badge_updates
         # expects the user's counters (xp, correct_count, consecutive_correct,
         # streak_days) to reflect the latest answer.
-        new_badges = badge_updates(u, correct)
+        potential_badges = badge_updates(u, correct)
         # Collect existing badge names BEFORE creating new ones to avoid
         # UnrepeatableReadError when SQLite loses timezone info on datetime fields
         existing_badge_names = [b.name for b in u.badges]
-        if new_badges:
-            for b in new_badges:
+        # Track only the badges that are actually newly awarded
+        newly_awarded_badges = []
+        if potential_badges:
+            for b in potential_badges:
                 # avoid duplicates
                 exists = Badge.get(user=u, name=b)
                 if not exists:
                     Badge(user=u, name=b)
                     existing_badge_names.append(b)
+                    newly_awarded_badges.append(b)
         # (streak updated earlier before badge calculation)
         # prepare response while DB session is active to avoid session-is-over errors
         resp = {
@@ -1197,8 +1200,8 @@ def check_puzzle():
         # We intentionally do NOT include prev/next SAN or other PGN context.
         # expose any newly awarded badges explicitly so the frontend can
         # show a modal only when new badges were earned during this answer
-        if new_badges:
-            resp['awarded_badges'] = new_badges
+        if newly_awarded_badges:
+            resp['awarded_badges'] = newly_awarded_badges
 
         # Reveal correct answer if incorrect OR if max attempts reached
         if not correct:
