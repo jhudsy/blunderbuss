@@ -941,12 +941,13 @@ window.addEventListener('DOMContentLoaded', ()=>{
     
     if (window.__CP_DEBUG) console.debug('Click-to-move: setting up event delegation on board')
     
-    // Track mousedown and mouseup to detect clicks vs drags
-    let mousedownSquare = null
-    let mousedownTime = 0
+    // Track pointerdown and pointerup to detect clicks vs drags
+    // Using pointer events for cross-device compatibility (mouse, touch, pen)
+    let pointerdownSquare = null
+    let pointerdownTime = 0
     
-    boardEl.addEventListener('mousedown', function(e) {
-      mousedownTime = Date.now()
+    boardEl.addEventListener('pointerdown', function(e) {
+      pointerdownTime = Date.now()
       // Find the square that was pressed
       let squareEl = e.target
       let attempts = 0
@@ -955,33 +956,33 @@ window.addEventListener('DOMContentLoaded', ()=>{
         attempts++
       }
       if (squareEl && squareEl.classList.contains('square-55d63')) {
-        mousedownSquare = squareEl.getAttribute('data-square')
-        if (window.__CP_DEBUG) console.debug('Click-to-move: mousedown on', mousedownSquare)
+        pointerdownSquare = squareEl.getAttribute('data-square')
+        if (window.__CP_DEBUG) console.debug('Click-to-move: pointerdown on', pointerdownSquare)
       }
     }, true) // Use capture phase
     
-    boardEl.addEventListener('mouseup', function(e) {
-      const mouseupTime = Date.now()
-      const elapsed = mouseupTime - mousedownTime
+    boardEl.addEventListener('pointerup', function(e) {
+      const pointerupTime = Date.now()
+      const elapsed = pointerupTime - pointerdownTime
       
-      if (window.__CP_DEBUG) console.debug('Click-to-move: mouseup, elapsed:', elapsed + 'ms')
+      if (window.__CP_DEBUG) console.debug('Click-to-move: pointerup, elapsed:', elapsed + 'ms')
       
-      // Only treat as click if mouseup is quick (< 200ms) and on same square
-      if (elapsed > 200 || !mousedownSquare) {
-        if (window.__CP_DEBUG) console.debug('Click-to-move: not a click (too slow or no mousedown)')
-        mousedownSquare = null
+      // Only treat as click if pointerup is quick (< 200ms) and on same square
+      if (elapsed > 200 || !pointerdownSquare) {
+        if (window.__CP_DEBUG) console.debug('Click-to-move: not a click (too slow or no pointerdown)')
+        pointerdownSquare = null
         return
       }
       
       if (!allowMoves) {
         if (window.__CP_DEBUG) console.debug('Click-to-move: moves not allowed')
-        mousedownSquare = null
+        pointerdownSquare = null
         return
       }
       
-      // Get the square from mousedown
-      const square = mousedownSquare
-      mousedownSquare = null
+      // Get the square from pointerdown
+      const square = pointerdownSquare
+      pointerdownSquare = null
       
       if (!square) {
         if (window.__CP_DEBUG) console.debug('Click-to-move: no square identified')
@@ -1040,7 +1041,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
         
         selectedSquare = null
       }
-    }, true) // Use capture phase for mouseup too
+    }, true) // Use capture phase for pointerup too
   }
   
   // Setup click handlers after board is created
