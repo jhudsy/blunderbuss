@@ -614,11 +614,11 @@ function showRecordToast(newBest){
   }catch(e){ try{ alert('Congratulations! New record puzzle streak: ' + String(newBest)) }catch(e){} }
 }
 
-// remove only hint (blue) highlight classes
+// remove only hint (blue) highlight classes and click-to-move (yellow) highlight
 function clearHintHighlights(){
   try{
-    const els = document.querySelectorAll('.square-highlight-blue')
-    els.forEach(el=>{ try{ el.classList.remove('square-highlight-blue') }catch(e){} })
+    const els = document.querySelectorAll('.square-highlight-blue, .highlight1-32417')
+    els.forEach(el=>{ try{ el.classList.remove('square-highlight-blue', 'highlight1-32417') }catch(e){} })
     // Also clear click-to-move selection
     selectedSquare = null
   }catch(e){}
@@ -798,7 +798,7 @@ function animateXpIncrement(delta){
 function clearAllHighlights(){
   // remove highlight classes and inline styles on all board squares
   const els = document.querySelectorAll('[class*="square-"]')
-  els.forEach(el=>{ el.classList.remove('square-highlight-green','square-highlight-red'); el.style.background = '' })
+  els.forEach(el=>{ el.classList.remove('square-highlight-green','square-highlight-red','highlight1-32417'); el.style.background = '' })
 }
 
 function highlightSquareWithFade(square, color){
@@ -1005,32 +1005,32 @@ window.addEventListener('DOMContentLoaded', ()=>{
         // Only select pieces of the correct color for the side to move
         if (piece && piece.color === game.turn()) {
           selectedSquare = square
-          // Highlight the selected square
-          if (squareEl) squareEl.classList.add('square-highlight-blue')
+          // Highlight the selected square with yellow (same as drag highlight)
+          if (squareEl) squareEl.classList.add('highlight1-32417')
           if (window.__CP_DEBUG) console.debug('Click-to-move: selected', square)
         } else {
           if (window.__CP_DEBUG) console.debug('Click-to-move: no valid piece to select', piece)
         }
       } 
-      // Second click: make the move or deselect
+      // Second click: make the move, deselect, or reselect
       else {
         // Remove highlight from previously selected square
         const prevSquareEl = boardEl.querySelector('.square-' + selectedSquare)
         if (prevSquareEl) {
-          prevSquareEl.classList.remove('square-highlight-blue')
+          prevSquareEl.classList.remove('highlight1-32417')
         }
         
-        // If clicking the same square, deselect
+        // If clicking the same square, deselect it
         if (square === selectedSquare) {
           selectedSquare = null
-          if (window.__CP_DEBUG) console.debug('Click-to-move: deselected')
+          if (window.__CP_DEBUG) console.debug('Click-to-move: deselected (clicked same square)')
           return
         }
         
-        // If clicking another piece of the same color, select it instead
+        // If clicking another piece of the same color, select it instead (reselect)
         if (piece && piece.color === game.turn()) {
           selectedSquare = square
-          if (squareEl) squareEl.classList.add('square-highlight-blue')
+          if (squareEl) squareEl.classList.add('highlight1-32417')
           if (window.__CP_DEBUG) console.debug('Click-to-move: reselected', square)
           return
         }
@@ -1044,8 +1044,15 @@ window.addEventListener('DOMContentLoaded', ()=>{
         const result = onDrop(selectedSquare, square)
         
         // Only clear selection if the move was successful (not snapback)
+        // If move fails, keep the piece selected so user can try a different square
         if (result !== 'snapback') {
           selectedSquare = null
+        } else {
+          if (window.__CP_DEBUG) console.debug('Click-to-move: move rejected, keeping selection')
+          // Re-add highlight since it was removed above
+          if (prevSquareEl) {
+            prevSquareEl.classList.add('highlight1-32417')
+          }
         }
       }
     }
