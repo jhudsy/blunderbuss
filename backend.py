@@ -775,13 +775,18 @@ def get_puzzle():
         # the same perf/tag filters and cooldown). Otherwise use due-only
         # selection which implements the spaced-repetition algorithm.
         use_spaced = getattr(u, 'settings_use_spaced', True)
+        cooldown = get_user_int_attr(u, 'cooldown_minutes', 10)
         if use_spaced:
-            chosen = select_puzzle(u, all_puzzles, due_only=True, cooldown_minutes=10)
+            chosen = select_puzzle(u, all_puzzles, due_only=True, cooldown_minutes=cooldown)
         else:
             # pick randomly (but still apply cooldown filter)
             from selection import filter_recent, choose_weighted
-            candidates = filter_recent(all_puzzles, cooldown_minutes=10)
+            candidates = filter_recent(all_puzzles, cooldown_minutes=cooldown)
             chosen = choose_weighted(candidates)
+            # If cooldown filtering left nothing, fall back to all puzzles
+            # (important when user has only a few puzzles and wants random selection)
+            if not chosen and all_puzzles:
+                chosen = choose_weighted(all_puzzles)
         if not chosen:
             return jsonify({'error': 'no available puzzles'}), 404
     
