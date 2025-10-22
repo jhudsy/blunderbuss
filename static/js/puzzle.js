@@ -1,8 +1,14 @@
 // Ensure CP_DEBUG exists and silence debug logs in production UI
 if (typeof window !== 'undefined') {
   if (typeof window.__CP_DEBUG === 'undefined') window.__CP_DEBUG = false
-  if (!window.__CP_DEBUG) { try { console.debug = function(){} } catch(e){} }
+  if (!window.__CP_DEBUG) { 
+    try { console.debug = function(){} } catch(e){ /* Intentionally ignore */ } 
+  }
 }
+
+// ============================================================================
+// Global State
+// ============================================================================
 
 let board = null
 let game = new Chess()
@@ -17,6 +23,90 @@ let __castlingPending = null
 let selectedSquare = null  // Currently selected piece square
 
 // ============================================================================
+// Utility Functions
+// ============================================================================
+
+/**
+ * Safe error logger - only logs in debug mode
+ */
+function logError(message, error) {
+  if (window.__CP_DEBUG) {
+    console.error(message, error)
+  }
+}
+
+/**
+ * Safe getElementById with null check
+ */
+function getElement(id) {
+  try {
+    return document.getElementById(id)
+  } catch(e) {
+    logError('Failed to get element:', e)
+    return null
+  }
+}
+
+/**
+ * Set element display style safely
+ */
+function setElementDisplay(elementId, display) {
+  const element = getElement(elementId)
+  if (element) {
+    try {
+      element.style.display = display
+    } catch(e) {
+      logError(`Failed to set display for ${elementId}:`, e)
+    }
+  }
+}
+
+/**
+ * Send a move to the server for validation
+ */
+async function sendMoveToServer(san, startFEN) {
+  if (window.__CP_DEBUG) {
+    console.debug('starting fen', startFEN)
+    console.debug('check_puzzle: sending', { puzzleId: currentPuzzle?.id, san })
+  }
+
+  try {
+    const response = await fetch('/check_puzzle', {
+      method: 'POST',
+      headers: {'content-type': 'application/json'},
+      body: JSON.stringify({
+        id: currentPuzzle.id,
+        san,
+        hint_used: hintUsedForCurrent
+      })
+    })
+
+    if (window.__CP_DEBUG) console.debug('check_puzzle: raw response', response)
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '<no-body>')
+      console.error('check_puzzle: non-OK response', response.status, text)
+      throw new Error(`check_puzzle non-OK: ${response.status}`)
+    }
+
+    const json = await response.json().catch(e => {
+      console.error('check_puzzle: JSON parse error', e)
+      throw e
+    })
+
+    if (window.__CP_DEBUG) {
+      console.debug('check_puzzle: response', json)
+      console.debug('check_puzzle: response keys', Object.keys(json), 'stringified', JSON.stringify(json))
+    }
+
+    return json
+  } catch(err) {
+    console.error('check_puzzle: async error', err)
+    throw err
+  }
+}
+
+// ============================================================================
 // UI Helper Functions
 // ============================================================================
 
@@ -25,49 +115,47 @@ let selectedSquare = null  // Currently selected piece square
  */
 function setNextButtonEnabled(enabled, delay = 0) {
   const action = () => {
-    try {
-      const btn = document.getElementById('next');
-      if (btn) btn.disabled = !enabled;
-    } catch(e) {}
-  };
-  if (delay > 0) setTimeout(action, delay);
-  else action();
+    const btn = getElement('next')
+    if (btn) btn.disabled = !enabled
+  }
+  if (delay > 0) setTimeout(action, delay)
+  else action()
 }
 
 /**
  * Enable or disable the Hint button
  */
 function setHintButtonEnabled(enabled) {
-  try {
-    const btn = document.getElementById('hint');
-    if (btn) btn.disabled = !enabled;
-  } catch(e) {}
+  const btn = getElement('hint')
+  if (btn) btn.disabled = !enabled
 }
 
 /**
  * Update the ribbon XP display and animate if increased
  */
 function updateRibbonXP(newXP) {
-  try {
-    if (typeof newXP !== 'undefined') {
-      const rx = document.getElementById('ribbonXP');
-      if (rx) {
-        const prev = parseInt(rx.textContent) || 0;
-        rx.textContent = newXP;
-        const delta = (newXP || 0) - prev;
-        if (delta > 0) animateXpIncrement(delta);
-      }
-    }
-  } catch(e) {}
+  if (typeof newXP === 'undefined') return
+  
+  const rx = getElement('ribbonXP')
+  if (rx) {
+    const prev = parseInt(rx.textContent) || 0
+    rx.textContent = newXP
+    const delta = (newXP || 0) - prev
+    if (delta > 0) animateXpIncrement(delta)
+  }
 }
 
 /**
  * Refresh the ribbon state from the server
  */
 function refreshRibbonState() {
-  try { 
-    if (window.refreshRibbon) window.refreshRibbon();
-  } catch(e) {}
+  if (window.refreshRibbon) {
+    try {
+      window.refreshRibbon()
+    } catch(e) {
+      logError('Failed to refresh ribbon:', e)
+    }
+  }
 }
 
 /**
@@ -253,13 +341,13 @@ async function loadPuzzle(){
  */
 function handleCheckPuzzleResponse(j, source, target, startFEN) {
   // Check if max attempts reached before locking board
-  const maxAttemptsReached = j.max_attempts_reached || false;
-  const attemptsRemaining = j.attempts_remaining || 0;
-  const hasAttemptsLeft = !j.correct && !maxAttemptsReached && attemptsRemaining > 0;
+  const maxAttemptsReached = j.max_attempts_reached || false
+  const attemptsRemaining = j.attempts_remaining || 0
+  const hasAttemptsLeft = !j.correct && !maxAttemptsReached && attemptsRemaining > 0
   
   // Only lock board interactions if answer is correct OR max attempts reached
   if (!hasAttemptsLeft) {
-    try{ allowMoves = false }catch(e){}
+    allowMoves = false
   }
   
   if (j.correct) {
@@ -381,7 +469,8 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
 async function onDrop(source, target){
   // guard: ensure we have a loaded puzzle
   // clear any lingering hint highlight immediately when attempting a move
-  try{ clearHintHighlights() } catch(e){}
+  clearHintHighlights()
+  
   if (!currentPuzzle){
     if (window.__CP_DEBUG) console.debug('onDrop called before puzzle loaded')
     return 'snapback'
@@ -390,29 +479,14 @@ async function onDrop(source, target){
   const move = {from: source, to: target, promotion: 'q'}
   // capture the starting FEN so we can reset after a wrong move
   const startFEN = game.fen()
+  
   // Helper: send the move result to the server and handle the response/UI
-  async function sendCheckPuzzle(result, startFEN){
-    // send SAN to backend
-    const san = result.san
-    if (window.__CP_DEBUG) console.debug('starting fen', startFEN)
-    if (window.__CP_DEBUG) console.debug('check_puzzle: sending', { puzzleId: currentPuzzle && currentPuzzle.id, san })
-
-    try{
-      const r = await fetch('/check_puzzle', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({id: currentPuzzle.id, san, hint_used: hintUsedForCurrent})})
-      if (window.__CP_DEBUG) console.debug('check_puzzle: raw response', r)
-      if (!r.ok){
-        const t = await r.text().catch(e => '<no-body>')
-        console.error('check_puzzle: non-OK response', r.status, t)
-        throw new Error('check_puzzle non-OK: ' + r.status)
-      }
-      const j = await r.json().catch(e => { console.error('check_puzzle: JSON parse error', e); throw e })
-      if (window.__CP_DEBUG) console.debug('check_puzzle: response', j)
-      try{ if (window.__CP_DEBUG) console.debug('check_puzzle: response keys', Object.keys(j), 'stringified', JSON.stringify(j)) } catch(e){}
-
-      // Use the consolidated response handler
-      handleCheckPuzzleResponse(j, source, target, startFEN)
-    }catch(err){
-      console.error('check_puzzle: async error', err)
+  async function sendAndHandleMove(result, startFEN){
+    try {
+      const json = await sendMoveToServer(result.san, startFEN)
+      handleCheckPuzzleResponse(json, source, target, startFEN)
+    } catch(err) {
+      // Error already logged in sendMoveToServer
     }
   }
 
@@ -426,66 +500,59 @@ async function onDrop(source, target){
         // present promotion selector, then perform the chosen promotion
         showPromotionSelector(source, target, async function(promo){
           if (!promo) return
+          
           // attempt the move with the selected promotion
           const moveObj = { from: source, to: target, promotion: promo }
           const res = game.move(moveObj)
+          
           if (res === null){
             // illegal promotion; restore board
-            try{ board.position(startFEN) }catch(e){}
+            try { 
+              board.position(startFEN) 
+            } catch(e) {
+              logError('Failed to restore board after illegal promotion:', e)
+            }
             return
           }
+          
           // update board to reflect the chosen promotion
-          try{ board.position(game.fen()) }catch(e){}
-            // If this move is a castle, mark it so onSnapEnd can play a small rook animation
-            try{
-              if (res && res.flags && (String(res.flags).indexOf('k') !== -1 || String(res.flags).indexOf('q') !== -1)){
-                __castlingPending = { startFEN: startFEN, endFEN: game.fen(), move: res }
-              }
-            }catch(e){}
-            // Let chessboard.js update the board (onSnapEnd will call board.position(game.fen()))
+          try { 
+            board.position(game.fen()) 
+          } catch(e) {
+            logError('Failed to update board after promotion:', e)
+          }
+          
+          // If this move is a castle, mark it so onSnapEnd can play a small rook animation
+          if (res?.flags && (String(res.flags).includes('k') || String(res.flags).includes('q'))) {
+            __castlingPending = { startFEN: startFEN, endFEN: game.fen(), move: res }
+          }
+          
           // lock moves and send to server and handle UI
-          try{ allowMoves = false }catch(e){}
-          await sendCheckPuzzle(res, startFEN)
+          allowMoves = false
+          await sendAndHandleMove(res, startFEN)
         })
         return 'snapback'
       }
     }
-  }catch(e){ /* ignore promotion detection failures */ }
+  } catch(e) {
+    logError('Promotion detection failed:', e)
+  }
 
   const result = game.move(move)
   if (result === null){
     return 'snapback'
   }
+  
   // lock moves and send SAN to backend
-  try{ allowMoves = false }catch(e){}
+  allowMoves = false
+  
   // if this move is a castle, mark pending animation for onSnapEnd
-  try{
-    if (result && result.flags && (String(result.flags).indexOf('k') !== -1 || String(result.flags).indexOf('q') !== -1)){
-      __castlingPending = { startFEN: startFEN, endFEN: game.fen(), move: result }
-    }
-  }catch(e){}
-  // Rely on chessboard.js to set the final position after the snap (onSnapEnd)
-  const san = result.san
-  if (window.__CP_DEBUG) console.debug('starting fen', startFEN)
-  if (window.__CP_DEBUG) console.debug('check_puzzle: sending', { puzzleId: currentPuzzle && currentPuzzle.id, san })
-
-  try{
-    const r = await fetch('/check_puzzle', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({id: currentPuzzle.id, san, hint_used: hintUsedForCurrent})})
-    if (window.__CP_DEBUG) console.debug('check_puzzle: raw response', r)
-    if (!r.ok){
-      const t = await r.text().catch(e => '<no-body>')
-      console.error('check_puzzle: non-OK response', r.status, t)
-      throw new Error('check_puzzle non-OK: ' + r.status)
-    }
-    const j = await r.json().catch(e => { console.error('check_puzzle: JSON parse error', e); throw e })
-    if (window.__CP_DEBUG) console.debug('check_puzzle: response', j)
-    try{ if (window.__CP_DEBUG) console.debug('check_puzzle: response keys', Object.keys(j), 'stringified', JSON.stringify(j)) } catch(e){}
-
-    // Use the consolidated response handler for all responses
-    handleCheckPuzzleResponse(j, source, target, startFEN)
-  }catch(err){
-    console.error('check_puzzle: async error', err)
+  if (result?.flags && (String(result.flags).includes('k') || String(result.flags).includes('q'))) {
+    __castlingPending = { startFEN: startFEN, endFEN: game.fen(), move: result }
   }
+  
+  // Send move to server and handle response
+  await sendAndHandleMove(result, startFEN)
 }
 
 // Show a simple promotion selector overlay. Calls cb(piece) with one of 'q','r','b','n',
@@ -617,24 +684,28 @@ function showRecordToast(newBest){
 // remove only hint (blue) highlight classes
 // NOTE: Does NOT clear click-to-move selection - that's managed separately
 function clearHintHighlights(){
-  try{
+  try {
     const els = document.querySelectorAll('.square-highlight-blue')
-    els.forEach(el=>{ try{ el.classList.remove('square-highlight-blue') }catch(e){} })
-  }catch(e){}
+    els.forEach(el => el.classList.remove('square-highlight-blue'))
+  } catch(e) {
+    logError('Failed to clear hint highlights:', e)
+  }
 }
 
 // Clear click-to-move selection and yellow highlight
 function clearClickToMoveSelection(){
-  try{
-    if (selectedSquare) {
-      const boardEl = document.getElementById('board')
-      if (boardEl) {
-        const el = boardEl.querySelector('.square-' + selectedSquare)
-        if (el) el.classList.remove('highlight1-32417')
-      }
-      selectedSquare = null
+  if (!selectedSquare) return
+  
+  try {
+    const boardEl = getElement('board')
+    if (boardEl) {
+      const el = boardEl.querySelector('.square-' + selectedSquare)
+      if (el) el.classList.remove('highlight1-32417')
     }
-  }catch(e){}
+    selectedSquare = null
+  } catch(e) {
+    logError('Failed to clear click-to-move selection:', e)
+  }
 }
 
 // highlight a square (e.g., the square containing the piece to move) for a short duration
