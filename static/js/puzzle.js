@@ -13,6 +13,9 @@ let allowMoves = true
 let __castlingPending = null
 // result modal removed; use inline UI feedback instead
 
+// Click-to-move state
+let selectedSquare = null  // Currently selected piece square
+
 // ============================================================================
 // UI Helper Functions
 // ============================================================================
@@ -157,6 +160,9 @@ async function loadPuzzle(){
   }catch(e){}
   // clear any square highlights from previous puzzle
   clearAllHighlights()
+  
+  // Reset click-to-move state
+  selectedSquare = null
 
   game = new Chess()
   game.load(currentPuzzle.fen)
@@ -613,6 +619,8 @@ function clearHintHighlights(){
   try{
     const els = document.querySelectorAll('.square-highlight-blue')
     els.forEach(el=>{ try{ el.classList.remove('square-highlight-blue') }catch(e){} })
+    // Also clear click-to-move selection
+    selectedSquare = null
   }catch(e){}
 }
 
@@ -924,6 +932,76 @@ window.addEventListener('DOMContentLoaded', ()=>{
     },
     pieceTheme: '/static/img/chesspieces/{piece}.png'
   })
+  
+  // Click-to-move functionality
+  // Add click listeners to all squares for click-to-move support
+  const setupClickToMove = () => {
+    const boardEl = document.getElementById('board')
+    if (!boardEl) return
+    
+    const squares = boardEl.querySelectorAll('.square-55d63')
+    squares.forEach(squareEl => {
+      squareEl.addEventListener('click', function(e) {
+        if (!allowMoves) return
+        
+        // Extract square coordinates from the class name (e.g., 'square-e2')
+        const classList = Array.from(squareEl.classList)
+        const squareClass = classList.find(c => c.startsWith('square-') && c.length === 9)
+        if (!squareClass) return
+        const square = squareClass.substring(7) // Extract 'e2' from 'square-e2'
+        
+        const piece = game.get(square)
+        
+        // First click: select a piece
+        if (!selectedSquare) {
+          // Only select pieces of the correct color for the side to move
+          if (piece && piece.color === game.turn()) {
+            selectedSquare = square
+            // Highlight the selected square
+            squareEl.classList.add('square-highlight-blue')
+          }
+        } 
+        // Second click: make the move or deselect
+        else {
+          // Remove highlight from previously selected square
+          const prevSquareEl = boardEl.querySelector('.square-' + selectedSquare)
+          if (prevSquareEl) {
+            prevSquareEl.classList.remove('square-highlight-blue')
+          }
+          
+          // If clicking the same square, deselect
+          if (square === selectedSquare) {
+            selectedSquare = null
+            return
+          }
+          
+          // If clicking another piece of the same color, select it instead
+          if (piece && piece.color === game.turn()) {
+            selectedSquare = square
+            squareEl.classList.add('square-highlight-blue')
+            return
+          }
+          
+          // Otherwise, attempt to move from selectedSquare to this square
+          const moveNotation = selectedSquare + '-' + square
+          
+          // Use chessboard.js's move() method to animate the piece
+          const moveResult = board.move(moveNotation)
+          
+          // If the animation succeeded, trigger onDrop to validate and submit the move
+          if (moveResult) {
+            onDrop(selectedSquare, square)
+          }
+          
+          selectedSquare = null
+        }
+      })
+    })
+  }
+  
+  // Setup click handlers after board is created
+  setupClickToMove()
+  
   // Responsive: ensure chessboard recomputes its pixel size based on the
   // Bootstrap column/container width. chessboard.js exposes a `resize`
   // method that recalculates square sizes from the container width.
