@@ -55,7 +55,9 @@
         </div>
         <div class="mb-3">
           <label for="max_attempts" class="form-label">Maximum incorrect attempts: <span id="max_attempts_value">{{ max_attempts|default(3) }}</span></label>
-          <input type="range" class="form-range" min="1" max="3" step="1" id="max_attempts" name="max_attempts" value="{{ max_attempts|default(3) }}">
+          <div style="max-width: 400px;">
+            <input type="range" class="form-range" min="1" max="3" step="1" id="max_attempts" name="max_attempts" value="{{ max_attempts|default(3) }}">
+          </div>
           <div class="form-text">Number of attempts allowed before revealing the solution. XP is halved for each incorrect attempt.</div>
         </div>
         <div class="mb-3">
