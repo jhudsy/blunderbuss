@@ -941,42 +941,53 @@ window.addEventListener('DOMContentLoaded', ()=>{
     
     if (window.__CP_DEBUG) console.debug('Click-to-move: setting up event delegation on board')
     
-    // Use event delegation: listen on the board container
-    boardEl.addEventListener('click', function(e) {
-      if (window.__CP_DEBUG) console.debug('Click-to-move: board clicked', e.target, 'classes:', e.target.className)
-      if (!allowMoves) {
-        if (window.__CP_DEBUG) console.debug('Click-to-move: moves not allowed')
-        return
-      }
-      
-      // Find the square element that was clicked (traverse up if needed)
-      // Piece images are children of squares, so we need to look up the tree
+    // Track mousedown and mouseup to detect clicks vs drags
+    let mousedownSquare = null
+    let mousedownTime = 0
+    
+    boardEl.addEventListener('mousedown', function(e) {
+      mousedownTime = Date.now()
+      // Find the square that was pressed
       let squareEl = e.target
       let attempts = 0
       while (squareEl && !squareEl.classList.contains('square-55d63') && attempts < 10) {
         squareEl = squareEl.parentElement
         attempts++
       }
+      if (squareEl && squareEl.classList.contains('square-55d63')) {
+        mousedownSquare = squareEl.getAttribute('data-square')
+        if (window.__CP_DEBUG) console.debug('Click-to-move: mousedown on', mousedownSquare)
+      }
+    }, true) // Use capture phase
+    
+    boardEl.addEventListener('mouseup', function(e) {
+      const mouseupTime = Date.now()
+      const elapsed = mouseupTime - mousedownTime
       
-      if (!squareEl || !squareEl.classList.contains('square-55d63')) {
-        if (window.__CP_DEBUG) console.debug('Click-to-move: clicked element is not a square')
+      if (window.__CP_DEBUG) console.debug('Click-to-move: mouseup, elapsed:', elapsed + 'ms')
+      
+      // Only treat as click if mouseup is quick (< 200ms) and on same square
+      if (elapsed > 200 || !mousedownSquare) {
+        if (window.__CP_DEBUG) console.debug('Click-to-move: not a click (too slow or no mousedown)')
+        mousedownSquare = null
         return
       }
       
-      if (window.__CP_DEBUG) console.debug('Click-to-move: found square element', squareEl)
-      
-      // Extract square coordinates from the class name (e.g., 'square-e2')
-      // or from the data-square attribute
-      let square = squareEl.getAttribute('data-square')
-      if (!square) {
-        const classList = Array.from(squareEl.classList)
-        const squareClass = classList.find(c => c.startsWith('square-') && c.length === 9)
-        if (!squareClass) {
-          if (window.__CP_DEBUG) console.debug('Click-to-move: no square class found', classList)
-          return
-        }
-        square = squareClass.substring(7) // Extract 'e2' from 'square-e2'
+      if (!allowMoves) {
+        if (window.__CP_DEBUG) console.debug('Click-to-move: moves not allowed')
+        mousedownSquare = null
+        return
       }
+      
+      // Get the square from mousedown
+      const square = mousedownSquare
+      mousedownSquare = null
+      
+      if (!square) {
+        if (window.__CP_DEBUG) console.debug('Click-to-move: no square identified')
+        return
+      }
+      
       if (window.__CP_DEBUG) console.debug('Click-to-move: clicked square', square)
       
       const piece = game.get(square)
@@ -1029,7 +1040,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
         
         selectedSquare = null
       }
-    })
+    }, true) // Use capture phase for mouseup too
   }
   
   // Setup click handlers after board is created
