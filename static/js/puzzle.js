@@ -995,6 +995,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
     
     // Separate function to handle the click logic
     function handleSquareClick(square, squareEl) {
+      if (window.__CP_DEBUG) console.debug('Click-to-move: handleSquareClick called, selectedSquare =', selectedSquare, 'square =', square)
       const piece = game.get(square)
       const boardEl = document.getElementById('board')
       
