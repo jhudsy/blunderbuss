@@ -723,7 +723,7 @@ function showBadgeToast(badges){
     toastEl.className = 'toast'
     toastEl.setAttribute('role','alert')
     toastEl.setAttribute('aria-live','assertive')
-    toastEl.setAttribute('aria-atomic','true')
+    toastEl.setAttribute('aria-atomic','true');
     // attempt to enrich badges with metadata from /api/badges
     (async ()=>{
       let items = badges.map(b=>({name: b}))
