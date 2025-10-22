@@ -943,16 +943,17 @@ window.addEventListener('DOMContentLoaded', ()=>{
     
     // Use event delegation: listen on the board container
     boardEl.addEventListener('click', function(e) {
-      if (window.__CP_DEBUG) console.debug('Click-to-move: board clicked', e.target)
+      if (window.__CP_DEBUG) console.debug('Click-to-move: board clicked', e.target, 'classes:', e.target.className)
       if (!allowMoves) {
         if (window.__CP_DEBUG) console.debug('Click-to-move: moves not allowed')
         return
       }
       
       // Find the square element that was clicked (traverse up if needed)
+      // Piece images are children of squares, so we need to look up the tree
       let squareEl = e.target
       let attempts = 0
-      while (squareEl && !squareEl.classList.contains('square-55d63') && attempts < 5) {
+      while (squareEl && !squareEl.classList.contains('square-55d63') && attempts < 10) {
         squareEl = squareEl.parentElement
         attempts++
       }
@@ -962,14 +963,20 @@ window.addEventListener('DOMContentLoaded', ()=>{
         return
       }
       
+      if (window.__CP_DEBUG) console.debug('Click-to-move: found square element', squareEl)
+      
       // Extract square coordinates from the class name (e.g., 'square-e2')
-      const classList = Array.from(squareEl.classList)
-      const squareClass = classList.find(c => c.startsWith('square-') && c.length === 9)
-      if (!squareClass) {
-        if (window.__CP_DEBUG) console.debug('Click-to-move: no square class found', classList)
-        return
+      // or from the data-square attribute
+      let square = squareEl.getAttribute('data-square')
+      if (!square) {
+        const classList = Array.from(squareEl.classList)
+        const squareClass = classList.find(c => c.startsWith('square-') && c.length === 9)
+        if (!squareClass) {
+          if (window.__CP_DEBUG) console.debug('Click-to-move: no square class found', classList)
+          return
+        }
+        square = squareClass.substring(7) // Extract 'e2' from 'square-e2'
       }
-      const square = squareClass.substring(7) // Extract 'e2' from 'square-e2'
       if (window.__CP_DEBUG) console.debug('Click-to-move: clicked square', square)
       
       const piece = game.get(square)
