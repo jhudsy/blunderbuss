@@ -1095,14 +1095,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
   // Recompute on window resize and orientation change
   window.addEventListener('resize', scheduleResize, {passive:true})
   window.addEventListener('orientationchange', scheduleResize)
-  // Ensure pointer/touch interactions clear the hint immediately for mobile/touch users
-  try{
-    const boardEl = document.getElementById('board')
-    if (boardEl){
-  // Use pointer events only (covers mouse and touch on modern browsers)
-  boardEl.addEventListener('pointerdown', ()=>{ try{ clearHintHighlights() }catch(e){} }, {passive:true})
-    }
-  }catch(e){}
+  
   document.getElementById('next').addEventListener('click', loadPuzzle)
   // ensure Hint button matches Next button styling and initial enabled/disabled state
   try{
