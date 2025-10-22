@@ -1051,22 +1051,19 @@ window.addEventListener('DOMContentLoaded', ()=>{
         // Otherwise, attempt to move from selectedSquare to this square
         if (window.__CP_DEBUG) console.debug('Click-to-move: attempting move', selectedSquare, '->', square)
         
+        // Animate the piece movement using chessboard.js
+        const moveNotation = selectedSquare + '-' + square
+        board.move(moveNotation)
+        
         // Trigger onDrop to validate and handle the move
-        // onDrop will validate the move, update the game state, animate, and submit to server
+        // onDrop will validate the move, update the game state, and submit to server
         // It returns 'snapback' for illegal moves or nothing for legal moves
+        // Note: We need to handle the async result properly
         const result = onDrop(selectedSquare, square)
         
-        // Only clear selection if the move was successful (not snapback)
-        // If move fails, keep the piece selected so user can try a different square
-        if (result !== 'snapback') {
-          selectedSquare = null
-        } else {
-          if (window.__CP_DEBUG) console.debug('Click-to-move: move rejected, keeping selection')
-          // Re-add highlight since it was removed above
-          if (prevSquareEl) {
-            prevSquareEl.classList.add('highlight1-32417')
-          }
-        }
+        // onDrop is async, but for now we'll clear the selection immediately
+        // If the move is invalid, onDrop will handle the snapback animation
+        selectedSquare = null
       }
     }
   }
