@@ -1063,8 +1063,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
     const piece = game.get(square)
     const boardEl = document.getElementById('board')
     
-    console.log('[DEBUG] handleSquareClick:', square, 'piece:', piece, 'selectedSquare:', selectedSquare)
-    
     // First click: select a piece
     if (!selectedSquare) {
       // Only select pieces of the correct color for the side to move
@@ -1072,7 +1070,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
         selectedSquare = square
         // Highlight the selected square with purple
         if (squareEl) squareEl.classList.add('highlight1-32417')
-        console.log('[DEBUG] Selected piece on', square)
       }
     } 
     // Second click: make the move, deselect, or reselect
@@ -1080,7 +1077,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
       // If clicking the same square, deselect it
       if (square === selectedSquare) {
         clearClickToMoveSelection()
-        console.log('[DEBUG] Deselected', square)
         return
       }
       
@@ -1091,7 +1087,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
         // Highlight new square
         selectedSquare = square
         if (squareEl) squareEl.classList.add('highlight1-32417')
-        console.log('[DEBUG] Reselected to', square)
         return
       }
       
@@ -1100,16 +1095,12 @@ window.addEventListener('DOMContentLoaded', ()=>{
       const legalMoves = game.moves({square: selectedSquare, verbose: true})
       const isLegal = legalMoves.some(m => m.to === square)
       
-      console.log('[DEBUG] Attempting move from', selectedSquare, 'to', square, 'legal:', isLegal, 'legalMoves:', legalMoves.map(m => m.to))
-      
       if (!isLegal) {
         // Invalid move - keep the piece selected
-        console.log('[DEBUG] Move not legal, keeping selection')
         return
       }
       
       // Move is legal - animate it and then validate/submit
-      console.log('[DEBUG] Executing move')
       const moveNotation = selectedSquare + '-' + square
       board.move(moveNotation)
       
@@ -1165,12 +1156,10 @@ window.addEventListener('DOMContentLoaded', ()=>{
     // We just need to detect quick clicks
     
     boardEl.addEventListener('pointerup', function(e) {
-      console.log('[DEBUG] pointerup fired, pointerDownSquare:', pointerDownSquare, 'isDragInProgress:', isDragInProgress)
       if (!pointerDownSquare) return
       
       // If a drag is in progress, chessboard.js is handling it
       if (isDragInProgress) {
-        console.log('[DEBUG] Drag in progress, ignoring pointerup')
         pointerDownSquare = null
         pointerDownTime = null
         isDragInProgress = false
