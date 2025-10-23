@@ -949,6 +949,7 @@ function revealCorrectMoveSquares(from, to, promotion, flags, finalFEN){
 
 // Variable to track if a drag is in progress (shared between onDragStart and click-to-move)
 let isDragInProgress = false
+let dragStartSquare = null // Track where drag started from
 
 window.addEventListener('DOMContentLoaded', ()=>{
   // create the board once with our local pieceTheme
@@ -957,15 +958,20 @@ window.addEventListener('DOMContentLoaded', ()=>{
   board = Chessboard('board', {
     position: 'start',
     draggable: true,
-    onDrop,
+    onDrop: function(source, target) {
+      // A drop occurred, so reset drag tracking
+      dragStartSquare = null
+      return onDrop(source, target)
+    },
     onDragStart: function(source, piece, position, orientation){
       // Respect allowMoves flag
       try{ clearHintHighlights() }catch(e){}
       try{
         if (!allowMoves) return false
         
-        // Mark that a drag is now in progress
+        // Mark that a drag is now in progress and track where it started
         isDragInProgress = true
+        dragStartSquare = source
         console.log('[Click-to-move] onDragStart - drag started from', source)
         
         // Clear any existing selection when starting a drag
@@ -984,7 +990,19 @@ window.addEventListener('DOMContentLoaded', ()=>{
     onSnapEnd: function(){
       // Drag has ended
       isDragInProgress = false
-      console.log('[Click-to-move] onSnapEnd - drag ended')
+      console.log('[Click-to-move] onSnapEnd - drag ended, dragStartSquare:', dragStartSquare)
+      
+      // If dragStartSquare is set, it means a drag started but no drop occurred (piece snapped back)
+      // Treat this as a click-to-select
+      if (dragStartSquare) {
+        console.log('[Click-to-move] onSnapEnd - no drop occurred, treating as click-to-select')
+        const squareEl = document.querySelector('.square-' + dragStartSquare)
+        if (squareEl) {
+          handleSquareClick(dragStartSquare, squareEl)
+        }
+        dragStartSquare = null
+      }
+      
       try{
         // If we have a pending castling animation, animate a subtle rook slide
         if (__castlingPending){
@@ -1037,6 +1055,86 @@ window.addEventListener('DOMContentLoaded', ()=>{
   // Logic: pointerdown on a square = candidate for moving
   // If pointer leaves square before pointerup = drag move
   // If pointerup on same square = click-to-move (select piece)
+  
+  // Handle click-to-move logic (accessible to both pointer events and onSnapEnd)
+  function handleSquareClick(square, squareEl) {
+    console.log('[Click-to-move] handleSquareClick called for square:', square, 'selectedSquare:', selectedSquare)
+    
+    const piece = game.get(square)
+    const boardEl = document.getElementById('board')
+    
+    // First click: select a piece
+    if (!selectedSquare) {
+      // Only select pieces of the correct color for the side to move
+      console.log('[Click-to-move] no selection yet, piece:', piece, 'turn:', game.turn())
+      if (piece && piece.color === game.turn()) {
+        console.log('[Click-to-move] selecting piece on square:', square)
+        selectedSquare = square
+        // Highlight the selected square with purple
+        if (squareEl) squareEl.classList.add('highlight1-32417')
+      } else {
+        console.log('[Click-to-move] cannot select - wrong color or no piece')
+      }
+    } 
+    // Second click: make the move, deselect, or reselect
+    else {
+      // If clicking the same square, deselect it
+      if (square === selectedSquare) {
+        console.log('[Click-to-move] deselecting same square')
+        clearClickToMoveSelection()
+        return
+      }
+      
+      // If clicking another piece of the same color, select it instead (reselect)
+      if (piece && piece.color === game.turn()) {
+        console.log('[Click-to-move] reselecting different piece of same color')
+        // Remove highlight from old square
+        clearClickToMoveSelection()
+        // Highlight new square
+        selectedSquare = square
+        if (squareEl) squareEl.classList.add('highlight1-32417')
+        return
+      }
+      
+      // Otherwise, attempt to move from selectedSquare to this square
+      // Check if the move is legal before animating
+      const legalMoves = game.moves({square: selectedSquare, verbose: true})
+      const isLegal = legalMoves.some(m => m.to === square)
+      
+      console.log('[Click-to-move] attempting move from', selectedSquare, 'to', square, 'valid:', isLegal)
+      
+      if (!isLegal) {
+        // Invalid move - keep the piece selected
+        console.log('[Click-to-move] invalid move, keeping selection')
+        return
+      }
+      
+      // Move is legal - animate it and then validate/submit
+      console.log('[Click-to-move] executing move')
+      const moveNotation = selectedSquare + '-' + square
+      board.move(moveNotation)
+      
+      // Trigger onDrop to validate and handle the move
+      // onDrop will update the game state and submit to server
+      const sourceSquare = selectedSquare
+      
+      // Clear selection AFTER triggering the move
+      clearClickToMoveSelection()
+      
+      onDrop(sourceSquare, square)
+      
+      // Update board position to match game state after a short delay
+      // This ensures castling, en passant, and promotion are properly displayed
+      setTimeout(() => {
+        try {
+          board.position(game.fen())
+        } catch(e) {
+          logError('Failed to update board after click-to-move:', e)
+        }
+      }, 200)
+    }
+  }
+  
   const setupClickToMove = () => {
     const boardEl = document.getElementById('board')
     if (!boardEl) return
@@ -1117,85 +1215,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
       pointerDownTime = null
       isDragInProgress = false
     }, true) // Use capture phase
-    
-    // Separate function to handle the click logic
-    function handleSquareClick(square, squareEl) {
-      console.log('[Click-to-move] handleSquareClick called for square:', square, 'selectedSquare:', selectedSquare)
-      
-      const piece = game.get(square)
-      const boardEl = document.getElementById('board')
-      
-      // First click: select a piece
-      if (!selectedSquare) {
-        // Only select pieces of the correct color for the side to move
-        console.log('[Click-to-move] no selection yet, piece:', piece, 'turn:', game.turn())
-        if (piece && piece.color === game.turn()) {
-          console.log('[Click-to-move] selecting piece on square:', square)
-          selectedSquare = square
-          // Highlight the selected square with purple
-          if (squareEl) squareEl.classList.add('highlight1-32417')
-        } else {
-          console.log('[Click-to-move] cannot select - wrong color or no piece')
-        }
-      } 
-      // Second click: make the move, deselect, or reselect
-      else {
-        // If clicking the same square, deselect it
-        if (square === selectedSquare) {
-          console.log('[Click-to-move] deselecting same square')
-          clearClickToMoveSelection()
-          return
-        }
-        
-        // If clicking another piece of the same color, select it instead (reselect)
-        if (piece && piece.color === game.turn()) {
-          console.log('[Click-to-move] reselecting different piece of same color')
-          // Remove highlight from old square
-          clearClickToMoveSelection()
-          // Highlight new square
-          selectedSquare = square
-          if (squareEl) squareEl.classList.add('highlight1-32417')
-          return
-        }
-        
-        // Otherwise, attempt to move from selectedSquare to this square
-        // Check if the move is legal before animating
-        const legalMoves = game.moves({square: selectedSquare, verbose: true})
-        const isLegal = legalMoves.some(m => m.to === square)
-        
-        console.log('[Click-to-move] attempting move from', selectedSquare, 'to', square, 'valid:', isLegal)
-        
-        if (!isLegal) {
-          // Invalid move - keep the piece selected
-          console.log('[Click-to-move] invalid move, keeping selection')
-          return
-        }
-        
-        // Move is legal - animate it and then validate/submit
-        console.log('[Click-to-move] executing move')
-        const moveNotation = selectedSquare + '-' + square
-        board.move(moveNotation)
-        
-        // Trigger onDrop to validate and handle the move
-        // onDrop will update the game state and submit to server
-        const sourceSquare = selectedSquare
-        
-        // Clear selection AFTER triggering the move
-        clearClickToMoveSelection()
-        
-        onDrop(sourceSquare, square)
-        
-        // Update board position to match game state after a short delay
-        // This ensures castling, en passant, and promotion are properly displayed
-        setTimeout(() => {
-          try {
-            board.position(game.fen())
-          } catch(e) {
-            logError('Failed to update board after click-to-move:', e)
-          }
-        }, 200)
-      }
-    }
   }
   
   // Setup click handlers after board is created
