@@ -331,27 +331,27 @@ def index():
 
 @app.route('/logout')
 def logout():
-    username = session.get('username')
+    u = get_current_user()
     # Clear OAuth tokens from DB for the logged-in user, if present.
     try:
-        if username:
+        if u:
             from pony.orm import db_session
             with db_session:
-                u = User.get(username=username)
-                if u:
+                user = User.get(username=u.username)
+                if user:
                     # Use the property setters to ensure encryption hooks run
                     try:
-                        safe_set_token(u, 'access_token', None)
+                        safe_set_token(user, 'access_token', None)
                     except Exception:
-                        u.access_token_encrypted = None
+                        user.access_token_encrypted = None
                     try:
-                        safe_set_token(u, 'refresh_token', None)
+                        safe_set_token(user, 'refresh_token', None)
                     except Exception:
-                        u.refresh_token_encrypted = None
-                    u.token_expires_at = None
+                        user.refresh_token_encrypted = None
+                    user.token_expires_at = None
     except Exception:
         # Avoid failing logout due to DB errors; log and continue to clear session
-        logger.exception('Failed to clear OAuth tokens for user=%s during logout', username)
+        logger.exception('Failed to clear OAuth tokens for user=%s during logout', u.username if u else 'unknown')
     # Clear session in all cases
     session.clear()
     return redirect(url_for('index'))
@@ -434,8 +434,9 @@ def login():
     Otherwise, redirects to Lichess OAuth with PKCE challenge.
     """
     # If already logged in, return username
-    if 'username' in session:
-        return jsonify({'username': session['username']}), 200
+    u = get_current_user()
+    if u:
+        return jsonify({'username': u.username}), 200
     
     # Get Lichess client ID from environment
     client_id = os.environ.get('LICHESS_CLIENT_ID') or os.environ.get('LICHESS_CLIENTID')
@@ -587,50 +588,50 @@ def start_import():
 
     Returns JSON: { 'ok': True, 'task_id': '<id>' }
     """
-    username = session.get('username')
-    if not username:
+    u = get_current_user()
+    if not u:
         return jsonify({'error': 'not logged in'}), 401
     with db_session:
-        u = User.get(username=username)
-        if not u:
+        user = User.get(username=u.username)
+        if not user:
             return jsonify({'error': 'user not found'}), 404
-        perftypes = getattr(u, 'settings_perftypes', '[]')
+        perftypes = getattr(user, 'settings_perftypes', '[]')
         try:
             import json
             perf_list = json.loads(perftypes) if perftypes else []
             perf_arg = ','.join(perf_list) if isinstance(perf_list, list) else str(perftypes)
         except Exception:
             perf_arg = str(perftypes)
-        days = int(getattr(u, 'settings_days', 30) or 30)
+        days = int(getattr(user, 'settings_days', 30) or 30)
         # Mark import as in-progress immediately so the UI can detect and display
         # the modal/polling state without waiting for the worker to start the task.
         try:
-            u._import_status = 'in_progress'
-            u._import_error = None
+            user._import_status = 'in_progress'
+            user._import_error = None
         except Exception:
-            logger.exception('Failed to set import status for user=%s in start_import', username)
+            logger.exception('Failed to set import status for user=%s in start_import', u.username)
     try:
-        task = import_games_task.delay(username, perf_arg, days)
+        task = import_games_task.delay(u.username, perf_arg, days)
         return jsonify({'ok': True, 'task_id': task.id}), 200
     except Exception:
-        logger.exception('Failed to enqueue import task for user=%s', username)
+        logger.exception('Failed to enqueue import task for user=%s', u.username)
         return jsonify({'error': 'enqueue-failed'}), 500
 
 
 @app.route('/import_status')
 def import_status():
     """Return import progress for the current user: total, done, last_game_date."""
-    username = session.get('username')
-    if not username:
+    u = get_current_user()
+    if not u:
         return jsonify({'error': 'not logged in'}), 401
     with db_session:
-        u = User.get(username=username)
-        if not u:
+        user = User.get(username=u.username)
+        if not user:
             return jsonify({'error': 'user not found'}), 404
-        done = int(getattr(u, '_import_done', 0) or 0)
-        last_game = getattr(u, '_last_game_date', None)
-        status = getattr(u, '_import_status', None) or 'idle'
-        error = getattr(u, '_import_error', None)
+        done = int(getattr(user, '_import_done', 0) or 0)
+        last_game = getattr(user, '_last_game_date', None)
+        status = getattr(user, '_import_status', None) or 'idle'
+        error = getattr(user, '_import_error', None)
     # Format last_game_date into a more readable string if present. Store times in UTC.
     if last_game:
         try:
@@ -761,24 +762,24 @@ def get_puzzle():
 
 @app.route('/puzzle')
 def puzzle_page():
-    username = session.get('username')
-    if not username:
+    u = get_current_user()
+    if not u:
         return redirect(url_for('login'))
     return render_template('puzzle.html')
 
 
 @app.route('/badges')
 def badge_gallery():
-    username = session.get('username')
-    if not username:
+    u = get_current_user()
+    if not u:
         return redirect(url_for('login'))
     return render_template('badges.html')
 
 
 @app.route('/badges/<path:name>')
 def badge_detail(name):
-    username = session.get('username')
-    if not username:
+    u = get_current_user()
+    if not u:
         return redirect(url_for('login'))
     return render_template('badge_detail.html')
 
@@ -788,15 +789,15 @@ def badge_detail(name):
 
 @app.route('/api/badges')
 def api_badges():
-    username = session.get('username')
-    if not username:
+    u = get_current_user()
+    if not u:
         return jsonify({'error': 'not logged in'}), 401
     with db_session:
-        u = User.get(username=username)
-        if not u:
+        user = User.get(username=u.username)
+        if not user:
             return jsonify({'error': 'user not found'}), 404
         items = []
-        for b in u.badges:
+        for b in user.badges:
             meta = get_badge_meta(b.name)
             d = b.to_dict()
             d.update({'icon': meta.get('icon'), 'description': meta.get('description')})
@@ -806,14 +807,14 @@ def api_badges():
 
 @app.route('/settings', methods=['GET','POST'])
 def settings():
-    username = session.get('username')
-    if not username:
+    u = get_current_user()
+    if not u:
         return redirect(url_for('login'))
     with db_session:
-        u = User.get(username=username)
+        user = User.get(username=u.username)
         if request.method == 'POST':
             data = request.get_json() or {}
-            days = int(data.get('days', getattr(u, 'settings_days', 30)))
+            days = int(data.get('days', getattr(user, 'settings_days', 30)))
             # Accept perf as a JSON list or as a CSV string for backward compatibility
             perf_raw = data.get('perf', None)
             perf_list = None
@@ -825,10 +826,10 @@ def settings():
                 # fallback to existing stored value
                 try:
                     import json
-                    perf_list = json.loads(u.settings_perftypes) if u.settings_perftypes else []
+                    perf_list = json.loads(user.settings_perftypes) if user.settings_perftypes else []
                 except Exception:
-                    perf_list = [p.strip().lower() for p in (getattr(u, 'settings_perftypes', '') or '').split(',') if p.strip()]
-            cooldown = int(data.get('cooldown', getattr(u, 'cooldown_minutes', 10)))
+                    perf_list = [p.strip().lower() for p in (getattr(user, 'settings_perftypes', '') or '').split(',') if p.strip()]
+            cooldown = int(data.get('cooldown', getattr(user, 'cooldown_minutes', 10)))
             # tags: allow the client to send a list of desired puzzle tags
             tags_raw = data.get('tags', None)
             tags_list = None
@@ -839,42 +840,42 @@ def settings():
             else:
                 try:
                     import json
-                    tags_list = json.loads(u.settings_tags) if u.settings_tags else []
+                    tags_list = json.loads(user.settings_tags) if user.settings_tags else []
                 except Exception:
-                    tags_list = [t.strip() for t in (getattr(u, 'settings_tags', '') or '').split(',') if t.strip()]
-            u.settings_days = days
+                    tags_list = [t.strip() for t in (getattr(user, 'settings_tags', '') or '').split(',') if t.strip()]
+            user.settings_days = days
             # persist as JSON text so we can return a structured list later
             import json
-            u.settings_perftypes = json.dumps(perf_list)
-            u.settings_tags = json.dumps(tags_list)
+            user.settings_perftypes = json.dumps(perf_list)
+            user.settings_tags = json.dumps(tags_list)
             # spaced repetition preference: boolean checkbox from frontend
             try:
                 use_spaced = bool(data.get('use_spaced', True))
             except Exception:
                 use_spaced = True
-            u.settings_use_spaced = use_spaced
+            user.settings_use_spaced = use_spaced
             # persist user maximum puzzle limit (0 means unlimited)
             try:
-                max_p = int(data.get('max_puzzles', getattr(u, 'settings_max_puzzles', 0) or 0))
+                max_p = int(data.get('max_puzzles', getattr(user, 'settings_max_puzzles', 0) or 0))
             except Exception:
                 max_p = 0
-            u.settings_max_puzzles = max_p
+            user.settings_max_puzzles = max_p
             # persist max attempts setting (range 1-3, default 3)
             try:
-                max_attempts = int(data.get('max_attempts', getattr(u, 'settings_max_attempts', 3) or 3))
+                max_attempts = int(data.get('max_attempts', getattr(user, 'settings_max_attempts', 3) or 3))
                 max_attempts = max(1, min(3, max_attempts))  # enforce range
             except Exception:
                 max_attempts = 3
-            u.settings_max_attempts = max_attempts
-            u.cooldown_minutes = cooldown
+            user.settings_max_attempts = max_attempts
+            user.cooldown_minutes = cooldown
             return jsonify({'status': 'ok'})
         else:
             # For GET, return the perf types as a list (decoded JSON) so templates can use tojson
             import json
-            stored = getattr(u, 'settings_perftypes', None) or '[]'
+            stored = getattr(user, 'settings_perftypes', None) or '[]'
             perf_list = parse_perf_types(stored)
             # load tags similarly
-            tags_stored = getattr(u, 'settings_tags', None) or '[]'
+            tags_stored = getattr(user, 'settings_tags', None) or '[]'
             try:
                 tags_list = json.loads(tags_stored)
                 if not isinstance(tags_list, list):
@@ -882,15 +883,15 @@ def settings():
             except Exception:
                 tags_list = [t.strip() for t in str(tags_stored).split(',') if t.strip()]
 
-            max_p = int(getattr(u, 'settings_max_puzzles', 0) or 0)
+            max_p = int(getattr(user, 'settings_max_puzzles', 0) or 0)
             # warn users when max_puzzles is set but low
             max_puzzles_warning = False
             if max_p and max_p > 0 and max_p < 10:
                 max_puzzles_warning = True
             # pass the user's spaced-repetition preference to the template
-            use_spaced = getattr(u, 'settings_use_spaced', True)
-            max_attempts = getattr(u, 'settings_max_attempts', 3) or 3
-            return render_template('settings.html', days=getattr(u, 'settings_days', 30), perf=perf_list, cooldown=getattr(u, 'cooldown_minutes', 10), tags=tags_list, max_puzzles=max_p, max_puzzles_warning=max_puzzles_warning, use_spaced=use_spaced, max_attempts=max_attempts)
+            use_spaced = getattr(user, 'settings_use_spaced', True)
+            max_attempts = getattr(user, 'settings_max_attempts', 3) or 3
+            return render_template('settings.html', days=getattr(user, 'settings_days', 30), perf=perf_list, cooldown=getattr(user, 'cooldown_minutes', 10), tags=tags_list, max_puzzles=max_p, max_puzzles_warning=max_puzzles_warning, use_spaced=use_spaced, max_attempts=max_attempts)
 
 
 
@@ -942,30 +943,30 @@ def api_puzzle_counts():
 
 @app.route('/user_information')
 def user_information():
-    username = session.get('username')
-    if not username:
+    u = get_current_user()
+    if not u:
         return jsonify({'error': 'not logged in'}), 401
     with db_session:
-        u = User.get(username=username)
-        if not u:
+        user = User.get(username=u.username)
+        if not user:
             return jsonify({'error': 'user not found'}), 404
         # Collect values while inside the db_session to avoid lazy-loading
         # errors when the JSON is serialized outside the session.
-        xp = int(getattr(u, 'xp', 0) or 0)
+        xp = int(getattr(user, 'xp', 0) or 0)
         # return badge names so the frontend can compute a count
-        badges = [b.name for b in u.badges]
-        days_streak = int(getattr(u, 'streak_days', 0) or 0)
-        puzzle_streak = int(getattr(u, 'consecutive_correct', 0) or 0)
-        best_puzzle_streak = int(getattr(u, 'best_puzzle_streak', 0) or 0)
-        best_day_streak = int(getattr(u, 'best_streak_days', 0) or 0)
-        username_val = u.username
+        badges = [b.name for b in user.badges]
+        days_streak = int(getattr(user, 'streak_days', 0) or 0)
+        puzzle_streak = int(getattr(user, 'consecutive_correct', 0) or 0)
+        best_puzzle_streak = int(getattr(user, 'best_puzzle_streak', 0) or 0)
+        best_day_streak = int(getattr(user, 'best_streak_days', 0) or 0)
+        username_val = user.username
         # xp today
-        xp_today = int(getattr(u, 'xp_today', 0) or 0)
-        xp_today_date = getattr(u, 'xp_today_date', None)
+        xp_today = int(getattr(user, 'xp_today', 0) or 0)
+        xp_today_date = getattr(user, 'xp_today_date', None)
         # compute average XP/day since first activity
         avg_xp_per_day = None
         try:
-            first_iso = getattr(u, '_first_game_date', None)
+            first_iso = getattr(user, '_first_game_date', None)
             if first_iso:
                 from datetime import datetime as _dt, timezone as _tz
                 first_date = _dt.fromisoformat(first_iso).date()
@@ -995,8 +996,8 @@ def leaderboard():
 
 @app.route('/leaderboard_page')
 def leaderboard_page():
-    username = session.get('username')
-    if not username:
+    u = get_current_user()
+    if not u:
         return redirect(url_for('login'))
     return render_template('leaderboard.html')
 
@@ -1011,8 +1012,8 @@ def check_puzzle():
     # require SAN but allow missing id (fallback to user's first puzzle)
     if not san:
         return jsonify({'error': 'san required'}), 400
-    username = session.get('username')
-    if not username:
+    u = get_current_user()
+    if not u:
         return jsonify({'error': 'not logged in'}), 401
     
     # Track attempts per puzzle using session storage
@@ -1023,7 +1024,7 @@ def check_puzzle():
         if pid is None:
             # fallback: pick any puzzle belonging to the user (tests sometimes
             # create puzzles and pass None as id); choose the first one.
-            p = next((x for x in Puzzle.select() if getattr(x.user, 'username', None) == username), None)
+            p = next((x for x in Puzzle.select() if getattr(x.user, 'username', None) == u.username), None)
         else:
             try:
                 pid = int(pid)
@@ -1181,8 +1182,8 @@ def puzzle_hint():
     if not pid:
         pid = request.args.get('id')
 
-    username = session.get('username')
-    if not username:
+    u = get_current_user()
+    if not u:
         return jsonify({'error': 'not logged in'}), 401
     # normalize id to int when provided; allow missing id for test fallback
     if pid is not None and pid != '':
@@ -1197,13 +1198,13 @@ def puzzle_hint():
         if pid is None:
             # fallback: pick any puzzle belonging to the user (tests sometimes
             # create puzzles and pass None as id); choose the first one.
-            p = next((x for x in Puzzle.select() if getattr(x.user, 'username', None) == username), None)
+            p = next((x for x in Puzzle.select() if getattr(x.user, 'username', None) == u.username), None)
         else:
             p = Puzzle.get(id=pid)
         if not p:
             return jsonify({'error': 'puzzle not found'}), 404
         # Only allow hints for the requesting user's puzzles
-        if getattr(p.user, 'username', None) != username:
+        if getattr(p.user, 'username', None) != u.username:
             return jsonify({'error': 'forbidden'}), 403
         # Derive the from-square by applying the SAN to the stored FEN
         try:
