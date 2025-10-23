@@ -92,17 +92,6 @@
     <script src="/static/vendor/jquery-3.6.0.min.js"></script>
     <script src="/static/vendor/bootstrap.bundle.min.js"></script>
     <script src="/static/js/ribbon.js"></script>
-    <!-- Toast container -->
-    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
-      <div id="saveToast" class="toast" role="status" aria-live="polite" aria-atomic="true" data-bs-autohide="true" data-bs-delay="2000">
-        <div class="toast-header">
-          <strong class="me-auto">Settings</strong>
-          <small>now</small>
-          <button type="button" class="btn-close ms-2 mb-1" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>
-        <div class="toast-body" id="saveToastBody">Saved</div>
-      </div>
-    </div>
   <script>
       // initialize ribbon after DOM load
       window.addEventListener('DOMContentLoaded', ()=>{ if (window.initRibbon) window.initRibbon();
@@ -214,22 +203,11 @@
         };
         
         try {
-          const r = await fetch('/settings', { 
+          await fetch('/settings', { 
             method: 'POST', 
             headers: {'Content-Type':'application/json'}, 
             body: JSON.stringify(payload)
           });
-          
-          const toastEl = document.getElementById('saveToast');
-          const toastBody = document.getElementById('saveToastBody');
-          const bsToast = new bootstrap.Toast(toastEl, { delay: 2000, autohide: true });
-          
-          if (r.ok) {
-            toastBody.textContent = 'Settings saved';
-          } else {
-            toastBody.textContent = 'Failed to save settings';
-          }
-          bsToast.show();
         } catch(e) {
           console.error('Failed to save settings:', e);
         }
