@@ -680,13 +680,17 @@ function clearHintHighlights(){
 
 // Clear click-to-move selection and yellow highlight
 function clearClickToMoveSelection(){
+  console.log('[Click-to-move] clearClickToMoveSelection called, selectedSquare:', selectedSquare)
   if (!selectedSquare) return
   
   try {
     const boardEl = getElement('board')
     if (boardEl) {
       const el = boardEl.querySelector('.square-' + selectedSquare)
-      if (el) el.classList.remove('highlight1-32417')
+      if (el) {
+        el.classList.remove('highlight1-32417')
+        console.log('[Click-to-move] removed highlight from', selectedSquare)
+      }
     }
     selectedSquare = null
   } catch(e) {
@@ -1030,7 +1034,10 @@ window.addEventListener('DOMContentLoaded', ()=>{
     let hasLeftOriginalSquare = false
     
     boardEl.addEventListener('pointerdown', function(e) {
-      if (!allowMoves) return
+      if (!allowMoves) {
+        console.log('[Click-to-move] pointerdown ignored - moves not allowed')
+        return
+      }
       
       // Find the square that was pressed
       let squareEl = e.target
@@ -1043,6 +1050,9 @@ window.addEventListener('DOMContentLoaded', ()=>{
       if (squareEl && squareEl.classList.contains('square-55d63')) {
         pointerDownSquare = squareEl.getAttribute('data-square')
         hasLeftOriginalSquare = false
+        console.log('[Click-to-move] pointerdown on square:', pointerDownSquare)
+      } else {
+        console.log('[Click-to-move] pointerdown not on a square')
       }
     }, false)
     
@@ -1061,18 +1071,24 @@ window.addEventListener('DOMContentLoaded', ()=>{
         const currentSquare = currentSquareEl.getAttribute('data-square')
         if (currentSquare !== pointerDownSquare) {
           hasLeftOriginalSquare = true
+          console.log('[Click-to-move] pointermove - left original square', pointerDownSquare, '→', currentSquare)
         }
       } else {
         // Pointer is outside board squares
         hasLeftOriginalSquare = true
+        console.log('[Click-to-move] pointermove - left board entirely')
       }
     }, false)
     
     boardEl.addEventListener('pointerup', function(e) {
-      if (!pointerDownSquare) return
+      if (!pointerDownSquare) {
+        console.log('[Click-to-move] pointerup ignored - no pointerDownSquare')
+        return
+      }
       
       // If we left the original square, it's a drag - let chessboard.js handle it
       if (hasLeftOriginalSquare) {
+        console.log('[Click-to-move] pointerup - was a drag, ignoring')
         pointerDownSquare = null
         hasLeftOriginalSquare = false
         return
@@ -1092,8 +1108,13 @@ window.addEventListener('DOMContentLoaded', ()=>{
         
         // Only handle if released on the same square as pressed
         if (square === pointerDownSquare) {
+          console.log('[Click-to-move] pointerup - click detected on square:', square, 'selectedSquare:', selectedSquare)
           handleSquareClick(square, squareEl)
+        } else {
+          console.log('[Click-to-move] pointerup on different square:', square, 'vs', pointerDownSquare)
         }
+      } else {
+        console.log('[Click-to-move] pointerup not on a square')
       }
       
       pointerDownSquare = null
@@ -1102,28 +1123,36 @@ window.addEventListener('DOMContentLoaded', ()=>{
     
     // Separate function to handle the click logic
     function handleSquareClick(square, squareEl) {
+      console.log('[Click-to-move] handleSquareClick called for square:', square, 'selectedSquare:', selectedSquare)
+      
       const piece = game.get(square)
       const boardEl = document.getElementById('board')
       
       // First click: select a piece
       if (!selectedSquare) {
         // Only select pieces of the correct color for the side to move
+        console.log('[Click-to-move] no selection yet, piece:', piece, 'turn:', game.turn())
         if (piece && piece.color === game.turn()) {
+          console.log('[Click-to-move] selecting piece on square:', square)
           selectedSquare = square
           // Highlight the selected square with purple
           if (squareEl) squareEl.classList.add('highlight1-32417')
+        } else {
+          console.log('[Click-to-move] cannot select - wrong color or no piece')
         }
       } 
       // Second click: make the move, deselect, or reselect
       else {
         // If clicking the same square, deselect it
         if (square === selectedSquare) {
+          console.log('[Click-to-move] deselecting same square')
           clearClickToMoveSelection()
           return
         }
         
         // If clicking another piece of the same color, select it instead (reselect)
         if (piece && piece.color === game.turn()) {
+          console.log('[Click-to-move] reselecting different piece of same color')
           // Remove highlight from old square
           clearClickToMoveSelection()
           // Highlight new square
@@ -1137,12 +1166,16 @@ window.addEventListener('DOMContentLoaded', ()=>{
         const legalMoves = game.moves({square: selectedSquare, verbose: true})
         const isLegal = legalMoves.some(m => m.to === square)
         
+        console.log('[Click-to-move] attempting move from', selectedSquare, 'to', square, 'valid:', isLegal)
+        
         if (!isLegal) {
           // Invalid move - keep the piece selected
+          console.log('[Click-to-move] invalid move, keeping selection')
           return
         }
         
         // Move is legal - animate it and then validate/submit
+        console.log('[Click-to-move] executing move')
         const moveNotation = selectedSquare + '-' + square
         board.move(moveNotation)
         
