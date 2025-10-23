@@ -661,7 +661,7 @@ function showRecordToast(newBest){
         New record puzzle streak: <strong>${String(newBest)}</strong>
       </div>`
     container.appendChild(toastEl)
-    const bs = new bootstrap.Toast(toastEl, { delay: 5000 })
+    const bs = new bootstrap.Toast(toastEl, { autohide: true, delay: 3000 })
     bs.show()
     toastEl.addEventListener('hidden.bs.toast', ()=>{ try{ container.removeChild(toastEl) }catch(e){} })
   }catch(e){ try{ alert('Congratulations! New record puzzle streak: ' + String(newBest)) }catch(e){} }
@@ -827,7 +827,7 @@ function showBadgeToast(badges){
           <ul style="margin:0;padding-left:1.2em">${items.map(it=>`<li>${it.icon?`<img src="/static/img/badges/${it.icon}" alt="${it.name}" style="width:20px;height:20px;margin-right:6px;vertical-align:text-bottom">` : ''}<strong>${it.name}</strong>${it.description?` — <small class="text-muted">${it.description}</small>` : ''}</li>`).join('')}</ul>
         </div>`
       container.appendChild(toastEl)
-      const bs = new bootstrap.Toast(toastEl, { delay: 5000 })
+      const bs = new bootstrap.Toast(toastEl, { autohide: true, delay: 3000 })
       bs.show()
       // remove after hidden
       toastEl.addEventListener('hidden.bs.toast', ()=>{ try{ container.removeChild(toastEl) }catch(e){} })
