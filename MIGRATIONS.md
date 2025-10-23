@@ -35,6 +35,30 @@ basic Alembic setup and an example migration.
 
 ## Recent schema changes
 
+### Weekly XP tracking (xp_this_week, week_start_date)
+
+**Date**: October 2025
+
+**Change**: Added `xp_this_week` and `week_start_date` columns to User table for weekly leaderboard support.
+
+**Migration**:
+```bash
+docker compose run --rm web python scripts/migrate_add_weekly_xp.py
+```
+
+**Details**:
+- `xp_this_week` (Optional int, default 0): Tracks XP accumulated during the current week
+- `week_start_date` (Optional str): ISO date string (YYYY-MM-DD) of the Monday that started the week
+- Weekly XP resets every Monday at midnight UTC
+- The backend automatically manages resetting and tracking via `update_user_xp()`
+- Enables dual leaderboards: "All Time" (using `xp`) and "Weekly" (using `xp_this_week`)
+- The migration is idempotent and will skip if the columns already exist
+
+**Compatibility**: 
+- Existing users without these fields will have `NULL` initially
+- Backend treats `NULL` xp_this_week as 0 and will populate week_start_date on next XP gain
+- The migration adds columns with DEFAULT values, so all users automatically get 0 for xp_this_week
+
 ### Multiple attempts feature (settings_max_attempts)
 
 **Date**: October 2025
