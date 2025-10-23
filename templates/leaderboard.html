@@ -11,6 +11,8 @@
     <link rel="stylesheet" href="/static/css/site.css" />
     <style>
       .leaderboard-table { max-width: 800px; }
+      .current-user-row { background-color: rgba(255, 193, 7, 0.15); font-weight: 500; }
+      .ellipsis-row { text-align: center; font-weight: bold; color: #6c757d; }
     </style>
   </head>
   <body class="p-4">
@@ -18,37 +20,126 @@
 
     <div class="container py-4">
       <h1 class="h4 mb-3">Leaderboard</h1>
-      <div class="leaderboard-table">
-        <table class="table table-striped">
-          <thead>
-            <tr><th>Rank</th><th>Username</th><th>XP</th></tr>
-          </thead>
-          <tbody id="leaderboardBody">
-            <tr><td colspan="3">Loading...</td></tr>
-          </tbody>
-        </table>
+      
+      <!-- Nav tabs -->
+      <ul class="nav nav-tabs mb-3" id="leaderboardTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="alltime-tab" data-bs-toggle="tab" data-bs-target="#alltime" type="button" role="tab" aria-controls="alltime" aria-selected="true">All Time</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="weekly-tab" data-bs-toggle="tab" data-bs-target="#weekly" type="button" role="tab" aria-controls="weekly" aria-selected="false">Weekly</button>
+        </li>
+      </ul>
+
+      <!-- Tab content -->
+      <div class="tab-content" id="leaderboardTabContent">
+        <!-- All Time Tab -->
+        <div class="tab-pane fade show active" id="alltime" role="tabpanel" aria-labelledby="alltime-tab">
+          <div class="leaderboard-table">
+            <table class="table table-striped">
+              <thead>
+                <tr><th>Rank</th><th>Username</th><th>XP</th></tr>
+              </thead>
+              <tbody id="alltimeBody">
+                <tr><td colspan="3">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Weekly Tab -->
+        <div class="tab-pane fade" id="weekly" role="tabpanel" aria-labelledby="weekly-tab">
+          <div class="leaderboard-table">
+            <table class="table table-striped">
+              <thead>
+                <tr><th>Rank</th><th>Username</th><th>XP</th></tr>
+              </thead>
+              <tbody id="weeklyBody">
+                <tr><td colspan="3">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
 
     <script src="/static/vendor/jquery-3.6.0.min.js"></script>
     <script>window.jQuery = window.jQuery || window.$; window.$ = window.$ || window.jQuery;</script>
-  <script src="/static/vendor/bootstrap.bundle.min.js"></script>
+    <script src="/static/vendor/bootstrap.bundle.min.js"></script>
     <script src="/static/js/ribbon.js"></script>
-    <script>window.addEventListener('DOMContentLoaded', ()=>{ if (window.initRibbon) window.initRibbon();
-        // fetch leaderboard
-        fetch('/leaderboard').then(r=>r.json()).then(data=>{
-          const body = document.getElementById('leaderboardBody');
-          body.innerHTML = '';
-          if (!data || !data.items || data.items.length===0) {
-            body.innerHTML = '<tr><td colspan="3">No entries</td></tr>';
-            return;
+    <script>
+      function renderLeaderboard(data, bodyId) {
+        const body = document.getElementById(bodyId);
+        body.innerHTML = '';
+        
+        if (!data || !data.top_10 || data.top_10.length === 0) {
+          body.innerHTML = '<tr><td colspan="3">No entries</td></tr>';
+          return;
+        }
+        
+        // Render top 10
+        data.top_10.forEach((entry, idx) => {
+          const rank = idx + 1;
+          const tr = document.createElement('tr');
+          const isCurrentUser = data.user_entry && entry.username === data.user_entry.username;
+          if (isCurrentUser) {
+            tr.className = 'current-user-row';
           }
-          data.items.forEach((it, idx)=>{
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${idx+1}</td><td>${it.username}</td><td>${it.xp}</td>`;
-            body.appendChild(tr);
+          tr.innerHTML = `<td>${rank}</td><td>${entry.username}</td><td>${entry.xp}</td>`;
+          body.appendChild(tr);
+        });
+        
+        // Add ellipsis and current user if they're not in top 10
+        if (data.user_rank && data.user_rank > 10 && data.user_entry) {
+          // Add ellipsis row
+          const ellipsisRow = document.createElement('tr');
+          ellipsisRow.className = 'ellipsis-row';
+          ellipsisRow.innerHTML = '<td colspan="3">...</td>';
+          body.appendChild(ellipsisRow);
+          
+          // Add current user's row
+          const userRow = document.createElement('tr');
+          userRow.className = 'current-user-row';
+          userRow.innerHTML = `<td>${data.user_rank}</td><td>${data.user_entry.username}</td><td>${data.user_entry.xp}</td>`;
+          body.appendChild(userRow);
+        }
+      }
+      
+      function loadAllTime() {
+        fetch('/leaderboard/alltime')
+          .then(r => r.json())
+          .then(data => renderLeaderboard(data, 'alltimeBody'))
+          .catch(e => {
+            const body = document.getElementById('alltimeBody');
+            body.innerHTML = '<tr><td colspan="3">Failed to load</td></tr>';
           });
-        }).catch(e=>{ const body = document.getElementById('leaderboardBody'); body.innerHTML = '<tr><td colspan="3">Failed to load</td></tr>'; });
-      })</script>
+      }
+      
+      function loadWeekly() {
+        fetch('/leaderboard/weekly')
+          .then(r => r.json())
+          .then(data => renderLeaderboard(data, 'weeklyBody'))
+          .catch(e => {
+            const body = document.getElementById('weeklyBody');
+            body.innerHTML = '<tr><td colspan="3">Failed to load</td></tr>';
+          });
+      }
+      
+      window.addEventListener('DOMContentLoaded', () => {
+        if (window.initRibbon) window.initRibbon();
+        
+        // Load all time leaderboard on page load
+        loadAllTime();
+        
+        // Load weekly leaderboard when tab is shown
+        document.getElementById('weekly-tab').addEventListener('shown.bs.tab', () => {
+          // Only load once
+          const body = document.getElementById('weeklyBody');
+          if (body.innerHTML.includes('Loading...')) {
+            loadWeekly();
+          }
+        });
+      });
+    </script>
   </body>
 </html>

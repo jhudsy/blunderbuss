@@ -276,11 +276,12 @@ def get_user_str_attr(user, attr, default=''):
 
 
 def update_user_xp(user, gained_xp):
-    """Update user XP and daily XP tracking."""
+    """Update user XP, daily XP tracking, and weekly XP tracking."""
     user.xp = (user.xp or 0) + gained_xp
     
     try:
-        today_iso = datetime.now(timezone.utc).date().isoformat()
+        today = datetime.now(timezone.utc).date()
+        today_iso = today.isoformat()
         
         # Reset daily XP if it's a new day
         if getattr(user, 'xp_today_date', None) != today_iso:
@@ -289,6 +290,18 @@ def update_user_xp(user, gained_xp):
         
         # Add to today's XP
         user.xp_today = get_user_int_attr(user, 'xp_today', 0) + (gained_xp or 0)
+        
+        # Calculate the start of the current week (Monday)
+        days_since_monday = today.weekday()  # 0 = Monday, 6 = Sunday
+        week_start = (today - timedelta(days=days_since_monday)).isoformat()
+        
+        # Reset weekly XP if it's a new week
+        if getattr(user, 'week_start_date', None) != week_start:
+            user.xp_this_week = 0
+            user.week_start_date = week_start
+        
+        # Add to this week's XP
+        user.xp_this_week = get_user_int_attr(user, 'xp_this_week', 0) + (gained_xp or 0)
         
         # Record first activity date if not set
         if not getattr(user, '_first_game_date', None):
@@ -996,6 +1009,92 @@ def leaderboard():
         scored.sort(key=lambda x: -x['xp'])
         start = (page-1)*per
         return jsonify({'total': len(scored), 'page': page, 'per': per, 'items': scored[start:start+per]})
+
+
+@app.route('/leaderboard/alltime')
+def leaderboard_alltime():
+    """Return top 10 all-time XP leaders plus current user if not in top 10."""
+    u = get_current_user()
+    current_username = u.username if u else None
+    
+    with db_session:
+        users = select(u for u in User)[:]
+        scored = []
+        for user in users:
+            xp = int(getattr(user, 'xp', 0) or 0)
+            scored.append({'username': user.username, 'xp': xp})
+        
+        # Sort by XP descending
+        scored.sort(key=lambda x: (-x['xp'], x['username']))
+        
+        # Get top 10
+        top_10 = scored[:10]
+        
+        # Find current user's position if logged in
+        user_entry = None
+        user_rank = None
+        if current_username:
+            for idx, entry in enumerate(scored, start=1):
+                if entry['username'] == current_username:
+                    user_rank = idx
+                    user_entry = entry
+                    break
+        
+        return jsonify({
+            'top_10': top_10,
+            'user_entry': user_entry,
+            'user_rank': user_rank,
+            'total': len(scored)
+        })
+
+
+@app.route('/leaderboard/weekly')
+def leaderboard_weekly():
+    """Return top 10 weekly XP leaders plus current user if not in top 10."""
+    u = get_current_user()
+    current_username = u.username if u else None
+    
+    # Calculate current week start
+    today = datetime.now(timezone.utc).date()
+    days_since_monday = today.weekday()
+    week_start = (today - timedelta(days=days_since_monday)).isoformat()
+    
+    with db_session:
+        users = select(u for u in User)[:]
+        scored = []
+        for user in users:
+            # Only include users whose week_start_date matches current week
+            user_week_start = getattr(user, 'week_start_date', None)
+            if user_week_start == week_start:
+                xp = int(getattr(user, 'xp_this_week', 0) or 0)
+                scored.append({'username': user.username, 'xp': xp})
+            else:
+                # User hasn't earned XP this week yet
+                scored.append({'username': user.username, 'xp': 0})
+        
+        # Sort by XP descending
+        scored.sort(key=lambda x: (-x['xp'], x['username']))
+        
+        # Get top 10
+        top_10 = scored[:10]
+        
+        # Find current user's position if logged in
+        user_entry = None
+        user_rank = None
+        if current_username:
+            for idx, entry in enumerate(scored, start=1):
+                if entry['username'] == current_username:
+                    user_rank = idx
+                    user_entry = entry
+                    break
+        
+        return jsonify({
+            'top_10': top_10,
+            'user_entry': user_entry,
+            'user_rank': user_rank,
+            'total': len(scored),
+            'week_start': week_start
+        })
 
 
 @app.route('/leaderboard_page')

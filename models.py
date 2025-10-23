@@ -74,6 +74,9 @@ class User(db.Entity):
     # XP accumulated today (resets on day change) stored as int and the date it refers to
     xp_today = Optional(int, default=0)
     xp_today_date = Optional(str)
+    # XP accumulated this week (resets weekly) and the week start date it refers to (ISO format YYYY-MM-DD)
+    xp_this_week = Optional(int, default=0)
+    week_start_date = Optional(str)
     _import_total = Optional(int, default=0)
     _import_done = Optional(int, default=0)
     # Human-readable import status: 'idle', 'in_progress', 'finished'
