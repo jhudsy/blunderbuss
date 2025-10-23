@@ -973,19 +973,20 @@ window.addEventListener('DOMContentLoaded', ()=>{
       try{
         if (!allowMoves) return false
         
+        // Only allow picking up pieces for the side to move.
+        if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
+            (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
+          return false
+        }
+        
         // Mark that a drag is now in progress and track where it started
+        // (only after validating the piece can be dragged)
         isDragInProgress = true
         dragStartSquare = source
         
         // Clear any existing selection when starting a drag
         if (selectedSquare) {
           clearClickToMoveSelection()
-        }
-        
-        // Only allow picking up pieces for the side to move.
-        if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
-            (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
-          return false
         }
       }catch(e){ /* ignore and allow by default */ }
     },
@@ -1164,10 +1165,12 @@ window.addEventListener('DOMContentLoaded', ()=>{
     // We just need to detect quick clicks
     
     boardEl.addEventListener('pointerup', function(e) {
+      console.log('[DEBUG] pointerup fired, pointerDownSquare:', pointerDownSquare, 'isDragInProgress:', isDragInProgress)
       if (!pointerDownSquare) return
       
       // If a drag is in progress, chessboard.js is handling it
       if (isDragInProgress) {
+        console.log('[DEBUG] Drag in progress, ignoring pointerup')
         pointerDownSquare = null
         pointerDownTime = null
         isDragInProgress = false
