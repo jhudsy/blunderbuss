@@ -239,6 +239,9 @@ async function loadPuzzle(){
   
   // Reset click-to-move state
   clearClickToMoveSelection()
+  
+  // Clear any pending castling animation from previous puzzle
+  __castlingPending = null
 
   game = new Chess()
   game.load(currentPuzzle.fen)
