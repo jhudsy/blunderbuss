@@ -406,14 +406,14 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
             const moveObj = temp.move(san, {sloppy: true})
             
             if (moveObj){
-              try{ revealCorrectMoveSquares(moveObj.from, moveObj.to, moveObj.promotion) } catch(e){}
+              try{ revealCorrectMoveSquares(moveObj.from, moveObj.to, moveObj.promotion, moveObj.flags, temp.fen()) } catch(e){}
             } else {
               // Fallback: scan moves list
               const moves = temp.moves({verbose:true})
               for (let m of moves){
                 if (m.san === san){
                   if (window.__CP_DEBUG) console.debug('matched move in moves list:', m)
-                  try{ revealCorrectMoveSquares(m.from, m.to, m.promotion) } catch(e){ board.position(startFEN) }
+                  try{ revealCorrectMoveSquares(m.from, m.to, m.promotion, m.flags, temp.fen()) } catch(e){ board.position(startFEN) }
                   break
                 }
               }
@@ -887,7 +887,7 @@ function highlightSquareWithFade(square, color){
 }
 
 // Reveal the correct move by highlighting the from/to squares with a pulsing animation
-function revealCorrectMoveSquares(from, to, promotion){
+function revealCorrectMoveSquares(from, to, promotion, flags, finalFEN){
   try{
     // If this is a promotion move, we need to update the board position
     // to show the promoted piece, not just animate the pawn moving
@@ -904,6 +904,15 @@ function revealCorrectMoveSquares(from, to, promotion){
         currentPos[to] = color + promotion.toUpperCase()
         // Update board position to show the promotion
         board.position(currentPos, true) // true = animate
+      }
+    } else if (flags && (flags.includes('k') || flags.includes('q'))) {
+      // Castling move: animate king first, then update board to show rook
+      try { board.move(from + '-' + to) } catch(e) { /* ignore animation failure */ }
+      // After king animation, update board to final position to show rook move
+      if (finalFEN) {
+        setTimeout(() => {
+          try { board.position(finalFEN) } catch(e) { /* ignore */ }
+        }, 200)
       }
     } else {
       // Normal move: animate using chessboard.js
