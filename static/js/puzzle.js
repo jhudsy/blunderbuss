@@ -959,9 +959,18 @@ window.addEventListener('DOMContentLoaded', ()=>{
     position: 'start',
     draggable: true,
     onDrop: function(source, target) {
-      // A drop occurred, so reset drag tracking
-      dragStartSquare = null
-      return onDrop(source, target)
+      // Check if this is a valid drop or a snapback
+      const result = onDrop(source, target)
+      
+      // Only clear dragStartSquare if the drop was accepted (not a snapback)
+      if (result !== 'snapback') {
+        console.log('[Click-to-move] onDrop - valid drop, clearing dragStartSquare')
+        dragStartSquare = null
+      } else {
+        console.log('[Click-to-move] onDrop - snapback, keeping dragStartSquare:', dragStartSquare)
+      }
+      
+      return result
     },
     onDragStart: function(source, piece, position, orientation){
       // Respect allowMoves flag
