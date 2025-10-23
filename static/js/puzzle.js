@@ -65,11 +65,6 @@ function setElementDisplay(elementId, display) {
  * Send a move to the server for validation
  */
 async function sendMoveToServer(san, startFEN) {
-  if (window.__CP_DEBUG) {
-    console.debug('starting fen', startFEN)
-    console.debug('check_puzzle: sending', { puzzleId: currentPuzzle?.id, san })
-  }
-
   try {
     const response = await fetch('/check_puzzle', {
       method: 'POST',
@@ -81,8 +76,6 @@ async function sendMoveToServer(san, startFEN) {
       })
     })
 
-    if (window.__CP_DEBUG) console.debug('check_puzzle: raw response', response)
-
     if (!response.ok) {
       const text = await response.text().catch(() => '<no-body>')
       console.error('check_puzzle: non-OK response', response.status, text)
@@ -93,11 +86,6 @@ async function sendMoveToServer(san, startFEN) {
       console.error('check_puzzle: JSON parse error', e)
       throw e
     })
-
-    if (window.__CP_DEBUG) {
-      console.debug('check_puzzle: response', json)
-      console.debug('check_puzzle: response keys', Object.keys(json), 'stringified', JSON.stringify(json))
-    }
 
     return json
   } catch(err) {
@@ -397,29 +385,22 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
       // 2) Wait a little more before revealing the correct move
       setTimeout(() => {
         // 3) Reveal correct move if provided
-        if (window.__CP_DEBUG) console.debug('check_puzzle: hasOwnProperty(correct_san)?', j && Object.prototype.hasOwnProperty.call(j, 'correct_san'))
-        if (window.__CP_DEBUG) console.debug('check_puzzle: typeof correct_san', typeof j.correct_san, 'value:', j.correct_san)
-        
         if (j.correct_san){
-          if (window.__CP_DEBUG) console.debug('server provided correct_san (raw):', j.correct_san)
           const cmc = document.getElementById('correctMoveContainer')
           if (cmc) cmc.style.display = ''
           
           // Sanitize SAN from server
           let san = (j.correct_san || '').toString().trim()
-          if (window.__CP_DEBUG) console.debug('server provided correct_san (before sanitize):', j.correct_san, 'after trim:', san)
           san = san.replace(/^\d+\.*\s*/, '')
           san = san.replace(/\.{2,}/g, '')
           san = san.replace(/[(),;:]/g, '')
           san = san.trim()
-          if (window.__CP_DEBUG) console.debug('server provided correct_san (sanitized):', san)
           
           try{
             // Compute the correct move from the starting position
             const temp = new Chess()
             try{ temp.load(startFEN) } catch(e){ /* ignore */ }
             const moveObj = temp.move(san, {sloppy: true})
-            if (window.__CP_DEBUG) console.debug('temp.move result:', moveObj)
             
             if (moveObj){
               try{ revealCorrectMoveSquares(moveObj.from, moveObj.to, moveObj.promotion) } catch(e){}
@@ -1023,8 +1004,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
     const boardEl = document.getElementById('board')
     if (!boardEl) return
     
-    if (window.__CP_DEBUG) console.debug('Click-to-move: setting up event delegation on board')
-    
     // Use pointerdown with a timeout to detect clicks (not drags)
     // This approach works even if pointerup is prevented by chessboard.js
     let lastPointerdownSquare = null
@@ -1044,13 +1023,10 @@ window.addEventListener('DOMContentLoaded', ()=>{
       }
       
       if (!squareEl || !squareEl.classList.contains('square-55d63')) {
-        if (window.__CP_DEBUG) console.debug('Click-to-move: pointerdown not on a square')
         return
       }
       
       const square = squareEl.getAttribute('data-square')
-      if (window.__CP_DEBUG) console.debug('Click-to-move: pointerdown on', square)
-      
       lastPointerdownSquare = square
       lastPointerdownTime = now
       
@@ -1058,18 +1034,14 @@ window.addEventListener('DOMContentLoaded', ()=>{
       // If pointer hasn't moved after 150ms, treat it as a click
       setTimeout(() => {
         if (lastPointerdownSquare !== square || pointerMoved) {
-          if (window.__CP_DEBUG) console.debug('Click-to-move: detected drag, not click')
           return
         }
         
         if (!allowMoves) {
-          if (window.__CP_DEBUG) console.debug('Click-to-move: moves not allowed')
           return
         }
         
-        if (window.__CP_DEBUG) console.debug('Click-to-move: treating as click on', square, 'selectedSquare before call =', selectedSquare)
         handleSquareClick(square, squareEl)
-        if (window.__CP_DEBUG) console.debug('Click-to-move: after handleSquareClick, selectedSquare =', selectedSquare)
       }, 150)
     }, true) // Use capture phase
     
@@ -1080,7 +1052,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
     
     // Separate function to handle the click logic
     function handleSquareClick(square, squareEl) {
-      if (window.__CP_DEBUG) console.debug('Click-to-move: handleSquareClick called, selectedSquare =', selectedSquare, 'square =', square)
       const piece = game.get(square)
       const boardEl = document.getElementById('board')
       
@@ -1091,9 +1062,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
           selectedSquare = square
           // Highlight the selected square with yellow (same as drag highlight)
           if (squareEl) squareEl.classList.add('highlight1-32417')
-          if (window.__CP_DEBUG) console.debug('Click-to-move: selected', square)
-        } else {
-          if (window.__CP_DEBUG) console.debug('Click-to-move: no valid piece to select', piece)
         }
       } 
       // Second click: make the move, deselect, or reselect
@@ -1107,7 +1075,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
         // If clicking the same square, deselect it
         if (square === selectedSquare) {
           selectedSquare = null
-          if (window.__CP_DEBUG) console.debug('Click-to-move: deselected (clicked same square)')
           return
         }
         
@@ -1115,20 +1082,15 @@ window.addEventListener('DOMContentLoaded', ()=>{
         if (piece && piece.color === game.turn()) {
           selectedSquare = square
           if (squareEl) squareEl.classList.add('highlight1-32417')
-          if (window.__CP_DEBUG) console.debug('Click-to-move: reselected', square)
           return
         }
         
         // Otherwise, attempt to move from selectedSquare to this square
-        if (window.__CP_DEBUG) console.debug('Click-to-move: attempting move', selectedSquare, '->', square)
-        
         // Check if the move is legal before animating
-        // Get all legal moves from the selected square
         const legalMoves = game.moves({square: selectedSquare, verbose: true})
         const isLegal = legalMoves.some(m => m.to === square)
         
         if (!isLegal) {
-          if (window.__CP_DEBUG) console.debug('Click-to-move: illegal move, keeping selection')
           // Keep the piece selected so user can try a different square
           // Re-add highlight since it was removed above
           if (prevSquareEl) {
