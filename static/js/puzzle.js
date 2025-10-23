@@ -1105,7 +1105,18 @@ window.addEventListener('DOMContentLoaded', ()=>{
         
         // Trigger onDrop to validate and handle the move
         // onDrop will update the game state and submit to server
-        onDrop(selectedSquare, square)
+        const sourceSquare = selectedSquare
+        onDrop(sourceSquare, square)
+        
+        // Update board position to match game state after a short delay
+        // This ensures castling, en passant, and promotion are properly displayed
+        setTimeout(() => {
+          try {
+            board.position(game.fen())
+          } catch(e) {
+            logError('Failed to update board after click-to-move:', e)
+          }
+        }, 200)
         
         // Clear selection after successful move animation
         selectedSquare = null
