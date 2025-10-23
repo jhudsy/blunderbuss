@@ -95,18 +95,6 @@ def get_current_user():
     return SimpleNamespace(username=username)
 
 
-def _generate_pkce_pair():
-    """Return (verifier, challenge) for PKCE.
-
-    verifier is a urlsafe base64-encoded random 32-byte string without padding.
-    challenge is the base64url-encoded SHA256 digest of the verifier.
-    """
-    verifier = base64.urlsafe_b64encode(os.urandom(32)).rstrip(b'=').decode('utf-8')
-    challenge = hashlib.sha256(verifier.encode('utf-8')).digest()
-    challenge = base64.urlsafe_b64encode(challenge).rstrip(b'=').decode('utf-8')
-    return verifier, challenge
-
-
 def _is_hint_used(pid):
     """Check if a hint was used for the given puzzle id."""
     try:
@@ -440,59 +428,29 @@ def ready():
 
 @app.route('/login')
 def login():
-    # Support a simple mock login for tests/development by allowing
-    # ?user=username when ALLOW_MOCK_LOGIN=1. Otherwise, if the user is
-    # already logged in return their username. If no mock login and not
-    # logged in, start a PKCE flow by generating a verifier/challenge and
-    # storing the verifier in the session for the callback to use.
-    # Check query/form/json for a mock user
-    user = request.args.get('user') or (request.form.get('user') if request.form else None)
-    try:
-        j = request.get_json(silent=True) or {}
-        if not user and isinstance(j, dict):
-            user = j.get('user')
-    except Exception:
-        pass
-
-    if user and os.environ.get('ALLOW_MOCK_LOGIN') == '1':
-        # create user record if needed and set session
-        with db_session:
-            u = User.get(username=user)
-            if not u:
-                u = User(username=user)
-                u.settings_days = 30
-                u.settings_perftypes = 'blitz,rapid'
-        session['username'] = user
-        return jsonify({'ok': True}), 200
-
+    """Initiate Lichess OAuth login flow.
+    
+    If user is already logged in, returns their username.
+    Otherwise, redirects to Lichess OAuth with PKCE challenge.
+    """
+    # If already logged in, return username
     if 'username' in session:
         return jsonify({'username': session['username']}), 200
-
-    # If a Lichess client id is configured, start the OAuth PKCE redirect
-    # flow via the dedicated `/login-lichess` endpoint. This keeps the
-    # behaviour consistent: when a provider is configured the server should
-    # redirect the browser to the provider rather than return a raw PKCE
-    # challenge JSON payload.
-    client_id = os.environ.get('LICHESS_CLIENT_ID') or os.environ.get('LICHESS_CLIENTID')
-    if client_id:
-        return redirect(url_for('login_lichess'))
-
-    # Fallback (development/test): create a PKCE verifier/challenge pair and
-    # return the challenge so tests / non-browser clients can complete a PKCE
-    # flow without an external provider.
-    verifier, challenge = _generate_pkce_pair()
-    session['pkce_verifier'] = verifier
-    return jsonify({'pkce_challenge': challenge}), 200
-
-
-@app.route('/login-lichess')
-def login_lichess():
-    # If LICHESS_CLIENT_ID not set, redirect to mock login
+    
+    # Get Lichess client ID from environment
     client_id = os.environ.get('LICHESS_CLIENT_ID') or os.environ.get('LICHESS_CLIENTID')
     if not client_id:
-        return redirect(url_for('login'))
-    verifier, challenge = _generate_pkce_pair()
+        return jsonify({'error': 'Lichess OAuth not configured'}), 500
+    
+    # Generate PKCE verifier and challenge inline
+    verifier = base64.urlsafe_b64encode(os.urandom(32)).rstrip(b'=').decode('utf-8')
+    challenge = hashlib.sha256(verifier.encode('utf-8')).digest()
+    challenge = base64.urlsafe_b64encode(challenge).rstrip(b'=').decode('utf-8')
+    
+    # Store verifier in session for callback verification
     session['pkce_verifier'] = verifier
+    
+    # Build OAuth redirect URL
     params = {
         'client_id': client_id,
         'redirect_uri': url_for('login_callback', _external=True),
@@ -500,7 +458,8 @@ def login_lichess():
         'code_challenge_method': 'S256',
         'code_challenge': challenge
     }
-    return redirect('https://lichess.org/oauth?' + '&'.join(f"{k}={requests.utils.quote(v)}" for k,v in params.items()))
+    oauth_url = 'https://lichess.org/oauth?' + '&'.join(f"{k}={requests.utils.quote(v)}" for k,v in params.items())
+    return redirect(oauth_url)
 
 
 @app.route('/login-callback')
