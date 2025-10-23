@@ -107,40 +107,24 @@ def _generate_pkce_pair():
     return verifier, challenge
 
 
-def _get_hints_map():
-    """Return the session-scoped hints_used mapping (string pid -> truthy).
-
-    This helper centralizes safe access to session['hints_used'] so callers
-    don't need to repeat try/except blocks.
-    """
-    try:
-        return session.get('hints_used', {}) or {}
-    except Exception:
-        return {}
-
-
 def _is_hint_used(pid):
+    """Check if a hint was used for the given puzzle id."""
     try:
-        return bool(_get_hints_map().get(str(pid)))
+        hints = session.get('hints_used', {}) or {}
+        return bool(hints.get(str(pid)))
     except Exception:
         return False
 
 
-def _mark_hint_used(pid):
+def _set_hint_used(pid, used=True):
+    """Mark a puzzle's hint as used (True) or clear it (False/None)."""
     try:
-        used = _get_hints_map()
-        used[str(pid)] = True
-        session['hints_used'] = used
-    except Exception:
-        pass
-
-
-def _clear_hint_used(pid):
-    try:
-        used = _get_hints_map()
-        if str(pid) in used:
-            used.pop(str(pid), None)
-            session['hints_used'] = used
+        hints = session.get('hints_used', {}) or {}
+        if used:
+            hints[str(pid)] = True
+        else:
+            hints.pop(str(pid), None)
+        session['hints_used'] = hints
     except Exception:
         pass
 
@@ -1210,7 +1194,7 @@ def check_puzzle():
         # Clear attempt tracking and hint record when puzzle is solved or max attempts reached
         if correct or (not correct and current_attempt >= max_attempts):
             session.pop(puzzle_attempts_key, None)
-            _clear_hint_used(pid)
+            _set_hint_used(pid, False)
         
         return jsonify(resp)
 
@@ -1393,7 +1377,7 @@ def puzzle_hint():
                 if move:
                     from_sq = chess.square_name(move.from_square)
             # record hint use in session for this puzzle id
-            _mark_hint_used(pid)
+            _set_hint_used(pid, True)
             # Final sanity check
             if not from_sq:
                 logger.debug('Computed no from-square for puzzle id=%s (san=%r, fen=%r)', pid, san, p.fen)
