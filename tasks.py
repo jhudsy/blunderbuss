@@ -47,7 +47,21 @@ if os.environ.get('CELERY_EAGER', '0') == '1' or CELERY_BROKER.startswith('memor
 @celery_app.task(bind=True)
 def import_games_task(self, username, perftypes, days):
     init_db()
-    since_ms = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
+    
+    # Validate days to prevent overflow errors
+    # Maximum 3650 days (10 years) seems reasonable for Lichess game history
+    MAX_DAYS = 3650
+    if days > MAX_DAYS:
+        logger.warning('Days value %d exceeds maximum %d for user=%s; capping to maximum', days, MAX_DAYS, username)
+        days = MAX_DAYS
+    
+    try:
+        since_ms = int((datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000)
+    except (OverflowError, OSError) as e:
+        logger.error('Failed to calculate date for days=%d user=%s: %s; using maximum allowed', days, username, e)
+        # Fall back to maximum allowed date
+        since_ms = int((datetime.now(timezone.utc) - timedelta(days=MAX_DAYS)).timestamp() * 1000)
+    
     # Read the user's access token from the DB rather than passing it via the broker
     with db_session:
         u = User.get(username=username)
