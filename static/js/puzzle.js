@@ -955,6 +955,18 @@ window.addEventListener('DOMContentLoaded', ()=>{
       try{ clearHintHighlights() }catch(e){}
       try{
         if (!allowMoves) return false
+        
+        // If a piece is already selected for click-to-move, prevent drag
+        // This allows completing the click-to-move action
+        if (selectedSquare && selectedSquare !== source) {
+          return false
+        }
+        
+        // Clear any existing selection when starting a drag
+        if (selectedSquare) {
+          clearClickToMoveSelection()
+        }
+        
         // Only allow picking up pieces for the side to move.
         if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
             (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
@@ -1018,66 +1030,12 @@ window.addEventListener('DOMContentLoaded', ()=>{
     const boardEl = document.getElementById('board')
     if (!boardEl) return
     
-    // Track pointer state to distinguish clicks from drags
-    let pointerDownSquare = null
-    let pointerDownTime = 0
-    let pointerStartX = 0
-    let pointerStartY = 0
-    let isDragging = false
-    
-    // Track pointerdown to detect start of interaction
-    boardEl.addEventListener('pointerdown', function(e) {
-      pointerDownTime = Date.now()
-      pointerStartX = e.clientX
-      pointerStartY = e.clientY
-      isDragging = false
+    // Use click event which fires after drag is cancelled or if no drag occurred
+    // This is simpler and works well with chessboard.js drag handling
+    boardEl.addEventListener('click', function(e) {
+      if (!allowMoves) return
       
-      // Find the square that was pressed
-      let squareEl = e.target
-      let attempts = 0
-      while (squareEl && !squareEl.classList.contains('square-55d63') && attempts < 10) {
-        squareEl = squareEl.parentElement
-        attempts++
-      }
-      
-      if (squareEl && squareEl.classList.contains('square-55d63')) {
-        pointerDownSquare = squareEl.getAttribute('data-square')
-      }
-    }, false)
-    
-    // Track pointer movement to detect drags
-    boardEl.addEventListener('pointermove', function(e) {
-      if (!pointerDownSquare) return
-      
-      const deltaX = Math.abs(e.clientX - pointerStartX)
-      const deltaY = Math.abs(e.clientY - pointerStartY)
-      
-      // If pointer moved more than 5 pixels, it's a drag
-      if (deltaX > 5 || deltaY > 5) {
-        isDragging = true
-      }
-    }, false)
-    
-    // Handle pointerup for click detection (more reliable on tablets than click event)
-    boardEl.addEventListener('pointerup', function(e) {
-      // Skip if dragging or moves not allowed
-      if (isDragging || !allowMoves) {
-        isDragging = false
-        pointerDownSquare = null
-        return
-      }
-      
-      const now = Date.now()
-      const elapsed = now - pointerDownTime
-      
-      // Only treat as click if released quickly (within 500ms)
-      if (elapsed > 500) {
-        isDragging = false
-        pointerDownSquare = null
-        return
-      }
-      
-      // Find the square that was released
+      // Find the square that was clicked
       let squareEl = e.target
       let attempts = 0
       while (squareEl && !squareEl.classList.contains('square-55d63') && attempts < 10) {
@@ -1086,24 +1044,13 @@ window.addEventListener('DOMContentLoaded', ()=>{
       }
       
       if (!squareEl || !squareEl.classList.contains('square-55d63')) {
-        isDragging = false
-        pointerDownSquare = null
         return
       }
       
       const square = squareEl.getAttribute('data-square')
       
-      // Only handle if released on same square as pressed (or adjacent for quick moves)
-      if (square === pointerDownSquare || !pointerDownSquare) {
-        // Small delay to let drag handlers finish if they were triggered
-        setTimeout(() => {
-          handleSquareClick(square, squareEl)
-        }, 10)
-      }
-      
-      // Reset state
-      isDragging = false
-      pointerDownSquare = null
+      // Handle the click
+      handleSquareClick(square, squareEl)
     }, false)
     
     // Separate function to handle the click logic
@@ -1116,26 +1063,23 @@ window.addEventListener('DOMContentLoaded', ()=>{
         // Only select pieces of the correct color for the side to move
         if (piece && piece.color === game.turn()) {
           selectedSquare = square
-          // Highlight the selected square with yellow (same as drag highlight)
+          // Highlight the selected square with purple
           if (squareEl) squareEl.classList.add('highlight1-32417')
         }
       } 
       // Second click: make the move, deselect, or reselect
       else {
-        // Remove highlight from previously selected square
-        const prevSquareEl = boardEl.querySelector('.square-' + selectedSquare)
-        if (prevSquareEl) {
-          prevSquareEl.classList.remove('highlight1-32417')
-        }
-        
         // If clicking the same square, deselect it
         if (square === selectedSquare) {
-          selectedSquare = null
+          clearClickToMoveSelection()
           return
         }
         
         // If clicking another piece of the same color, select it instead (reselect)
         if (piece && piece.color === game.turn()) {
+          // Remove highlight from old square
+          clearClickToMoveSelection()
+          // Highlight new square
           selectedSquare = square
           if (squareEl) squareEl.classList.add('highlight1-32417')
           return
@@ -1147,11 +1091,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
         const isLegal = legalMoves.some(m => m.to === square)
         
         if (!isLegal) {
-          // Keep the piece selected so user can try a different square
-          // Re-add highlight since it was removed above
-          if (prevSquareEl) {
-            prevSquareEl.classList.add('highlight1-32417')
-          }
+          // Invalid move - keep the piece selected
           return
         }
         
@@ -1162,6 +1102,10 @@ window.addEventListener('DOMContentLoaded', ()=>{
         // Trigger onDrop to validate and handle the move
         // onDrop will update the game state and submit to server
         const sourceSquare = selectedSquare
+        
+        // Clear selection AFTER triggering the move
+        clearClickToMoveSelection()
+        
         onDrop(sourceSquare, square)
         
         // Update board position to match game state after a short delay
@@ -1173,9 +1117,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
             logError('Failed to update board after click-to-move:', e)
           }
         }, 200)
-        
-        // Clear selection after successful move animation
-        selectedSquare = null
       }
     }
   }
