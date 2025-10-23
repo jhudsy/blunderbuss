@@ -81,6 +81,13 @@
   function initRibbon(){
     // initial population
     refreshRibbon()
+    // Initialize Bootstrap tooltips for ribbon elements
+    try {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    } catch(e) {
+      if (window.__CP_DEBUG) console.debug('tooltip initialization failed', e)
+    }
     // Also ensure importer attach is called in case ribbon.js is loaded after importer
     try{ if (window.importer && typeof window.importer.startImport === 'function') { /* importer will attach on DOMContentLoaded */ } }catch(e){}
     // expose for other code to call when needed
