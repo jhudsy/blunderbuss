@@ -160,6 +160,8 @@ function resetBoard(fen) {
   } catch (e) {
     // Ignore load errors
   }
+  // Clear any pending castling animation when resetting board
+  __castlingPending = null
 }
 
 /**
