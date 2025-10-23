@@ -947,9 +947,13 @@ function revealCorrectMoveSquares(from, to, promotion, flags, finalFEN){
 
 // (castling animations handled by chessboard.js via onSnapEnd)
 
+// Variable to track if a drag is in progress (shared between onDragStart and click-to-move)
+let isDragInProgress = false
+
 window.addEventListener('DOMContentLoaded', ()=>{
   // create the board once with our local pieceTheme
   // clear hint when user begins interacting with the board (onDragStart)
+  
   board = Chessboard('board', {
     position: 'start',
     draggable: true,
@@ -959,6 +963,10 @@ window.addEventListener('DOMContentLoaded', ()=>{
       try{ clearHintHighlights() }catch(e){}
       try{
         if (!allowMoves) return false
+        
+        // Mark that a drag is now in progress
+        isDragInProgress = true
+        console.log('[Click-to-move] onDragStart - drag started from', source)
         
         // Clear any existing selection when starting a drag
         if (selectedSquare) {
@@ -974,6 +982,9 @@ window.addEventListener('DOMContentLoaded', ()=>{
     },
     // for castling, en passant, pawn promotion — ensure UI matches game state
     onSnapEnd: function(){
+      // Drag has ended
+      isDragInProgress = false
+      console.log('[Click-to-move] onSnapEnd - drag ended')
       try{
         // If we have a pending castling animation, animate a subtle rook slide
         if (__castlingPending){
@@ -1031,8 +1042,10 @@ window.addEventListener('DOMContentLoaded', ()=>{
     if (!boardEl) return
     
     let pointerDownSquare = null
-    let hasLeftOriginalSquare = false
+    let pointerDownTime = null
+    // isDragInProgress is now a global variable shared with onDragStart
     
+    // Use capture phase (true) to intercept events before chessboard.js
     boardEl.addEventListener('pointerdown', function(e) {
       if (!allowMoves) {
         console.log('[Click-to-move] pointerdown ignored - moves not allowed')
@@ -1049,48 +1062,31 @@ window.addEventListener('DOMContentLoaded', ()=>{
       
       if (squareEl && squareEl.classList.contains('square-55d63')) {
         pointerDownSquare = squareEl.getAttribute('data-square')
-        hasLeftOriginalSquare = false
+        pointerDownTime = Date.now()
+        isDragInProgress = false
         console.log('[Click-to-move] pointerdown on square:', pointerDownSquare)
       } else {
         console.log('[Click-to-move] pointerdown not on a square')
       }
-    }, false)
+    }, true) // Use capture phase
     
-    boardEl.addEventListener('pointermove', function(e) {
-      if (!pointerDownSquare || hasLeftOriginalSquare) return
-      
-      // Check if pointer is still over the original square
-      let currentSquareEl = e.target
-      let attempts = 0
-      while (currentSquareEl && !currentSquareEl.classList.contains('square-55d63') && attempts < 10) {
-        currentSquareEl = currentSquareEl.parentElement
-        attempts++
-      }
-      
-      if (currentSquareEl && currentSquareEl.classList.contains('square-55d63')) {
-        const currentSquare = currentSquareEl.getAttribute('data-square')
-        if (currentSquare !== pointerDownSquare) {
-          hasLeftOriginalSquare = true
-          console.log('[Click-to-move] pointermove - left original square', pointerDownSquare, '→', currentSquare)
-        }
-      } else {
-        // Pointer is outside board squares
-        hasLeftOriginalSquare = true
-        console.log('[Click-to-move] pointermove - left board entirely')
-      }
-    }, false)
+    // We no longer need pointermove detection since chessboard.js will handle drags
+    // We just need to detect quick clicks
     
     boardEl.addEventListener('pointerup', function(e) {
+      console.log('[Click-to-move] pointerup fired, pointerDownSquare:', pointerDownSquare, 'isDragInProgress:', isDragInProgress)
+      
       if (!pointerDownSquare) {
         console.log('[Click-to-move] pointerup ignored - no pointerDownSquare')
         return
       }
       
-      // If we left the original square, it's a drag - let chessboard.js handle it
-      if (hasLeftOriginalSquare) {
-        console.log('[Click-to-move] pointerup - was a drag, ignoring')
+      // If a drag is in progress, chessboard.js is handling it
+      if (isDragInProgress) {
+        console.log('[Click-to-move] pointerup - drag in progress, ignoring')
         pointerDownSquare = null
-        hasLeftOriginalSquare = false
+        pointerDownTime = null
+        isDragInProgress = false
         return
       }
       
@@ -1118,8 +1114,9 @@ window.addEventListener('DOMContentLoaded', ()=>{
       }
       
       pointerDownSquare = null
-      hasLeftOriginalSquare = false
-    }, false)
+      pointerDownTime = null
+      isDragInProgress = false
+    }, true) // Use capture phase
     
     // Separate function to handle the click logic
     function handleSquareClick(square, squareEl) {
