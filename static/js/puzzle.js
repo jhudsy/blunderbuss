@@ -958,9 +958,9 @@ window.addEventListener('DOMContentLoaded', ()=>{
   board = Chessboard('board', {
     position: 'start',
     draggable: true,
-    onDrop: function(source, target) {
+    onDrop: async function(source, target) {
       // Check if this is a valid drop or a snapback
-      const result = onDrop(source, target)
+      const result = await onDrop(source, target)
       
       // Only clear dragStartSquare if the drop was accepted (not a snapback)
       if (result !== 'snapback') {
