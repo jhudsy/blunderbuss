@@ -678,9 +678,8 @@ function clearHintHighlights(){
   }
 }
 
-// Clear click-to-move selection and yellow highlight
+// Clear click-to-move selection and purple highlight
 function clearClickToMoveSelection(){
-  console.log('[Click-to-move] clearClickToMoveSelection called, selectedSquare:', selectedSquare)
   if (!selectedSquare) return
   
   try {
@@ -689,7 +688,6 @@ function clearClickToMoveSelection(){
       const el = boardEl.querySelector('.square-' + selectedSquare)
       if (el) {
         el.classList.remove('highlight1-32417')
-        console.log('[Click-to-move] removed highlight from', selectedSquare)
       }
     }
     selectedSquare = null
@@ -964,10 +962,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
       
       // Only clear dragStartSquare if the drop was accepted (not a snapback)
       if (result !== 'snapback') {
-        console.log('[Click-to-move] onDrop - valid drop, clearing dragStartSquare')
         dragStartSquare = null
-      } else {
-        console.log('[Click-to-move] onDrop - snapback, keeping dragStartSquare:', dragStartSquare)
       }
       
       return result
@@ -981,7 +976,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
         // Mark that a drag is now in progress and track where it started
         isDragInProgress = true
         dragStartSquare = source
-        console.log('[Click-to-move] onDragStart - drag started from', source)
         
         // Clear any existing selection when starting a drag
         if (selectedSquare) {
@@ -999,12 +993,10 @@ window.addEventListener('DOMContentLoaded', ()=>{
     onSnapEnd: function(){
       // Drag has ended
       isDragInProgress = false
-      console.log('[Click-to-move] onSnapEnd - drag ended, dragStartSquare:', dragStartSquare)
       
       // If dragStartSquare is set, it means a drag started but no drop occurred (piece snapped back)
       // Treat this as a click-to-select
       if (dragStartSquare) {
-        console.log('[Click-to-move] onSnapEnd - no drop occurred, treating as click-to-select')
         const squareEl = document.querySelector('.square-' + dragStartSquare)
         if (squareEl) {
           handleSquareClick(dragStartSquare, squareEl)
@@ -1067,36 +1059,28 @@ window.addEventListener('DOMContentLoaded', ()=>{
   
   // Handle click-to-move logic (accessible to both pointer events and onSnapEnd)
   function handleSquareClick(square, squareEl) {
-    console.log('[Click-to-move] handleSquareClick called for square:', square, 'selectedSquare:', selectedSquare)
-    
     const piece = game.get(square)
     const boardEl = document.getElementById('board')
     
     // First click: select a piece
     if (!selectedSquare) {
       // Only select pieces of the correct color for the side to move
-      console.log('[Click-to-move] no selection yet, piece:', piece, 'turn:', game.turn())
       if (piece && piece.color === game.turn()) {
-        console.log('[Click-to-move] selecting piece on square:', square)
         selectedSquare = square
         // Highlight the selected square with purple
         if (squareEl) squareEl.classList.add('highlight1-32417')
-      } else {
-        console.log('[Click-to-move] cannot select - wrong color or no piece')
       }
     } 
     // Second click: make the move, deselect, or reselect
     else {
       // If clicking the same square, deselect it
       if (square === selectedSquare) {
-        console.log('[Click-to-move] deselecting same square')
         clearClickToMoveSelection()
         return
       }
       
       // If clicking another piece of the same color, select it instead (reselect)
       if (piece && piece.color === game.turn()) {
-        console.log('[Click-to-move] reselecting different piece of same color')
         // Remove highlight from old square
         clearClickToMoveSelection()
         // Highlight new square
@@ -1110,16 +1094,12 @@ window.addEventListener('DOMContentLoaded', ()=>{
       const legalMoves = game.moves({square: selectedSquare, verbose: true})
       const isLegal = legalMoves.some(m => m.to === square)
       
-      console.log('[Click-to-move] attempting move from', selectedSquare, 'to', square, 'valid:', isLegal)
-      
       if (!isLegal) {
         // Invalid move - keep the piece selected
-        console.log('[Click-to-move] invalid move, keeping selection')
         return
       }
       
       // Move is legal - animate it and then validate/submit
-      console.log('[Click-to-move] executing move')
       const moveNotation = selectedSquare + '-' + square
       board.move(moveNotation)
       
@@ -1154,10 +1134,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
     
     // Use capture phase (true) to intercept events before chessboard.js
     boardEl.addEventListener('pointerdown', function(e) {
-      if (!allowMoves) {
-        console.log('[Click-to-move] pointerdown ignored - moves not allowed')
-        return
-      }
+      if (!allowMoves) return
       
       // Find the square that was pressed
       let squareEl = e.target
@@ -1171,9 +1148,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
         pointerDownSquare = squareEl.getAttribute('data-square')
         pointerDownTime = Date.now()
         isDragInProgress = false
-        console.log('[Click-to-move] pointerdown on square:', pointerDownSquare)
-      } else {
-        console.log('[Click-to-move] pointerdown not on a square')
       }
     }, true) // Use capture phase
     
@@ -1181,16 +1155,10 @@ window.addEventListener('DOMContentLoaded', ()=>{
     // We just need to detect quick clicks
     
     boardEl.addEventListener('pointerup', function(e) {
-      console.log('[Click-to-move] pointerup fired, pointerDownSquare:', pointerDownSquare, 'isDragInProgress:', isDragInProgress)
-      
-      if (!pointerDownSquare) {
-        console.log('[Click-to-move] pointerup ignored - no pointerDownSquare')
-        return
-      }
+      if (!pointerDownSquare) return
       
       // If a drag is in progress, chessboard.js is handling it
       if (isDragInProgress) {
-        console.log('[Click-to-move] pointerup - drag in progress, ignoring')
         pointerDownSquare = null
         pointerDownTime = null
         isDragInProgress = false
@@ -1211,13 +1179,8 @@ window.addEventListener('DOMContentLoaded', ()=>{
         
         // Only handle if released on the same square as pressed
         if (square === pointerDownSquare) {
-          console.log('[Click-to-move] pointerup - click detected on square:', square, 'selectedSquare:', selectedSquare)
           handleSquareClick(square, squareEl)
-        } else {
-          console.log('[Click-to-move] pointerup on different square:', square, 'vs', pointerDownSquare)
         }
-      } else {
-        console.log('[Click-to-move] pointerup not on a square')
       }
       
       pointerDownSquare = null
