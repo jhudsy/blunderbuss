@@ -5,7 +5,7 @@ What this repo is
 -----------------
 A small Flask web app for practicing tactical chess puzzles extracted from PGN files. It includes:
 
-- Flask backend (routes: `/`, `/puzzle`, `/get_puzzle`, `/check_puzzle`, `/load_games`, login mocks)
+- Flask backend with Lichess OAuth login
 - Puzzle extraction from PGN (now in `pgn_parser.py`)
 - Simple front-end using chessboard.js and chess.js, vendored under `static/vendor`
 - Local chess piece images in `static/img/chesspieces/`
@@ -41,9 +41,18 @@ curl -X POST -H "Content-Type: application/json" \
   http://127.0.0.1:5000/load_games
 ```
 
-4. Open the UI
+4. Configure Lichess OAuth (required for login)
 
-- Go to http://127.0.0.1:5000/login?user=test to mock-login as `test` (convenience)
+Create a Lichess OAuth application at https://lichess.org/account/oauth/app/create and add the credentials to your `.env` file:
+
+```bash
+LICHESS_CLIENT_ID=your_client_id
+LICHESS_CLIENT_SECRET=your_client_secret
+```
+
+5. Open the UI
+
+- Go to http://127.0.0.1:5000/login to sign in with Lichess
 - Then open http://127.0.0.1:5000/puzzle
 
 What changed recently (important)

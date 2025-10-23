@@ -1,11 +1,11 @@
 """Flask web application for the Chess Puzzle trainer.
 
-This module defines the HTTP routes for login (mock and Lichess OAuth),
-importing games, serving puzzles, checking answers (and updating spaced
-repetition/XP/badges), and several small UI pages (puzzle, badges, settings).
+This module defines the HTTP routes for Lichess OAuth login, importing games,
+serving puzzles, checking answers (and updating spaced repetition/XP/badges),
+and several small UI pages (puzzle, badges, settings).
 
 The app uses PonyORM for persistence and delegates import to a background
-task (Celery) when Lichess OAuth is used.
+task (Celery) when users log in via Lichess OAuth.
 """
 
 from flask import Flask, jsonify, request, session, redirect, url_for, render_template
