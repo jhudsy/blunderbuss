@@ -82,16 +82,6 @@ def _configure_logging():
         pass
 
 
-def _mask_secret(s):
-    try:
-        s = str(s)
-        if len(s) <= 8:
-            return '*****'
-        return s[:4] + '...' + s[-4:]
-    except Exception:
-        return '*****'
-
-
 def get_current_user():
     """Return a lightweight object with .username from the session or None.
 
