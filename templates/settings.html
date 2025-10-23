@@ -24,6 +24,10 @@
           <input type="number" name="days" id="days" class="form-control" value="{{ days }}">
         </div>
         <div class="mb-3">
+          <label class="form-label">Maximum puzzles to keep (0 = unlimited)</label>
+          <input type="number" name="max_puzzles" id="max_puzzles" class="form-control" value="{{ max_puzzles|default(0) }}" min="0">
+        </div>
+        <div class="mb-3">
           <label id="perfLabel" class="form-label">Time controls</label>
           <div id="perfCheckboxes" class="form-check" role="group" aria-labelledby="perfLabel">
             <div class="form-check form-check-inline">
@@ -39,26 +43,6 @@
               <label class="form-check-label" for="perf_blitz">Blitz</label>
             </div>
           </div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Cooldown between repeats (minutes)</label>
-          <input type="number" name="cooldown" id="cooldown" class="form-control" value="{{ cooldown }}">
-        </div>
-        <div class="mb-3">
-          <label class="form-label">Maximum puzzles to keep (0 = unlimited)</label>
-          <input type="number" name="max_puzzles" id="max_puzzles" class="form-control" value="{{ max_puzzles|default(0) }}" min="0">
-        </div>
-        <div class="mb-3 form-check">
-          <input class="form-check-input" type="checkbox" id="use_spaced" name="use_spaced">
-          <label class="form-check-label" for="use_spaced">Use spaced repetition</label>
-          <div class="form-text">When enabled (default for new users), puzzles are selected using the spaced repetition algorithm. When disabled puzzles are selected at random.</div>
-        </div>
-        <div class="mb-3">
-          <label for="max_attempts" class="form-label">Maximum incorrect attempts: <span id="max_attempts_value">{{ max_attempts|default(3) }}</span></label>
-          <div style="max-width: 400px;">
-            <input type="range" class="form-range" min="1" max="3" step="1" id="max_attempts" name="max_attempts" value="{{ max_attempts|default(3) }}">
-          </div>
-          <div class="form-text">Number of attempts allowed before revealing the solution. XP is halved for each incorrect attempt.</div>
         </div>
         <div class="mb-3">
           <label id="tagLabel" class="form-label">Puzzle tags</label>
@@ -78,6 +62,13 @@
           </div>
         </div>
         <div class="mb-3">
+          <label for="max_attempts" class="form-label">Maximum incorrect attempts: <span id="max_attempts_value">{{ max_attempts|default(3) }}</span></label>
+          <div style="max-width: 400px;">
+            <input type="range" class="form-range" min="1" max="3" step="1" id="max_attempts" name="max_attempts" value="{{ max_attempts|default(3) }}">
+          </div>
+          <div class="form-text">Number of attempts allowed before revealing the solution. XP is halved for each incorrect attempt.</div>
+        </div>
+        <div class="mb-3">
           <p id="puzzleCounts" class="text-muted">Loading puzzle counts...</p>
         </div>
         {% if max_puzzles_warning %}
@@ -85,7 +76,16 @@
           Your maximum puzzle limit is low — older puzzles will be deleted when new ones are imported.
         </div>
         {% endif %}
-        <button type="button" id="saveBtn" class="btn btn-primary">Save</button>
+        <div class="mb-3 form-check">
+          <input class="form-check-input" type="checkbox" id="use_spaced" name="use_spaced">
+          <label class="form-check-label" for="use_spaced">Use spaced repetition</label>
+          <div class="form-text">When enabled, puzzles are selected using the spaced repetition algorithm. When disabled puzzles are selected at random.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Cooldown between repeats (minutes)</label>
+          <input type="number" name="cooldown" id="cooldown" class="form-control" value="{{ cooldown }}">
+          <div class="form-text">Minimum time before a puzzle can be shown again.</div>
+        </div>
       </form>
     </div>
 
@@ -131,12 +131,30 @@
       if (serverTags.map(s=>String(s).toLowerCase()).includes('inaccuracy')) document.getElementById('tag_inaccuracy').checked = true;
     }
   } catch(e) { /* ignore templating/runtime issues */ }
-  // Pre-check spaced-repetition checkbox (new users default to enabled)
+  // Pre-check spaced-repetition checkbox (default to disabled for new setup)
   try {
-    const useSpaced = {{ use_spaced|tojson|default('true') }};
+    const useSpaced = {{ use_spaced|tojson|default('false') }};
     const el = document.getElementById('use_spaced');
     if (el) el.checked = !!useSpaced;
   } catch(e) { }
+  
+  // Update cooldown field state based on spaced repetition checkbox
+  function updateCooldownState() {
+    const useSpacedChecked = document.getElementById('use_spaced').checked;
+    const cooldownInput = document.getElementById('cooldown');
+    cooldownInput.disabled = !useSpacedChecked;
+    if (!useSpacedChecked) {
+      cooldownInput.classList.add('text-muted');
+    } else {
+      cooldownInput.classList.remove('text-muted');
+    }
+  }
+  
+  // Initialize cooldown state on load
+  updateCooldownState();
+  
+  // Update cooldown state when spaced repetition checkbox changes
+  document.getElementById('use_spaced').addEventListener('change', updateCooldownState);
       });
 
   // helper to fetch counts from backend and update UI
@@ -177,25 +195,79 @@
         });
       }
 
-      document.getElementById('saveBtn').addEventListener('click', async ()=>{
+      // Auto-save function
+      async function saveSettings() {
         const days = document.getElementById('days').value;
         const cooldown = document.getElementById('cooldown').value;
         const maxP = document.getElementById('max_puzzles').value;
         const maxAttempts = document.getElementById('max_attempts').value;
-  const checked = Array.from(document.querySelectorAll('#perfCheckboxes input[type=checkbox]:checked')).map(i=>i.value);
-  const tagChecked = Array.from(document.querySelectorAll('#tagCheckboxes input[type=checkbox]:checked')).map(i=>i.value);
-  const payload = { days: days, perf: checked, cooldown: cooldown, tags: tagChecked, max_puzzles: maxP, use_spaced: !!document.getElementById('use_spaced').checked, max_attempts: maxAttempts };
-        const r = await fetch('/settings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-        const toastEl = document.getElementById('saveToast');
-        const toastBody = document.getElementById('saveToastBody');
-  const bsToast = new bootstrap.Toast(toastEl, { delay: 2000, autohide: true });
-        if (r.ok) {
-          toastBody.textContent = 'Settings saved';
-        } else {
-          toastBody.textContent = 'Failed to save settings';
+        const checked = Array.from(document.querySelectorAll('#perfCheckboxes input[type=checkbox]:checked')).map(i=>i.value);
+        const tagChecked = Array.from(document.querySelectorAll('#tagCheckboxes input[type=checkbox]:checked')).map(i=>i.value);
+        const payload = { 
+          days: days, 
+          perf: checked, 
+          cooldown: cooldown, 
+          tags: tagChecked, 
+          max_puzzles: maxP, 
+          use_spaced: !!document.getElementById('use_spaced').checked, 
+          max_attempts: maxAttempts 
+        };
+        
+        try {
+          const r = await fetch('/settings', { 
+            method: 'POST', 
+            headers: {'Content-Type':'application/json'}, 
+            body: JSON.stringify(payload)
+          });
+          
+          const toastEl = document.getElementById('saveToast');
+          const toastBody = document.getElementById('saveToastBody');
+          const bsToast = new bootstrap.Toast(toastEl, { delay: 2000, autohide: true });
+          
+          if (r.ok) {
+            toastBody.textContent = 'Settings saved';
+          } else {
+            toastBody.textContent = 'Failed to save settings';
+          }
+          bsToast.show();
+        } catch(e) {
+          console.error('Failed to save settings:', e);
         }
-        bsToast.show();
-      })
+      }
+
+      // Add auto-save listeners to all form inputs
+      window.addEventListener('DOMContentLoaded', ()=>{ 
+        const autoSaveInputs = [
+          document.getElementById('days'),
+          document.getElementById('cooldown'),
+          document.getElementById('max_puzzles'),
+          document.getElementById('max_attempts'),
+          document.getElementById('use_spaced')
+        ];
+        
+        // Auto-save on input change (with debounce for text inputs)
+        autoSaveInputs.forEach(input => {
+          if (input) {
+            if (input.type === 'checkbox') {
+              input.addEventListener('change', saveSettings);
+            } else if (input.type === 'range') {
+              input.addEventListener('change', saveSettings);
+            } else {
+              // Debounce text/number inputs
+              let timeout;
+              input.addEventListener('input', () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(saveSettings, 1000);
+              });
+            }
+          }
+        });
+        
+        // Auto-save on checkbox changes
+        Array.from(document.querySelectorAll('#perfCheckboxes input[type=checkbox], #tagCheckboxes input[type=checkbox]')).forEach(ch => {
+          ch.addEventListener('change', saveSettings);
+        });
+      });
     </script>
   </body>
 </html>

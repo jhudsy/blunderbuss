@@ -848,11 +848,11 @@ def settings():
             import json
             user.settings_perftypes = json.dumps(perf_list)
             user.settings_tags = json.dumps(tags_list)
-            # spaced repetition preference: boolean checkbox from frontend
+            # spaced repetition preference: boolean checkbox from frontend (default False)
             try:
-                use_spaced = bool(data.get('use_spaced', True))
+                use_spaced = bool(data.get('use_spaced', False))
             except Exception:
-                use_spaced = True
+                use_spaced = False
             user.settings_use_spaced = use_spaced
             # persist user maximum puzzle limit (0 means unlimited)
             try:
@@ -874,22 +874,26 @@ def settings():
             import json
             stored = getattr(user, 'settings_perftypes', None) or '[]'
             perf_list = parse_perf_types(stored)
-            # load tags similarly
-            tags_stored = getattr(user, 'settings_tags', None) or '[]'
+            # load tags similarly (default to ["Blunder"] for new users)
+            tags_stored = getattr(user, 'settings_tags', None) or '["Blunder"]'
             try:
                 tags_list = json.loads(tags_stored)
                 if not isinstance(tags_list, list):
                     tags_list = [t.strip() for t in str(tags_stored).split(',') if t.strip()]
             except Exception:
                 tags_list = [t.strip() for t in str(tags_stored).split(',') if t.strip()]
+            
+            # If tags_list is empty (new user with no settings), default to Blunder only
+            if not tags_list:
+                tags_list = ['Blunder']
 
             max_p = int(getattr(user, 'settings_max_puzzles', 0) or 0)
             # warn users when max_puzzles is set but low
             max_puzzles_warning = False
             if max_p and max_p > 0 and max_p < 10:
                 max_puzzles_warning = True
-            # pass the user's spaced-repetition preference to the template
-            use_spaced = getattr(user, 'settings_use_spaced', True)
+            # pass the user's spaced-repetition preference to the template (default False)
+            use_spaced = getattr(user, 'settings_use_spaced', False)
             max_attempts = getattr(user, 'settings_max_attempts', 3) or 3
             return render_template('settings.html', days=getattr(user, 'settings_days', 30), perf=perf_list, cooldown=getattr(user, 'cooldown_minutes', 10), tags=tags_list, max_puzzles=max_p, max_puzzles_warning=max_puzzles_warning, use_spaced=use_spaced, max_attempts=max_attempts)
 
