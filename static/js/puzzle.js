@@ -956,12 +956,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
       try{
         if (!allowMoves) return false
         
-        // If a piece is already selected for click-to-move, prevent drag
-        // This allows completing the click-to-move action
-        if (selectedSquare && selectedSquare !== source) {
-          return false
-        }
-        
         // Clear any existing selection when starting a drag
         if (selectedSquare) {
           clearClickToMoveSelection()
@@ -1025,17 +1019,20 @@ window.addEventListener('DOMContentLoaded', ()=>{
   })
   
   // Click-to-move functionality
-  // Use event delegation on the board container to handle clicks
+  // Logic: pointerdown on a square = candidate for moving
+  // If pointer leaves square before pointerup = drag move
+  // If pointerup on same square = click-to-move (select piece)
   const setupClickToMove = () => {
     const boardEl = document.getElementById('board')
     if (!boardEl) return
     
-    // Use click event which fires after drag is cancelled or if no drag occurred
-    // This is simpler and works well with chessboard.js drag handling
-    boardEl.addEventListener('click', function(e) {
+    let pointerDownSquare = null
+    let hasLeftOriginalSquare = false
+    
+    boardEl.addEventListener('pointerdown', function(e) {
       if (!allowMoves) return
       
-      // Find the square that was clicked
+      // Find the square that was pressed
       let squareEl = e.target
       let attempts = 0
       while (squareEl && !squareEl.classList.contains('square-55d63') && attempts < 10) {
@@ -1043,14 +1040,64 @@ window.addEventListener('DOMContentLoaded', ()=>{
         attempts++
       }
       
-      if (!squareEl || !squareEl.classList.contains('square-55d63')) {
+      if (squareEl && squareEl.classList.contains('square-55d63')) {
+        pointerDownSquare = squareEl.getAttribute('data-square')
+        hasLeftOriginalSquare = false
+      }
+    }, false)
+    
+    boardEl.addEventListener('pointermove', function(e) {
+      if (!pointerDownSquare || hasLeftOriginalSquare) return
+      
+      // Check if pointer is still over the original square
+      let currentSquareEl = e.target
+      let attempts = 0
+      while (currentSquareEl && !currentSquareEl.classList.contains('square-55d63') && attempts < 10) {
+        currentSquareEl = currentSquareEl.parentElement
+        attempts++
+      }
+      
+      if (currentSquareEl && currentSquareEl.classList.contains('square-55d63')) {
+        const currentSquare = currentSquareEl.getAttribute('data-square')
+        if (currentSquare !== pointerDownSquare) {
+          hasLeftOriginalSquare = true
+        }
+      } else {
+        // Pointer is outside board squares
+        hasLeftOriginalSquare = true
+      }
+    }, false)
+    
+    boardEl.addEventListener('pointerup', function(e) {
+      if (!pointerDownSquare) return
+      
+      // If we left the original square, it's a drag - let chessboard.js handle it
+      if (hasLeftOriginalSquare) {
+        pointerDownSquare = null
+        hasLeftOriginalSquare = false
         return
       }
       
-      const square = squareEl.getAttribute('data-square')
+      // Pointer stayed on the same square - this is a click-to-move action
+      // Find the square where pointer was released
+      let squareEl = e.target
+      let attempts = 0
+      while (squareEl && !squareEl.classList.contains('square-55d63') && attempts < 10) {
+        squareEl = squareEl.parentElement
+        attempts++
+      }
       
-      // Handle the click
-      handleSquareClick(square, squareEl)
+      if (squareEl && squareEl.classList.contains('square-55d63')) {
+        const square = squareEl.getAttribute('data-square')
+        
+        // Only handle if released on the same square as pressed
+        if (square === pointerDownSquare) {
+          handleSquareClick(square, squareEl)
+        }
+      }
+      
+      pointerDownSquare = null
+      hasLeftOriginalSquare = false
     }, false)
     
     // Separate function to handle the click logic
