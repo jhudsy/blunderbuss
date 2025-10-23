@@ -1018,15 +1018,19 @@ window.addEventListener('DOMContentLoaded', ()=>{
     const boardEl = document.getElementById('board')
     if (!boardEl) return
     
-    // Use pointerdown with a timeout to detect clicks (not drags)
-    // This approach works even if pointerup is prevented by chessboard.js
-    let lastPointerdownSquare = null
-    let lastPointerdownTime = 0
+    // Track click state with better debouncing for tablets
+    let pointerDownSquare = null
+    let pointerDownTime = 0
+    let pointerStartX = 0
+    let pointerStartY = 0
     let pointerMoved = false
+    let clickPending = false
     
     boardEl.addEventListener('pointerdown', function(e) {
       const now = Date.now()
       pointerMoved = false
+      pointerStartX = e.clientX
+      pointerStartY = e.clientY
       
       // Find the square that was pressed
       let squareEl = e.target
@@ -1041,27 +1045,68 @@ window.addEventListener('DOMContentLoaded', ()=>{
       }
       
       const square = squareEl.getAttribute('data-square')
-      lastPointerdownSquare = square
-      lastPointerdownTime = now
-      
-      // Use a timeout to check if this was a click (not a drag)
-      // If pointer hasn't moved after 150ms, treat it as a click
-      setTimeout(() => {
-        if (lastPointerdownSquare !== square || pointerMoved) {
-          return
-        }
-        
-        if (!allowMoves) {
-          return
-        }
-        
-        handleSquareClick(square, squareEl)
-      }, 150)
+      pointerDownSquare = square
+      pointerDownTime = now
+      clickPending = true
     }, true) // Use capture phase
     
     // Track pointer movement to distinguish clicks from drags
+    // Use a threshold - small movements don't count as drags
     boardEl.addEventListener('pointermove', function(e) {
-      pointerMoved = true
+      if (!clickPending) return
+      
+      const deltaX = Math.abs(e.clientX - pointerStartX)
+      const deltaY = Math.abs(e.clientY - pointerStartY)
+      
+      // If pointer moved more than 5 pixels, it's a drag
+      if (deltaX > 5 || deltaY > 5) {
+        pointerMoved = true
+        clickPending = false
+      }
+    }, true)
+    
+    // Handle pointerup - this is more reliable than timeout for detecting clicks
+    boardEl.addEventListener('pointerup', function(e) {
+      if (!clickPending || !pointerDownSquare) {
+        return
+      }
+      
+      const now = Date.now()
+      const elapsed = now - pointerDownTime
+      
+      // Find the square where pointer was released
+      let squareEl = e.target
+      let attempts = 0
+      while (squareEl && !squareEl.classList.contains('square-55d63') && attempts < 10) {
+        squareEl = squareEl.parentElement
+        attempts++
+      }
+      
+      if (!squareEl || !squareEl.classList.contains('square-55d63')) {
+        clickPending = false
+        return
+      }
+      
+      const square = squareEl.getAttribute('data-square')
+      
+      // Only treat as click if:
+      // 1. Released on same square as pressed
+      // 2. Didn't move significantly
+      // 3. Released within 500ms (reasonable for tap)
+      if (square === pointerDownSquare && !pointerMoved && elapsed < 500) {
+        if (!allowMoves) {
+          clickPending = false
+          return
+        }
+        
+        // Prevent this event from triggering drag
+        e.preventDefault()
+        e.stopPropagation()
+        
+        handleSquareClick(square, squareEl)
+      }
+      
+      clickPending = false
     }, true)
     
     // Separate function to handle the click logic
