@@ -22,6 +22,153 @@ let __castlingPending = null
 // Click-to-move state
 let selectedSquare = null  // Currently selected piece square
 
+// Stockfish engine state
+let stockfishWorker = null
+let stockfishReady = false
+let evaluationInProgress = false
+let currentEvaluationCallback = null
+let evaluationTimeout = null
+
+// ============================================================================
+// Stockfish Engine Functions
+// ============================================================================
+
+/**
+ * Initialize the Stockfish engine
+ */
+function initStockfish() {
+  try {
+    // Create blob worker that loads Stockfish via importScripts
+    const workerCode = `
+      // Construct absolute URL for stockfish.js
+      const baseUrl = self.location.origin;
+      const stockfishUrl = baseUrl + '/static/js/stockfish.js';
+      
+      // Load Stockfish engine
+      importScripts(stockfishUrl);
+      
+      // Set up message handling
+      self.onmessage = function(e) {
+        if (typeof Stockfish === 'function') {
+          if (!self.engine) {
+            self.engine = Stockfish();
+            self.engine.onmessage = function(msg) {
+              self.postMessage(msg);
+            };
+          }
+          self.engine.postMessage(e.data);
+        }
+      };
+    `;
+    
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    const blobUrl = URL.createObjectURL(blob);
+    stockfishWorker = new Worker(blobUrl);
+    
+    stockfishWorker.onmessage = function(e) {
+      const message = e.data;
+      
+      if (message === 'uciok') {
+        stockfishReady = true;
+        if (window.__CP_DEBUG) console.debug('Stockfish engine ready');
+      } else if (message.startsWith('info') && currentEvaluationCallback) {
+        // Parse centipawn score from info messages
+        const cpMatch = message.match(/score cp (-?\d+)/);
+        const mateMatch = message.match(/score mate (-?\d+)/);
+        const depthMatch = message.match(/depth (\d+)/);
+        
+        if (depthMatch && parseInt(depthMatch[1]) >= 15) {
+          if (cpMatch) {
+            const cp = parseInt(cpMatch[1]);
+            // Update result for this depth
+            currentEvaluationCallback.latestCp = cp;
+          } else if (mateMatch) {
+            const mateIn = parseInt(mateMatch[1]);
+            // Convert mate scores to very high/low centipawn values
+            // Positive mate: very good for current side, negative: very bad
+            currentEvaluationCallback.latestCp = mateIn > 0 ? 10000 : -10000;
+          }
+        }
+      } else if (message.startsWith('bestmove') && currentEvaluationCallback) {
+        // Evaluation complete
+        clearTimeout(evaluationTimeout);
+        const callback = currentEvaluationCallback;
+        currentEvaluationCallback = null;
+        evaluationInProgress = false;
+        
+        if (callback.latestCp !== null) {
+          callback.resolve(callback.latestCp);
+        } else {
+          callback.reject(new Error('No evaluation found'));
+        }
+      }
+    };
+    
+    stockfishWorker.onerror = function(error) {
+      logError('Stockfish worker error:', error);
+      stockfishReady = false;
+    };
+    
+    // Initialize UCI protocol
+    stockfishWorker.postMessage('uci');
+    
+  } catch(e) {
+    logError('Failed to initialize Stockfish:', e);
+    stockfishReady = false;
+  }
+}
+
+/**
+ * Evaluate a FEN position using Stockfish
+ * @param {string} fen - The FEN position to evaluate
+ * @returns {Promise<number>} - The centipawn evaluation
+ */
+function evaluatePosition(fen) {
+  return new Promise((resolve, reject) => {
+    if (!stockfishReady) {
+      reject(new Error('Stockfish not ready'));
+      return;
+    }
+    
+    if (evaluationInProgress) {
+      reject(new Error('Evaluation already in progress'));
+      return;
+    }
+    
+    evaluationInProgress = true;
+    currentEvaluationCallback = {
+      resolve: resolve,
+      reject: reject,
+      latestCp: null
+    };
+    
+    // Set timeout for evaluation
+    evaluationTimeout = setTimeout(() => {
+      if (currentEvaluationCallback) {
+        const callback = currentEvaluationCallback;
+        currentEvaluationCallback = null;
+        evaluationInProgress = false;
+        callback.reject(new Error('Evaluation timeout'));
+      }
+    }, 10000); // 10 second timeout
+    
+    // Send position and request evaluation at depth 15
+    stockfishWorker.postMessage('ucinewgame');
+    stockfishWorker.postMessage('position fen ' + fen);
+    stockfishWorker.postMessage('go depth 15');
+  });
+}
+
+/**
+ * Calculate win likelihood from centipawn evaluation
+ * Formula: 50 + 50 * (2 / (e^(-0.00368*cp) + 1) - 1)
+ * @param {number} cp - Centipawn evaluation
+ * @returns {number} - Win probability as percentage (0-100)
+ */
+function winLikelihood(cp) {
+  return 50 + 50 * (2 / (Math.exp(-0.00368 * cp) + 1) - 1);
+}
+
 // ============================================================================
 // Utility Functions
 // ============================================================================
@@ -64,14 +211,17 @@ function setElementDisplay(elementId, display) {
 /**
  * Send a move to the server for validation
  */
-async function sendMoveToServer(san, startFEN) {
+async function sendMoveToServer(initialFen, moveFen, initialCp, moveCp) {
   try {
     const response = await fetch('/check_puzzle', {
       method: 'POST',
       headers: {'content-type': 'application/json'},
       body: JSON.stringify({
         id: currentPuzzle.id,
-        san,
+        initial_fen: initialFen,
+        move_fen: moveFen,
+        initial_cp: initialCp,
+        move_cp: moveCp,
         hint_used: hintUsedForCurrent
       })
     })
@@ -338,6 +488,18 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
   const attemptsRemaining = j.attempts_remaining || 0
   const hasAttemptsLeft = !j.correct && !maxAttemptsReached && attemptsRemaining > 0
   
+  // Log evaluation details for debugging
+  if (window.__CP_DEBUG) {
+    console.debug('Evaluation result:', {
+      initial_cp: j.initial_cp,
+      move_cp: j.move_cp,
+      initial_win: j.initial_win,
+      move_win: j.move_win,
+      win_change: j.win_change,
+      correct: j.correct
+    });
+  }
+  
   // Only lock board interactions if answer is correct OR max attempts reached
   if (!hasAttemptsLeft) {
     allowMoves = false
@@ -349,7 +511,10 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
     highlightSquareWithFade(target, 'green')
     
     const infoEl = document.getElementById('info')
-    if (infoEl) infoEl.textContent = 'Correct! Click Next to continue.'
+    if (infoEl) {
+      // Show evaluation details
+      infoEl.textContent = `Correct! Win chance: ${j.initial_win}% → ${j.move_win}% (${j.win_change >= 0 ? '+' : ''}${j.win_change}%). Click Next to continue.`;
+    }
     
     // Update all UI elements
     updateUIAfterAnswer({
@@ -371,7 +536,7 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
     if (!maxAttemptsReached && attemptsRemaining > 0) {
       const infoEl = document.getElementById('info');
       if (infoEl) {
-        infoEl.textContent = `Incorrect. You have ${attemptsRemaining} attempt${attemptsRemaining > 1 ? 's' : ''} remaining.`;
+        infoEl.textContent = `Incorrect. Win chance dropped to ${j.move_win}% (${j.win_change}%). You have ${attemptsRemaining} attempt${attemptsRemaining > 1 ? 's' : ''} remaining.`;
       }
       // Re-enable moves after a brief delay
       setTimeout(() => {
@@ -466,13 +631,49 @@ async function onDrop(source, target){
   // capture the starting FEN so we can reset after a wrong move
   const startFEN = game.fen()
   
-  // Helper: send the move result to the server and handle the response/UI
-  async function sendAndHandleMove(result, startFEN){
+  // Helper: evaluate both positions and send to server
+  async function evaluateAndSendMove(result, startFEN){
     try {
-      const json = await sendMoveToServer(result.san, startFEN)
-      handleCheckPuzzleResponse(json, source, target, startFEN)
+      // Show evaluating status
+      const infoEl = document.getElementById('info');
+      if (infoEl) infoEl.textContent = 'Analyzing position...';
+      
+      // Evaluate initial position
+      const initialCp = await evaluatePosition(startFEN);
+      
+      // Evaluate position after move
+      const moveFen = game.fen();
+      const moveCp = await evaluatePosition(moveFen);
+      
+      // Calculate win likelihoods
+      const initialWin = winLikelihood(initialCp);
+      const moveWin = winLikelihood(moveCp);
+      const winChange = moveWin - initialWin;
+      
+      if (window.__CP_DEBUG) {
+        console.debug('Evaluation:', {
+          startFEN,
+          moveFen,
+          initialCp,
+          moveCp,
+          initialWin: initialWin.toFixed(2) + '%',
+          moveWin: moveWin.toFixed(2) + '%',
+          winChange: winChange.toFixed(2) + '%'
+        });
+      }
+      
+      // Send to server
+      const json = await sendMoveToServer(startFEN, moveFen, initialCp, moveCp);
+      handleCheckPuzzleResponse(json, source, target, startFEN);
     } catch(err) {
-      // Error already logged in sendMoveToServer
+      console.error('Evaluation or server error:', err);
+      const infoEl = document.getElementById('info');
+      if (infoEl) infoEl.textContent = 'Error analyzing position. Please try again.';
+      // Re-enable moves after error
+      setTimeout(() => {
+        resetBoard(startFEN);
+        allowMoves = true;
+      }, 2000);
     }
   }
 
@@ -515,7 +716,7 @@ async function onDrop(source, target){
           
           // lock moves and send to server and handle UI
           allowMoves = false
-          await sendAndHandleMove(res, startFEN)
+          await evaluateAndSendMove(res, startFEN)
         })
         return 'snapback'
       }
@@ -529,7 +730,7 @@ async function onDrop(source, target){
     return 'snapback'
   }
   
-  // lock moves and send SAN to backend
+  // lock moves and send to backend with evaluation
   allowMoves = false
   
   // if this move is a castle, mark pending animation for onSnapEnd
@@ -538,7 +739,7 @@ async function onDrop(source, target){
   }
   
   // Send move to server and handle response
-  await sendAndHandleMove(result, startFEN)
+  await evaluateAndSendMove(result, startFEN)
 }
 
 // Show a simple promotion selector overlay. Calls cb(piece) with one of 'q','r','b','n',
@@ -950,6 +1151,9 @@ let isDragInProgress = false
 let dragStartSquare = null // Track where drag started from
 
 window.addEventListener('DOMContentLoaded', ()=>{
+  // Initialize Stockfish engine
+  initStockfish();
+  
   // create the board once with our local pieceTheme
   // clear hint when user begins interacting with the board (onDragStart)
   

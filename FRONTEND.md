@@ -22,7 +22,40 @@ If a user is not logged in, they should be redirected to the login page.
 
 Since there may be a delay in logging in while the system retrieves games, a modal loading progress dialogue, showing the number of games loaded, should be displayed. Using the date of the last game will allow the dialogue to show how many more days of games there are to download.
 
-The solving puzzle page must display the chessboard for the puzzle. When the user makes a move, feedback is given. For example, the square should turn green if the user moves correctly. If an incorrect move is chosen then 1. show the incorrect move in red, 2. delay for a bit, 3. reset the board to the previous position, 4. show the correct move (e.g., in green, animating the pieces). After a short delay enable the next button to move to the next puzzle. Pressing this button moves to the next puzzle, changing the board configuration (and resetting colors). The board should be flipped if necessary, i.e., if it is black to play. After the user tries a puzzle, a link to the game on lichess is provided.
+The solving puzzle page must display the chessboard for the puzzle. When the user makes a move, the system uses the Stockfish chess engine to evaluate both the initial position and the position after the move. 
+
+**Evaluation-based Move Validation:**
+
+The system evaluates moves based on win likelihood rather than comparing against a predetermined correct move. This approach:
+
+1. **Evaluates both positions**: When a user makes a move, Stockfish (running client-side via Web Worker) evaluates:
+   - The initial FEN position (before the move)
+   - The resulting FEN position (after the move)
+
+2. **Calculates win likelihood**: Each centipawn evaluation is converted to a win probability using the formula:
+   ```
+   win_likelihood = 50 + 50 * (2 / (e^(-0.00368 * cp) + 1) - 1)
+   ```
+   Where `cp` is the centipawn evaluation from Stockfish.
+
+3. **Determines correctness**: A move is considered correct if the win chance does not decrease by more than 10%. This allows for multiple valid moves that maintain a good position, rather than requiring one specific move.
+
+4. **Visual feedback**: 
+   - During evaluation (2-3 seconds), displays "Analyzing position..." status
+   - Correct moves: square turns green, shows win percentage change (e.g., "Correct! Win chance: 65% → 70% (+5%)")
+   - Incorrect moves: square turns red, shows win percentage drop (e.g., "Incorrect. Win chance dropped to 40% (-25%)")
+   - After a short delay, if incorrect and attempts remain, the board resets
+   - If max attempts reached, the correct move is revealed (animated in green)
+
+**Technical Implementation:**
+
+- Stockfish.js (931KB) is loaded from `/static/js/stockfish.js`
+- Engine runs in a Web Worker (background thread) to avoid blocking the UI
+- Evaluations use depth 15 (balance between speed and accuracy)
+- Win likelihood formula matches the one used server-side for consistency
+- Client calculates evaluations and sends centipawn values to server for validation
+
+The user receives feedback showing their XP earned, any badges/achievements, and evaluation details. After answering (correct or after max attempts), a link to the game on lichess is provided.
 
 The puzzle page should also show the game's details, i.e., who was white and black, the date the game was played, and the time control (rapid, blitz or classical). 
 

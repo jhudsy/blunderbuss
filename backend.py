@@ -1109,12 +1109,19 @@ def leaderboard_page():
 def check_puzzle():
     data = request.get_json() or {}
     pid = data.get('id')
-    san = data.get('san')
+    # New evaluation-based API: accept centipawn values and FEN strings
+    initial_cp = data.get('initial_cp')
+    move_cp = data.get('move_cp')
+    initial_fen = data.get('initial_fen')
+    move_fen = data.get('move_fen')
+    
     # Ignore client-supplied hint flag; prefer server-side session record
     hint_used = False
-    # require SAN but allow missing id (fallback to user's first puzzle)
-    if not san:
-        return jsonify({'error': 'san required'}), 400
+    
+    # require evaluation data
+    if initial_cp is None or move_cp is None:
+        return jsonify({'error': 'initial_cp and move_cp required'}), 400
+    
     u = get_current_user()
     if not u:
         return jsonify({'error': 'not logged in'}), 401
@@ -1133,12 +1140,25 @@ def check_puzzle():
                 pid = int(pid)
             except Exception:
                 return jsonify({'error': 'invalid id'}), 400
-            p = Puzzle.get(id=pid)
+        p = Puzzle.get(id=pid)
         if not p:
             return jsonify({'error': 'puzzle not found'}), 404
 
-        logger.debug('User answering puzzle id=%s user=%s provided_san=%s correct_san=%s', pid, getattr(p.user, 'username', None), san, p.correct_san)
-        correct = (san.strip() == p.correct_san.strip())
+        # Calculate win likelihood using the formula: 50 + 50 * (2 / (e^(-0.00368*cp) + 1) - 1)
+        import math
+        def win_likelihood(cp):
+            """Convert centipawn evaluation to win probability percentage."""
+            return 50 + 50 * (2 / (math.exp(-0.00368 * cp) + 1) - 1)
+        
+        initial_win = win_likelihood(initial_cp)
+        move_win = win_likelihood(move_cp)
+        win_change = move_win - initial_win
+        
+        # A move is correct if the win chance does not decrease by more than 10%
+        correct = win_change >= -10.0
+        
+        logger.debug('User answering puzzle id=%s user=%s initial_cp=%s move_cp=%s initial_win=%.2f%% move_win=%.2f%% change=%.2f%% correct=%s', 
+                     pid, getattr(p.user, 'username', None), initial_cp, move_cp, initial_win, move_win, win_change, correct)
         logger.debug('Answer correctness for puzzle id=%s: %s', pid, correct)
         # determine quality and update SM-2 fields
         quality = quality_from_answer(correct, p.pre_eval, p.post_eval)
@@ -1221,7 +1241,13 @@ def check_puzzle():
             'badges': existing_badge_names,
             'current_attempt': current_attempt,
             'max_attempts': max_attempts,
-            'attempts_remaining': max(0, max_attempts - current_attempt)
+            'attempts_remaining': max(0, max_attempts - current_attempt),
+            # Include evaluation data for client-side display/debugging
+            'initial_cp': initial_cp,
+            'move_cp': move_cp,
+            'initial_win': round(initial_win, 2),
+            'move_win': round(move_win, 2),
+            'win_change': round(win_change, 2)
         }
         # Check and update best puzzle streak record when appropriate
         try:
@@ -1245,9 +1271,12 @@ def check_puzzle():
         if newly_awarded_badges:
             resp['awarded_badges'] = newly_awarded_badges
 
-        # Reveal correct answer if incorrect OR if max attempts reached
+        # Reveal correct answer and evaluation target if incorrect OR if max attempts reached
         if not correct:
             resp['correct_san'] = p.correct_san
+            # Include the target evaluation that would have been acceptable
+            # (any move that keeps win chance within 10% of initial position)
+            resp['target_min_win'] = round(initial_win - 10.0, 2)
             # Check if max attempts reached
             if current_attempt >= max_attempts:
                 resp['max_attempts_reached'] = True
