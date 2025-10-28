@@ -45,7 +45,12 @@ function initStockfish() {
       const stockfishUrl = baseUrl + '/static/js/stockfish.js';
       
       // Load Stockfish engine
-      importScripts(stockfishUrl);
+      try {
+        importScripts(stockfishUrl);
+      } catch(e) {
+        self.postMessage('ERROR: Failed to load Stockfish: ' + e.message);
+        throw e;
+      }
       
       // Set up message handling
       self.onmessage = function(e) {
@@ -57,6 +62,8 @@ function initStockfish() {
             };
           }
           self.engine.postMessage(e.data);
+        } else {
+          self.postMessage('ERROR: Stockfish not loaded');
         }
       };
     `;
@@ -68,8 +75,17 @@ function initStockfish() {
     stockfishWorker.onmessage = function(e) {
       const message = e.data;
       
+      // Handle error messages from worker
+      if (message.startsWith('ERROR:')) {
+        logError('Stockfish initialization error:', message);
+        stockfishReady = false;
+        showEngineError('Chess engine failed to load. Puzzle validation may not work correctly.');
+        return;
+      }
+      
       if (message === 'uciok') {
         stockfishReady = true;
+        hideEngineError();
         if (window.__CP_DEBUG) console.debug('Stockfish engine ready');
       } else if (message.startsWith('info') && currentEvaluationCallback) {
         // Parse centipawn score from info messages
@@ -77,7 +93,8 @@ function initStockfish() {
         const mateMatch = message.match(/score mate (-?\d+)/);
         const depthMatch = message.match(/depth (\d+)/);
         
-        if (depthMatch && parseInt(depthMatch[1]) >= 15) {
+        // Accept any depth result for fast response (movetime mode)
+        if (depthMatch) {
           if (cpMatch) {
             const cp = parseInt(cpMatch[1]);
             // Update result for this depth
@@ -107,14 +124,78 @@ function initStockfish() {
     stockfishWorker.onerror = function(error) {
       logError('Stockfish worker error:', error);
       stockfishReady = false;
+      showEngineError('Chess engine encountered an error. Please refresh the page.');
     };
     
-    // Initialize UCI protocol
+    // Initialize UCI protocol with timeout
     stockfishWorker.postMessage('uci');
+    
+    // If engine doesn't respond within 5 seconds, show error
+    setTimeout(() => {
+      if (!stockfishReady) {
+        showEngineError('Chess engine is taking longer than expected to load. Puzzle validation may not work correctly.');
+      }
+    }, 5000);
     
   } catch(e) {
     logError('Failed to initialize Stockfish:', e);
     stockfishReady = false;
+    showEngineError('Failed to initialize chess engine. Please refresh the page.');
+  }
+}
+
+/**
+ * Show engine error message to user
+ */
+function showEngineError(message) {
+  const infoEl = document.getElementById('info');
+  if (infoEl) {
+    infoEl.textContent = message;
+    infoEl.style.color = '#dc3545'; // Bootstrap danger color
+  }
+}
+
+/**
+ * Hide engine error message
+ */
+function hideEngineError() {
+  const infoEl = document.getElementById('info');
+  if (infoEl && infoEl.style.color === 'rgb(220, 53, 69)') {
+    infoEl.style.color = '';
+  }
+}
+
+/**
+ * Show spinner during evaluation
+ */
+function showEvaluatingSpinner() {
+  const infoEl = document.getElementById('info');
+  if (infoEl) {
+    // Create spinner element if it doesn't exist
+    let spinner = document.getElementById('evaluation-spinner');
+    if (!spinner) {
+      spinner = document.createElement('span');
+      spinner.id = 'evaluation-spinner';
+      spinner.className = 'spinner-border spinner-border-sm me-2';
+      spinner.setAttribute('role', 'status');
+      spinner.setAttribute('aria-hidden', 'true');
+    }
+    // Insert spinner at the beginning of info text
+    if (infoEl.firstChild) {
+      infoEl.insertBefore(spinner, infoEl.firstChild);
+    } else {
+      infoEl.appendChild(spinner);
+    }
+  }
+}
+
+/**
+ * Hide evaluation spinner
+ */
+function hideEvaluatingSpinner() {
+  const spinner = document.getElementById('evaluation-spinner');
+  if (spinner && spinner.parentNode) {
+    spinner.parentNode.removeChild(spinner);
   }
 }
 
@@ -142,20 +223,26 @@ function evaluatePosition(fen) {
       latestCp: null
     };
     
-    // Set timeout for evaluation
+    // Set timeout for evaluation - reduced to 500ms for responsiveness
     evaluationTimeout = setTimeout(() => {
       if (currentEvaluationCallback) {
         const callback = currentEvaluationCallback;
         currentEvaluationCallback = null;
         evaluationInProgress = false;
-        callback.reject(new Error('Evaluation timeout'));
+        // If we have any evaluation, use it; otherwise reject
+        if (callback.latestCp !== null) {
+          callback.resolve(callback.latestCp);
+        } else {
+          callback.reject(new Error('Evaluation timeout'));
+        }
       }
-    }, 10000); // 10 second timeout
+    }, 500); // 500ms timeout for responsiveness
     
-    // Send position and request evaluation at depth 15
+    // Send position and request evaluation with movetime constraint
     stockfishWorker.postMessage('ucinewgame');
     stockfishWorker.postMessage('position fen ' + fen);
-    stockfishWorker.postMessage('go depth 15');
+    // Use movetime instead of depth for faster response
+    stockfishWorker.postMessage('go movetime 450'); // 450ms to leave margin before timeout
   });
 }
 
@@ -634,7 +721,11 @@ async function onDrop(source, target){
   // Helper: evaluate both positions and send to server
   async function evaluateAndSendMove(result, startFEN){
     try {
-      // Show evaluating status
+      // Disable buttons and show spinner
+      setNextButtonEnabled(false);
+      setHintButtonEnabled(false);
+      showEvaluatingSpinner();
+      
       const infoEl = document.getElementById('info');
       if (infoEl) infoEl.textContent = 'Analyzing position...';
       
@@ -644,6 +735,9 @@ async function onDrop(source, target){
       // Evaluate position after move
       const moveFen = game.fen();
       const moveCp = await evaluatePosition(moveFen);
+      
+      // Hide spinner after evaluation completes
+      hideEvaluatingSpinner();
       
       // Calculate win likelihoods
       const initialWin = winLikelihood(initialCp);
@@ -667,9 +761,17 @@ async function onDrop(source, target){
       handleCheckPuzzleResponse(json, source, target, startFEN);
     } catch(err) {
       console.error('Evaluation or server error:', err);
+      hideEvaluatingSpinner();
       const infoEl = document.getElementById('info');
-      if (infoEl) infoEl.textContent = 'Error analyzing position. Please try again.';
-      // Re-enable moves after error
+      if (infoEl) {
+        if (err.message && err.message.includes('not ready')) {
+          infoEl.textContent = 'Chess engine not ready. Please wait a moment and try again.';
+        } else {
+          infoEl.textContent = 'Error analyzing position. Please try again.';
+        }
+      }
+      // Re-enable buttons and moves after error
+      setHintButtonEnabled(true);
       setTimeout(() => {
         resetBoard(startFEN);
         allowMoves = true;
