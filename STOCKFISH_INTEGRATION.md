@@ -42,20 +42,30 @@ This means the win chance cannot decrease by more than 10 percentage points.
 **Stockfish Engine:**
 - File: `static/js/stockfish.js` (931KB from lichess-org)
 - Runs in Web Worker (non-blocking)
-- Evaluation depth: 15 (balance speed/accuracy)
-- Timeout: 10 seconds per evaluation
+- Evaluation time constraint: 450ms movetime (with 500ms timeout)
+- Responds in ~0.3-0.5 seconds for good responsiveness
+- Visual feedback: Bootstrap spinner shown during evaluation
+- Buttons disabled during evaluation to prevent conflicts
 
 ### 3. User Experience Changes
 
 **Correct Move Feedback:**
 ```
+[Spinner] Analyzing position...  (during evaluation)
 Correct! Win chance: 65% → 70% (+5%). Click Next to continue.
 ```
 
 **Incorrect Move Feedback:**
 ```
+[Spinner] Analyzing position...  (during evaluation)
 Incorrect. Win chance dropped to 40% (-25%). You have 2 attempts remaining.
 ```
+
+**Engine Loading:**
+- Spinner appears during evaluation (500ms max)
+- Buttons disabled during analysis
+- Error message if engine fails to load within 5 seconds
+- Graceful fallback with user-friendly error messages
 
 **Hint System:**
 - Still highlights the from-square of the stored "best move"
@@ -91,9 +101,11 @@ Incorrect. Win chance dropped to 40% (-25%). You have 2 attempts remaining.
    - Test mate-in-X positions
 
 3. **Performance:**
-   - Monitor evaluation time (should be 2-5 seconds at depth 15)
+   - Monitor evaluation time (should be ~300-500ms with movetime constraint)
+   - Verify spinner appears and disappears correctly
    - Check browser console for errors
    - Verify Web Worker doesn't block UI
+   - Test button disabling during evaluation
 
 4. **Hint System:**
    - Verify hints still work (highlight from-square)
@@ -116,9 +128,10 @@ Incorrect. Win chance dropped to 40% (-25%). You have 2 attempts remaining.
 
 1. **Adjustable Threshold:** Allow users to set strictness (5%, 10%, 15%)
 2. **Show Multiple Solutions:** Display all moves within threshold
-3. **Evaluation Depth Setting:** Let advanced users choose depth
+3. **Adjustable Time Constraint:** Let advanced users choose evaluation time (300ms, 500ms, 1000ms)
 4. **Comparison Mode:** Show evaluation of correct move vs user's move
 5. **Opening Book:** Skip engine evaluation for common openings
+6. **Evaluation Display:** Show real-time depth/score during analysis
 
 ## Rollback Plan
 
