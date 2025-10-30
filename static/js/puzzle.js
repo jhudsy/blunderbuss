@@ -892,7 +892,9 @@ async function onDrop(source, target){
       showEvaluatingSpinner();
       try { const infoEl2 = document.getElementById('info'); if (infoEl2) infoEl2.textContent = 'Analyzing position...'; } catch(e) {}
       const playerEval = await evaluatePosition(startFEN, playerMoveUci);
-      const playerMoveCp = playerEval.cp;
+      // IMPORTANT: searchmoves evaluates the position AFTER the move, which is from
+      // the opponent's perspective. Negate it to get back to the starting position's perspective.
+      const playerMoveCp = -playerEval.cp;
       
       // Hide spinner after evaluation completes
       hideEvaluatingSpinner();
@@ -903,12 +905,12 @@ async function onDrop(source, target){
           bestMoveUci,
           bestMoveCp,
           playerMoveUci,
-          playerMoveCp
+          playerMoveCp_raw: playerEval.cp,
+          playerMoveCp_negated: playerMoveCp
         });
       }
       
-      // Both evaluations are from the same starting position, so they're already
-      // from the same perspective (the player's perspective). No negation needed.
+      // Now both CPs are from the same perspective (starting position's side to move)
       const json = await sendMoveToServer(bestMoveCp, playerMoveCp);
       // Pass client-evaluated CPs to ensure UI can always show CP change
       handleCheckPuzzleResponse(json, source, target, startFEN, { initialCp: bestMoveCp, moveCp: playerMoveCp });
