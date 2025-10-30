@@ -40,7 +40,7 @@ The backend exposes the following routes:
      Notes:
      - Settings perftypes are now stored as a JSON array (e.g. ["blitz","rapid"]). The settings endpoint accepts a JSON list when POSTing.
       - The settings endpoint also accepts `use_spaced` (boolean) in the JSON POST body and will persist it to the user's record.
-     - The app respects the `LOG_LEVEL` or `CHESSPUZZLE_LOG_LEVEL` environment variable to control logging verbosity (e.g. `LOG_LEVEL=DEBUG`).
+     - The app respects the `LOG_LEVEL` or `BLUNDERBUSS_LOG_LEVEL` environment variable to control logging verbosity (e.g. `LOG_LEVEL=DEBUG`).
 - Information
      - /user_information. Returns how many XP the user has, the user's badges, how many days streak the user has.
       - /user_information. Returns how many XP the user has, the user's badges, how many days streak (calendar days with correct activity) and the user's puzzle streak (consecutive correct answers) as `streak` and `puzzle_streak` respectively.

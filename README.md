@@ -1,4 +1,5 @@
-ChessPuzzle — lightweight puzzle trainer
+````markdown
+Blunderbuss — lightweight puzzle trainer
 ======================================
 
 What this repo is
@@ -59,7 +60,7 @@ What changed recently (important)
 ---------------------------------
 - `parser.py` was renamed to `pgn_parser.py` to avoid shadowing the Python stdlib module `parser`.
 * Notes:
-  - Logging: you can control app logging with the `LOG_LEVEL` or `CHESSPUZZLE_LOG_LEVEL` environment variable (e.g. `LOG_LEVEL=DEBUG`). This is respected at app startup.
+  - Logging: you can control app logging with the `LOG_LEVEL` or `BLUNDERBUSS_LOG_LEVEL` environment variable (e.g. `LOG_LEVEL=DEBUG`). This is respected at app startup.
   - Settings/perf types: perftypes are stored as a JSON array in the DB (e.g. `["blitz","rapid"]`) and the settings page posts/accepts JSON lists.
   - Migration: the repository includes `scripts/migrate_perftypes.py` to convert legacy CSV perftype values to JSON arrays in `db.sqlite` (it backs up your DB before modifying it).
 - Frontend highlights are animated and configurable via CSS variables in `static/css/site.css`:
@@ -168,7 +169,7 @@ Which would you like next?
 
 Production deployment (Docker + Redis)
 -------------------------------------
-This section outlines practical steps to run ChessPuzzle in a production-like
+This section outlines practical steps to run Blunderbuss in a production-like
 environment using Docker. It assumes Redis is run as a separate container and
 that you will mount a persistent volume for the SQLite database (or switch to
 Postgres for higher concurrency).
@@ -238,7 +239,7 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
     volumes:
-      - chesspuzzle-data:/data
+      - blunderbuss-data:/data
     ports:
       - "5000:5000"
     depends_on:
@@ -253,12 +254,12 @@ services:
       - DATABASE_FILE=/data/db.sqlite
       - REDIS_PASSWORD=${REDIS_PASSWORD}
     volumes:
-      - chesspuzzle-data:/data
+      - blunderbuss-data:/data
     depends_on:
       - redis
 
 volumes:
-  chesspuzzle-data:
+  blunderbuss-data:
   redis-data:
 ```
 

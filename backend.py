@@ -36,13 +36,13 @@ load_dotenv()
 import logging
 
 # named logger for the application
-logger = logging.getLogger('chesspuzzle')
+logger = logging.getLogger('blunderbuss')
 
 
 def _configure_logging():
     # Send DEBUG logs to console in development
-    # Allow explicit override via environment variable LOG_LEVEL or CHESSPUZZLE_LOG_LEVEL
-    env_level = os.environ.get('LOG_LEVEL') or os.environ.get('CHESSPUZZLE_LOG_LEVEL')
+    # Allow explicit override via environment variable LOG_LEVEL or BLUNDERBUSS_LOG_LEVEL
+    env_level = os.environ.get('LOG_LEVEL') or os.environ.get('BLUNDERBUSS_LOG_LEVEL')
     is_dev = (os.environ.get('FLASK_ENV') == 'development') or (os.environ.get('FLASK_DEBUG') == '1')
     if env_level:
         try:
