@@ -89,9 +89,38 @@ function initStockfish() {
         if (callback.latestCp !== null) {
           callback.resolve(callback.latestCp);
         } else {
-          // This shouldn't happen with depth-based search
-          // If it does, it indicates an engine problem
-          callback.reject(new Error('No evaluation received from engine'));
+          // Sometimes movetime returns bestmove without info lines (simple positions)
+          // If this is already a fallback attempt, just use neutral 0 to avoid infinite loop
+          if (callback.isFallback) {
+            if (window.__CP_DEBUG) console.debug('Fallback depth search also had no cp, using neutral 0');
+            callback.resolve(0);
+            return;
+          }
+          
+          // Fall back to a quick depth search to ensure we get a score
+          if (window.__CP_DEBUG) console.debug('No cp from movetime, retrying with depth 5');
+          
+          // Set up for fallback evaluation
+          evaluationInProgress = true;
+          currentEvaluationCallback = {
+            resolve: callback.resolve,
+            reject: callback.reject,
+            latestCp: null,
+            fen: callback.fen,
+            isFallback: true
+          };
+          
+          // Use a shallow depth for quick fallback
+          try {
+            stockfishWorker.postMessage('position fen ' + callback.fen);
+            stockfishWorker.postMessage('go depth 5');
+          } catch(e) {
+            // If fallback also fails, use neutral evaluation (0 cp)
+            evaluationInProgress = false;
+            currentEvaluationCallback = null;
+            if (window.__CP_DEBUG) console.debug('Fallback failed, using neutral eval 0');
+            callback.resolve(0);
+          }
         }
       }
     };
@@ -195,7 +224,8 @@ function evaluatePosition(fen) {
     currentEvaluationCallback = {
       resolve: resolve,
       reject: reject,
-      latestCp: null
+      latestCp: null,
+      fen: fen
     };
     
   // Set timeout for evaluation - allow a bit over movetime to receive bestmove
@@ -204,12 +234,13 @@ function evaluatePosition(fen) {
         const callback = currentEvaluationCallback;
         currentEvaluationCallback = null;
         evaluationInProgress = false;
-        // If we have any evaluation, use it; otherwise timeout error
+        // If we have any evaluation, use it; otherwise use neutral 0 to avoid blocking UI
         if (callback.latestCp !== null) {
           callback.resolve(callback.latestCp);
         } else {
-          // Timeout without evaluation - this shouldn't happen with depth-based search
-          callback.reject(new Error('Evaluation timeout - no score received'));
+          // Timeout without evaluation - use neutral score rather than error
+          if (window.__CP_DEBUG) console.debug('Evaluation timeout, using neutral 0');
+          callback.resolve(0);
         }
       }
   }, 1000); // keep overall timeout at 1000ms; engine movetime is set to 600ms
