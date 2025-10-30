@@ -623,7 +623,7 @@ function handleCheckPuzzleResponse(j, source, target, startFEN, clientEval) {
       const initialPawns = (resolvedInitialCp != null) ? (resolvedInitialCp / 100).toFixed(1) : '—'
       const movePawns = (resolvedMoveCp != null) ? (resolvedMoveCp / 100).toFixed(1) : '—'
       // Show evaluation details with centipawn notation
-      infoEl.textContent = `Correct! Evaluation: ${initialPawns} → ${movePawns}. Win chance: ${j.initial_win}% → ${j.move_win}% (${j.win_change >= 0 ? '+' : ''}${j.win_change}%). Click Next to continue.`;
+      infoEl.textContent = `Correct! Evaluation: ${initialPawns} → ${movePawns}. Click Next to continue.`;
     }
     
     // Update all UI elements
@@ -649,7 +649,7 @@ function handleCheckPuzzleResponse(j, source, target, startFEN, clientEval) {
         // Format centipawn values (convert to pawn units: 100 cp = 1.0 pawns)
         const initialPawns = (resolvedInitialCp != null) ? (resolvedInitialCp / 100).toFixed(1) : '—'
         const movePawns = (resolvedMoveCp != null) ? (resolvedMoveCp / 100).toFixed(1) : '—'
-        infoEl.textContent = `Incorrect. Evaluation dropped: ${initialPawns} → ${movePawns}. Win chance: ${j.move_win}% (${j.win_change}%). You have ${attemptsRemaining} attempt${attemptsRemaining > 1 ? 's' : ''} remaining.`;
+        infoEl.textContent = `Incorrect. Evaluation: ${initialPawns} → ${movePawns}. You have ${attemptsRemaining} attempt${attemptsRemaining > 1 ? 's' : ''} remaining.`;
       }
       // Re-enable moves after a brief delay
       setTimeout(() => {
@@ -668,7 +668,7 @@ function handleCheckPuzzleResponse(j, source, target, startFEN, clientEval) {
       // Format centipawn values (convert to pawn units: 100 cp = 1.0 pawns)
       const initialPawns = (resolvedInitialCp != null) ? (resolvedInitialCp / 100).toFixed(1) : '—'
       const movePawns = (resolvedMoveCp != null) ? (resolvedMoveCp / 100).toFixed(1) : '—'
-      infoEl.textContent = `Incorrect. Evaluation dropped: ${initialPawns} → ${movePawns}. Win chance: ${j.move_win}% (${j.win_change}%). Maximum attempts reached.`;
+      infoEl.textContent = `Incorrect. Evaluation: ${initialPawns} → ${movePawns}. Maximum attempts reached.`;
     }
     
     // Start reveal sequence using nested setTimeouts
