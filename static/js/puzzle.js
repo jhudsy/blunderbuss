@@ -272,6 +272,8 @@ function precomputeBestEval(startFEN, attempt = 0) {
   }
 }
 
+// Removed 'stopCurrentSearch' to respect full engine computations.
+
 /**
  * Evaluate a FEN position using Stockfish
  * @param {string} fen - The FEN position to evaluate
@@ -824,13 +826,12 @@ async function onDrop(source, target){
   // Helper: evaluate both positions and send to server
   async function evaluateAndSendMove(result, startFEN){
     try {
-      // Disable buttons and show spinner
-      setNextButtonEnabled(false);
-      setHintButtonEnabled(false);
-      showEvaluatingSpinner();
+  // Disable buttons to prevent double actions
+  setNextButtonEnabled(false);
+  setHintButtonEnabled(false);
       
-      const infoEl = document.getElementById('info');
-      if (infoEl) infoEl.textContent = 'Analyzing position...';
+  // We will only show the spinner if we actually need to run a second
+  // evaluation (i.e., the player's move is not the best move).
       
       // NEW APPROACH: Evaluate both moves from the SAME starting position using
       // Stockfish's searchmoves parameter. This ensures both evaluations use the
@@ -847,6 +848,7 @@ async function onDrop(source, target){
             bestMoveUci = preEvalCache.bestMoveUci;
             bestMoveCp = preEvalCache.bestMoveCp;
           } else if (preEvalCache.inFlight) {
+            // Allow the precomputation to finish naturally
             await preEvalCache.inFlight;
             if (preEvalCache.bestMoveUci && typeof preEvalCache.bestMoveCp === 'number') {
               bestMoveUci = preEvalCache.bestMoveUci;
@@ -872,11 +874,11 @@ async function onDrop(source, target){
       
       // 2. Convert the player's move to UCI format
       // The move has already been made in the game object (result contains the move details)
-      const playerMoveUci = result.from + result.to + (result.promotion || '');
+  const playerMoveUci = (result.from + result.to + (result.promotion || '')).toLowerCase();
       
       // If player's move matches the best move, we can short-circuit
-      if (playerMoveUci === bestMoveUci) {
-        hideEvaluatingSpinner();
+  if (bestMoveUci && playerMoveUci === String(bestMoveUci).toLowerCase()) {
+        // No second evaluation; skip spinner entirely for a snappy UX
         if (window.__CP_DEBUG) {
           console.debug('Best move played, short-circuiting evaluation', { bestMoveUci, bestMoveCp });
         }
@@ -886,6 +888,9 @@ async function onDrop(source, target){
       }
 
       // 3. Evaluate the player's move from the starting position using searchmoves
+      // Now show spinner and message since we'll perform an additional analysis
+      showEvaluatingSpinner();
+      try { const infoEl2 = document.getElementById('info'); if (infoEl2) infoEl2.textContent = 'Analyzing position...'; } catch(e) {}
       const playerEval = await evaluatePosition(startFEN, playerMoveUci);
       const playerMoveCp = playerEval.cp;
       
