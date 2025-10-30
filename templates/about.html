@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About - Blunderbuss Chess Puzzle Trainer</title>
+  <link rel="stylesheet" href="/static/vendor/bootstrap.min.css">
+  <link rel="stylesheet" href="/static/css/site.css">
+  <style>
+    .hero-section {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 4rem 0;
+      margin-bottom: 2rem;
+    }
+    .feature-card {
+      transition: transform 0.2s;
+      height: 100%;
+    }
+    .feature-card:hover {
+      transform: translateY(-5px);
+    }
+    .feature-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+    <div class="container">
+      <a class="navbar-brand" href="/">♟️ Blunderbuss</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="/leaderboard_page">Leaderboard</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/login">Login with Lichess</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="hero-section text-center">
+    <div class="container">
+      <h1 class="display-3 fw-bold mb-3">Blunderbuss</h1>
+      <p class="lead fs-4">Master Chess Through Your Own Mistakes</p>
+      <p class="fs-5 mb-4">An intelligent chess puzzle trainer that learns from your Lichess games</p>
+      <a href="/login" class="btn btn-light btn-lg px-5 py-3">Get Started with Lichess</a>
+    </div>
+  </div>
+
+  <div class="container mb-5">
+    <div class="row g-4 mb-5">
+      <div class="col-md-4">
+        <div class="card feature-card shadow-sm">
+          <div class="card-body text-center p-4">
+            <div class="feature-icon">🎯</div>
+            <h3 class="card-title h5">Personalized Puzzles</h3>
+            <p class="card-text">Practice puzzles generated from your actual Lichess games. Learn from your real mistakes, not generic positions.</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card feature-card shadow-sm">
+          <div class="card-body text-center p-4">
+            <div class="feature-icon">🤖</div>
+            <h3 class="card-title h5">Stockfish Evaluation</h3>
+            <p class="card-text">Move validation powered by Stockfish engine. Any move that maintains position quality is accepted, not just one "correct" move.</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card feature-card shadow-sm">
+          <div class="card-body text-center p-4">
+            <div class="feature-icon">📚</div>
+            <h3 class="card-title h5">Spaced Repetition</h3>
+            <p class="card-text">Smart algorithm ensures you review puzzles at optimal intervals. Focus on positions you struggle with most.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-4 mb-5">
+      <div class="col-md-4">
+        <div class="card feature-card shadow-sm">
+          <div class="card-body text-center p-4">
+            <div class="feature-icon">🏆</div>
+            <h3 class="card-title h5">XP & Badges</h3>
+            <p class="card-text">Earn experience points and unlock achievement badges as you improve. Track your progress and compete on leaderboards.</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card feature-card shadow-sm">
+          <div class="card-body text-center p-4">
+            <div class="feature-icon">⚙️</div>
+            <h3 class="card-title h5">Customizable</h3>
+            <p class="card-text">Filter by time control, mistake severity, and more. Configure puzzle selection to match your training goals.</p>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card feature-card shadow-sm">
+          <div class="card-body text-center p-4">
+            <div class="feature-icon">🔐</div>
+            <h3 class="card-title h5">Secure & Private</h3>
+            <p class="card-text">Login securely with Lichess OAuth. Your data stays private and is used only to generate your personalized puzzles.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row mb-5">
+      <div class="col-lg-8 mx-auto">
+        <div class="card shadow">
+          <div class="card-body p-5">
+            <h2 class="card-title h3 mb-4">How It Works</h2>
+            <ol class="list-group list-group-numbered list-group-flush">
+              <li class="list-group-item border-0 ps-0">
+                <strong>Connect Your Lichess Account</strong> - Securely authenticate with Lichess to access your game history.
+              </li>
+              <li class="list-group-item border-0 ps-0">
+                <strong>Import Your Games</strong> - Blunderbuss analyzes your games and identifies positions where you made mistakes.
+              </li>
+              <li class="list-group-item border-0 ps-0">
+                <strong>Solve Puzzles</strong> - Practice the critical positions. The Stockfish engine validates your moves in real-time.
+              </li>
+              <li class="list-group-item border-0 ps-0">
+                <strong>Track Progress</strong> - Earn XP, unlock badges, and watch your chess skills improve over time.
+              </li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-center">
+      <h2 class="mb-4">Ready to Improve Your Chess?</h2>
+      <a href="/login" class="btn btn-primary btn-lg px-5 py-3">Start Training Now</a>
+    </div>
+  </div>
+
+  <footer class="bg-dark text-white py-4 mt-5">
+    <div class="container text-center">
+      <p class="mb-0">Blunderbuss Chess Puzzle Trainer &copy; 2025</p>
+      <p class="mb-0 small text-muted">Powered by Lichess & Stockfish</p>
+    </div>
+  </footer>
+
+  <script src="/static/vendor/jquery-3.6.0.min.js"></script>
+  <script src="/static/vendor/bootstrap.bundle.min.js"></script>
+</body>
+</html>

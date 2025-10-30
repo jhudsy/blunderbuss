@@ -403,8 +403,20 @@ def update_user_streaks(user, hint_used=False):
 
 @app.route('/')
 def index():
-    # The front page is now the puzzle UI. Redirect to the puzzle page.
-    return redirect(url_for('puzzle_page'))
+    """Root page: show About page for non-logged-in users, puzzle page for logged-in users."""
+    u = get_current_user()
+    if u:
+        # Logged in users go to puzzle page
+        return redirect(url_for('puzzle_page'))
+    else:
+        # Non-logged-in users see the About page
+        return redirect(url_for('about_page'))
+
+
+@app.route('/about')
+def about_page():
+    """About page - accessible to everyone."""
+    return render_template('about.html')
 
 
 @app.route('/logout')
@@ -432,7 +444,8 @@ def logout():
         logger.exception('Failed to clear OAuth tokens for user=%s during logout', u.username if u else 'unknown')
     # Clear session in all cases
     session.clear()
-    return redirect(url_for('index'))
+    # Redirect to About page after logout
+    return redirect(url_for('about_page'))
 
 
 @app.route('/health')
@@ -1164,9 +1177,8 @@ def leaderboard_weekly():
 
 @app.route('/leaderboard_page')
 def leaderboard_page():
-    u = get_current_user()
-    if not u:
-        return redirect(url_for('login'))
+    """Leaderboard page - accessible to everyone, including non-logged-in users."""
+    # Don't require login for leaderboard viewing
     return render_template('leaderboard.html')
 
 

@@ -12,10 +12,14 @@
     </div>
     <div>
       {% set cur = request.path %}
-  {% set puzzle_url = url_for('puzzle_page') %}
+      {% set puzzle_url = url_for('puzzle_page') %}
       {% set leaderboard_url = url_for('leaderboard_page') %}
       {% set settings_url = url_for('settings') %}
       {% set badges_url = url_for('badge_gallery') %}
+      {% set about_url = url_for('about_page') %}
+      {% if cur != about_url %}
+        <a class="btn btn-sm btn-outline-secondary me-2" href="{{ about_url }}">About</a>
+      {% endif %}
       {% if cur != puzzle_url %}
         <a class="btn btn-sm btn-outline-secondary me-2" href="{{ puzzle_url }}">Back to Puzzles</a>
       {% endif %}
