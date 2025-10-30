@@ -876,19 +876,8 @@ async function onDrop(source, target){
       // The move has already been made in the game object (result contains the move details)
   const playerMoveUci = (result.from + result.to + (result.promotion || '')).toLowerCase();
       
-      // If player's move matches the best move, we can short-circuit
-  if (bestMoveUci && playerMoveUci === String(bestMoveUci).toLowerCase()) {
-        // No second evaluation; skip spinner entirely for a snappy UX
-        if (window.__CP_DEBUG) {
-          console.debug('Best move played, short-circuiting evaluation', { bestMoveUci, bestMoveCp });
-        }
-        const json = await sendMoveToServer(bestMoveCp, bestMoveCp);
-        handleCheckPuzzleResponse(json, source, target, startFEN, { initialCp: bestMoveCp, moveCp: bestMoveCp });
-        return;
-      }
-
       // 3. Evaluate the player's move from the starting position using searchmoves
-      // Now show spinner and message since we'll perform an additional analysis
+      // Show spinner and message while performing evaluation
       showEvaluatingSpinner();
       try { const infoEl2 = document.getElementById('info'); if (infoEl2) infoEl2.textContent = 'Analyzing position...'; } catch(e) {}
       const playerEval = await evaluatePosition(startFEN, playerMoveUci);
