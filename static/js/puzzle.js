@@ -90,10 +90,10 @@ function initStockfish() {
           callback.resolve(callback.latestCp);
         } else {
           // Sometimes movetime returns bestmove without info lines (simple positions)
-          // If this is already a fallback attempt, just use neutral 0 to avoid infinite loop
+          // If this is already a fallback attempt, the engine is not working properly
           if (callback.isFallback) {
-            if (window.__CP_DEBUG) console.debug('Fallback depth search also had no cp, using neutral 0');
-            callback.resolve(0);
+            if (window.__CP_DEBUG) console.debug('Fallback depth search also had no cp - engine failure');
+            callback.reject(new Error('Chess engine failed to evaluate position'));
             return;
           }
           
@@ -115,11 +115,11 @@ function initStockfish() {
             stockfishWorker.postMessage('position fen ' + callback.fen);
             stockfishWorker.postMessage('go depth 5');
           } catch(e) {
-            // If fallback also fails, use neutral evaluation (0 cp)
+            // If we can't even send the command, engine has failed
             evaluationInProgress = false;
             currentEvaluationCallback = null;
-            if (window.__CP_DEBUG) console.debug('Fallback failed, using neutral eval 0');
-            callback.resolve(0);
+            if (window.__CP_DEBUG) console.debug('Fallback command failed - engine error');
+            callback.reject(new Error('Chess engine failed to evaluate position'));
           }
         }
       }
@@ -234,13 +234,21 @@ function evaluatePosition(fen) {
         const callback = currentEvaluationCallback;
         currentEvaluationCallback = null;
         evaluationInProgress = false;
-        // If we have any evaluation, use it; otherwise use neutral 0 to avoid blocking UI
+        // If we have any evaluation, use it
         if (callback.latestCp !== null) {
           callback.resolve(callback.latestCp);
         } else {
-          // Timeout without evaluation - use neutral score rather than error
-          if (window.__CP_DEBUG) console.debug('Evaluation timeout, using neutral 0');
-          callback.resolve(0);
+          // Timeout without evaluation
+          // If this was a fallback attempt, it's a real engine failure
+          if (callback.isFallback) {
+            if (window.__CP_DEBUG) console.debug('Fallback evaluation timeout - engine failure');
+            callback.reject(new Error('Chess engine failed to evaluate position'));
+          } else {
+            // Primary evaluation timeout - this shouldn't happen but use neutral 0
+            // The bestmove handler will trigger a fallback if needed
+            if (window.__CP_DEBUG) console.debug('Primary evaluation timeout, using neutral 0');
+            callback.resolve(0);
+          }
         }
       }
   }, 1000); // keep overall timeout at 1000ms; engine movetime is set to 600ms
@@ -793,6 +801,8 @@ async function onDrop(source, target){
       if (infoEl) {
         if (err.message && err.message.includes('not ready')) {
           infoEl.textContent = 'Chess engine not ready. Please wait a moment and try again.';
+        } else if (err.message && err.message.includes('failed to evaluate')) {
+          infoEl.textContent = 'Chess engine failed to analyze this position. Please try again or click Next for a different puzzle.';
         } else {
           infoEl.textContent = 'Error analyzing position. Please try again.';
         }
