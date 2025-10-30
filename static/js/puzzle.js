@@ -12,8 +12,8 @@ if (typeof window !== 'undefined') {
 
 const STOCKFISH_INIT_TIMEOUT_MS = 5000;
 const EVALUATION_TIMEOUT_MS = 1000;
-const EVALUATION_MOVETIME_MS = 600;
-const EVALUATION_FALLBACK_DEPTH = 5;
+const EVALUATION_MOVETIME_MS = 850;
+const EVALUATION_FALLBACK_DEPTH = 7;
 const STOCKFISH_THREADS = 2;
 
 // ============================================================================
