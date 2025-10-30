@@ -888,9 +888,9 @@ async function onDrop(source, target){
       showEvaluatingSpinner();
       try { const infoEl2 = document.getElementById('info'); if (infoEl2) infoEl2.textContent = 'Analyzing position...'; } catch(e) {}
       const playerEval = await evaluatePosition(startFEN, playerMoveUci);
-      // IMPORTANT: searchmoves evaluates the position AFTER the move, which is from
-      // the opponent's perspective. Negate it to get back to the starting position's perspective.
-      const playerMoveCp = -playerEval.cp;
+      // searchmoves restricts the search but evaluates from the current position's perspective,
+      // so both evaluations are from the same side's perspective - no negation needed.
+      const playerMoveCp = playerEval.cp;
       
       // Hide spinner after evaluation completes
       hideEvaluatingSpinner();
@@ -901,8 +901,7 @@ async function onDrop(source, target){
           bestMoveUci,
           bestMoveCp,
           playerMoveUci,
-          playerMoveCp_raw: playerEval.cp,
-          playerMoveCp_negated: playerMoveCp
+          playerMoveCp: playerMoveCp
         });
       }
       
