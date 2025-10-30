@@ -8,7 +8,7 @@ The app uses PonyORM for persistence and delegates import to a background
 task (Celery) when users log in via Lichess OAuth.
 """
 
-from flask import Flask, jsonify, request, session, redirect, url_for, render_template
+from flask import Flask, jsonify, request, session, redirect, url_for, render_template, send_from_directory
 # Use models and tasks
 from pony.orm import db_session, select
 import os
@@ -411,6 +411,12 @@ def index():
     else:
         # Non-logged-in users see the About page
         return redirect(url_for('about_page'))
+
+
+@app.route('/favicon.ico')
+def favicon():
+    """Serve favicon from static folder."""
+    return send_from_directory(app.static_folder, 'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 
 @app.route('/about')
