@@ -86,7 +86,7 @@ function initStockfish() {
         const cpMatch = message.match(/score cp (-?\d+)/);
         const mateMatch = message.match(/score mate (-?\d+)/);
         const depthMatch = message.match(/depth (\d+)/);
-        const pvMatch = message.match(/pv\s+(\S+)/);
+        const pvMatch = message.match(/\bpv\s+(\S+)/);
         
         // Accept any depth result for fast response (movetime mode)
         if (depthMatch) {
@@ -100,16 +100,21 @@ function initStockfish() {
             // Positive mate: very good for current side, negative: very bad
             currentEvaluationCallback.latestCp = mateIn > 0 ? 10000 : -10000;
           }
-          // Capture best move from PV line
-          if (pvMatch && !currentEvaluationCallback.bestMove) {
+          // Capture best move from PV line - always take the latest one
+          if (pvMatch) {
+            console.debug('UCI PV line:', message, 'extracted move:', pvMatch[1]);
             currentEvaluationCallback.bestMove = pvMatch[1];
           }
         }
       } else if (message.startsWith('bestmove') && currentEvaluationCallback) {
         // Extract bestmove from the command (format: "bestmove e2e4" or "bestmove e2e4 ponder e7e5")
         const bestmoveMatch = message.match(/bestmove\s+(\S+)/);
-        if (bestmoveMatch && !currentEvaluationCallback.bestMove) {
-          currentEvaluationCallback.bestMove = bestmoveMatch[1];
+        if (bestmoveMatch) {
+          console.debug('UCI bestmove line:', message, 'extracted move:', bestmoveMatch[1]);
+          // Only use this if we don't have one from PV (PV is more reliable for analysis)
+          if (!currentEvaluationCallback.bestMove) {
+            currentEvaluationCallback.bestMove = bestmoveMatch[1];
+          }
         }
         
         // Evaluation complete
