@@ -87,7 +87,10 @@ function initStockfish() {
         if (callback.latestCp !== null) {
           callback.resolve(callback.latestCp);
         } else {
-          callback.reject(new Error('No evaluation found'));
+          // If no evaluation received yet, use 0 as neutral evaluation
+          // This can happen with very fast responses or simple positions
+          if (window.__CP_DEBUG) console.warn('No evaluation found, using 0');
+          callback.resolve(0);
         }
       }
     };
@@ -194,26 +197,27 @@ function evaluatePosition(fen) {
       latestCp: null
     };
     
-    // Set timeout for evaluation - reduced to 500ms for responsiveness
+    // Set timeout for evaluation - 1000ms for reliable results
     evaluationTimeout = setTimeout(() => {
       if (currentEvaluationCallback) {
         const callback = currentEvaluationCallback;
         currentEvaluationCallback = null;
         evaluationInProgress = false;
-        // If we have any evaluation, use it; otherwise reject
+        // If we have any evaluation, use it; otherwise use 0 as neutral
         if (callback.latestCp !== null) {
           callback.resolve(callback.latestCp);
         } else {
-          callback.reject(new Error('Evaluation timeout'));
+          if (window.__CP_DEBUG) console.warn('Evaluation timeout, using 0');
+          callback.resolve(0);
         }
       }
-    }, 500); // 500ms timeout for responsiveness
+    }, 1000); // 1000ms timeout for reliable evaluation
     
     // Send position and request evaluation with movetime constraint
     stockfishWorker.postMessage('ucinewgame');
     stockfishWorker.postMessage('position fen ' + fen);
-    // Use movetime instead of depth for faster response
-    stockfishWorker.postMessage('go movetime 450'); // 450ms to leave margin before timeout
+    // Use movetime for time-constrained evaluation (leaves margin before timeout)
+    stockfishWorker.postMessage('go movetime 800');
   });
 }
 
