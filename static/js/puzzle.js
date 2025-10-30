@@ -883,7 +883,17 @@ async function onDrop(source, target){
       // The move has already been made in the game object (result contains the move details)
   const playerMoveUci = (result.from + result.to + (result.promotion || '')).toLowerCase();
       
-      // 3. Evaluate the player's move from the starting position using searchmoves
+      // 3a. If player's move matches best move, use cached value (no need for second evaluation)
+      if (bestMoveUci && playerMoveUci === String(bestMoveUci).toLowerCase()) {
+        if (window.__CP_DEBUG) {
+          console.debug('Best move played, using cached evaluation:', { bestMoveUci, bestMoveCp });
+        }
+        const json = await sendMoveToServer(bestMoveCp, bestMoveCp);
+        handleCheckPuzzleResponse(json, source, target, startFEN, { initialCp: bestMoveCp, moveCp: bestMoveCp });
+        return;
+      }
+      
+      // 3b. Player's move is different from best move - evaluate it using searchmoves
       // Show spinner and message while performing evaluation
       showEvaluatingSpinner();
       try { const infoEl2 = document.getElementById('info'); if (infoEl2) infoEl2.textContent = 'Analyzing position...'; } catch(e) {}
