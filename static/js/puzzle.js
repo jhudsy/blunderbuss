@@ -662,6 +662,15 @@ function handleCheckPuzzleResponse(j, source, target, startFEN, clientEval) {
     }
 
     // Max attempts reached - reveal solution and disable further moves
+    // First show the evaluation for the last incorrect move
+    const infoEl = document.getElementById('info');
+    if (infoEl) {
+      // Format centipawn values (convert to pawn units: 100 cp = 1.0 pawns)
+      const initialPawns = (resolvedInitialCp != null) ? (resolvedInitialCp / 100).toFixed(1) : '—'
+      const movePawns = (resolvedMoveCp != null) ? (resolvedMoveCp / 100).toFixed(1) : '—'
+      infoEl.textContent = `Incorrect. Evaluation dropped: ${initialPawns} → ${movePawns}. Win chance: ${j.move_win}% (${j.win_change}%). Maximum attempts reached.`;
+    }
+    
     // Start reveal sequence using nested setTimeouts
     setTimeout(() => {
       // 1) Reset board to the starting position
