@@ -2,7 +2,7 @@
 
 ## Overview
 
-This branch (`feature/stockfish-evaluation`) introduces a major change to how puzzle moves are validated. Instead of requiring an exact match to a predetermined correct move (SAN comparison), the system now uses Stockfish chess engine to evaluate positions and accepts any move that maintains the win likelihood within a 10% threshold.
+This branch (`feature/stockfish-evaluation`) introduces a major change to how puzzle moves are validated in Blunderbuss. Instead of requiring an exact match to a predetermined correct move (SAN comparison), the system now uses Stockfish chess engine to evaluate positions and accepts any move that maintains the win likelihood within a 10% threshold.
 
 ## Key Changes
 
