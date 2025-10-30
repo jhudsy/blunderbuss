@@ -262,6 +262,13 @@ function precomputeBestEval(startFEN, attempt = 0) {
       .then(({ cp, bestMove }) => {
         preEvalCache.bestMoveUci = bestMove || null;
         preEvalCache.bestMoveCp = typeof cp === 'number' ? cp : null;
+        if (window.__CP_DEBUG) {
+          console.debug('Precomputed evaluation cached:', {
+            fen: startFEN,
+            bestMove: bestMove,
+            cp: cp
+          });
+        }
       })
       .catch(() => { /* ignore precompute failures; will fallback at move time */ })
       .finally(() => {
