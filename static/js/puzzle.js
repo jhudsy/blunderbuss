@@ -102,7 +102,6 @@ function initStockfish() {
           }
           // Capture best move from PV line - always take the latest one
           if (pvMatch) {
-            console.debug('UCI PV line:', message, 'extracted move:', pvMatch[1]);
             currentEvaluationCallback.bestMove = pvMatch[1];
           }
         }
@@ -110,7 +109,6 @@ function initStockfish() {
         // Extract bestmove from the command (format: "bestmove e2e4" or "bestmove e2e4 ponder e7e5")
         const bestmoveMatch = message.match(/bestmove\s+(\S+)/);
         if (bestmoveMatch) {
-          console.debug('UCI bestmove line:', message, 'extracted move:', bestmoveMatch[1]);
           // Only use this if we don't have one from PV (PV is more reliable for analysis)
           if (!currentEvaluationCallback.bestMove) {
             currentEvaluationCallback.bestMove = bestmoveMatch[1];
