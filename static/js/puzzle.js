@@ -77,6 +77,7 @@ function initStockfish() {
         const cpMatch = message.match(/score cp (-?\d+)/);
         const mateMatch = message.match(/score mate (-?\d+)/);
         const depthMatch = message.match(/depth (\d+)/);
+        const pvMatch = message.match(/pv\s+(\S+)/);
         
         // Accept any depth result for fast response (movetime mode)
         if (depthMatch) {
@@ -90,8 +91,18 @@ function initStockfish() {
             // Positive mate: very good for current side, negative: very bad
             currentEvaluationCallback.latestCp = mateIn > 0 ? 10000 : -10000;
           }
+          // Capture best move from PV line
+          if (pvMatch && !currentEvaluationCallback.bestMove) {
+            currentEvaluationCallback.bestMove = pvMatch[1];
+          }
         }
       } else if (message.startsWith('bestmove') && currentEvaluationCallback) {
+        // Extract bestmove from the command (format: "bestmove e2e4" or "bestmove e2e4 ponder e7e5")
+        const bestmoveMatch = message.match(/bestmove\s+(\S+)/);
+        if (bestmoveMatch && !currentEvaluationCallback.bestMove) {
+          currentEvaluationCallback.bestMove = bestmoveMatch[1];
+        }
+        
         // Evaluation complete
         clearTimeout(evaluationTimeout);
         const callback = currentEvaluationCallback;
@@ -99,7 +110,7 @@ function initStockfish() {
         evaluationInProgress = false;
         
         if (callback.latestCp !== null) {
-          callback.resolve(callback.latestCp);
+          callback.resolve({ cp: callback.latestCp, bestMove: callback.bestMove || null });
         } else {
           // Sometimes movetime returns bestmove without info lines (simple positions)
           // If this is already a fallback attempt, the engine is not working properly
@@ -118,6 +129,7 @@ function initStockfish() {
             resolve: callback.resolve,
             reject: callback.reject,
             latestCp: null,
+            bestMove: null,
             fen: callback.fen,
             isFallback: true
           };
@@ -218,9 +230,10 @@ function hideEvaluatingSpinner() {
 /**
  * Evaluate a FEN position using Stockfish
  * @param {string} fen - The FEN position to evaluate
- * @returns {Promise<number>} - The centipawn evaluation
+ * @param {string} searchMove - Optional UCI move to restrict search to (e.g., "e2e4")
+ * @returns {Promise<{cp: number, bestMove: string}>} - The centipawn evaluation and best move
  */
-function evaluatePosition(fen) {
+function evaluatePosition(fen, searchMove = null) {
   return new Promise((resolve, reject) => {
     if (!stockfishReady) {
       reject(new Error('Stockfish not ready'));
@@ -237,6 +250,7 @@ function evaluatePosition(fen) {
       resolve: resolve,
       reject: reject,
       latestCp: null,
+      bestMove: null,
       fen: fen
     };
     
@@ -248,7 +262,7 @@ function evaluatePosition(fen) {
         evaluationInProgress = false;
         // If we have any evaluation, use it
         if (callback.latestCp !== null) {
-          callback.resolve(callback.latestCp);
+          callback.resolve({ cp: callback.latestCp, bestMove: callback.bestMove || null });
         } else {
           // Timeout without evaluation
           // If this was a fallback attempt, it's a real engine failure
@@ -259,7 +273,7 @@ function evaluatePosition(fen) {
             // Primary evaluation timeout - this shouldn't happen but use neutral 0
             // The bestmove handler will trigger a fallback if needed
             if (window.__CP_DEBUG) console.debug('Primary evaluation timeout, using neutral 0');
-            callback.resolve(0);
+            callback.resolve({ cp: 0, bestMove: null });
           }
         }
       }
@@ -269,7 +283,12 @@ function evaluatePosition(fen) {
     stockfishWorker.postMessage('ucinewgame');
     stockfishWorker.postMessage('position fen ' + fen);
     // Request thinking time; we continue capturing the latest cp from info lines
-    stockfishWorker.postMessage(`go movetime ${EVALUATION_MOVETIME_MS}`);
+    // If searchMove is specified, restrict search to that move only
+    if (searchMove) {
+      stockfishWorker.postMessage(`go movetime ${EVALUATION_MOVETIME_MS} searchmoves ${searchMove}`);
+    } else {
+      stockfishWorker.postMessage(`go movetime ${EVALUATION_MOVETIME_MS}`);
+    }
   });
 }
 
@@ -765,35 +784,45 @@ async function onDrop(source, target){
       const infoEl = document.getElementById('info');
       if (infoEl) infoEl.textContent = 'Analyzing position...';
       
-      // Evaluate initial position
-      const initialCp = await evaluatePosition(startFEN);
+      // NEW APPROACH: Evaluate both moves from the SAME starting position using
+      // Stockfish's searchmoves parameter. This ensures both evaluations use the
+      // same search depth and knowledge, preventing inconsistencies.
       
-      // Evaluate position after move
-      const moveFen = game.fen();
-      const moveCp = await evaluatePosition(moveFen);
+      // 1. Evaluate the starting position to find the best move and its evaluation
+      const bestEval = await evaluatePosition(startFEN);
+      const bestMoveUci = bestEval.bestMove;
+      const bestMoveCp = bestEval.cp;
+      
+      if (!bestMoveUci) {
+        throw new Error('Engine did not provide a best move');
+      }
+      
+      // 2. Convert the player's move to UCI format
+      // The move has already been made in the game object (result contains the move details)
+      const playerMoveUci = result.from + result.to + (result.promotion || '');
+      
+      // 3. Evaluate the player's move from the starting position using searchmoves
+      const playerEval = await evaluatePosition(startFEN, playerMoveUci);
+      const playerMoveCp = playerEval.cp;
       
       // Hide spinner after evaluation completes
       hideEvaluatingSpinner();
       
-      // IMPORTANT: Stockfish evaluates from the perspective of the side to move.
-      // After the player's move, the evaluation is from the opponent's perspective,
-      // so we must negate it to compare with the initial evaluation.
-      const moveCpAdjusted = -moveCp;
-      
       if (window.__CP_DEBUG) {
         console.debug('Evaluation:', {
           startFEN,
-          moveFen,
-          initialCp,
-          moveCp,
-          moveCpAdjusted
+          bestMoveUci,
+          bestMoveCp,
+          playerMoveUci,
+          playerMoveCp
         });
       }
       
-      // Send to server (using adjusted moveCp)
-      const json = await sendMoveToServer(initialCp, moveCpAdjusted);
+      // Both evaluations are from the same starting position, so they're already
+      // from the same perspective (the player's perspective). No negation needed.
+      const json = await sendMoveToServer(bestMoveCp, playerMoveCp);
       // Pass client-evaluated CPs to ensure UI can always show CP change
-      handleCheckPuzzleResponse(json, source, target, startFEN, { initialCp, moveCp: moveCpAdjusted });
+      handleCheckPuzzleResponse(json, source, target, startFEN, { initialCp: bestMoveCp, moveCp: playerMoveCp });
     } catch(err) {
       console.error('Evaluation or server error:', err);
       hideEvaluatingSpinner();

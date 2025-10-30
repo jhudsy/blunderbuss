@@ -23,14 +23,22 @@ This means the win chance cannot decrease by more than 1 percentage point.
 ### 2. Technical Implementation
 
 **Frontend (static/js/puzzle.js):**
-- Initialize Stockfish engine in Web Worker on page load
+- Initialize Stockfish engine in Web Worker on page load with 2 threads
 - When user makes a move:
-  1. Evaluate initial FEN position (depth 15)
-  2. Evaluate FEN after move (depth 15)
-  3. Calculate win likelihoods for both positions
+  1. Evaluate starting position to get best move and its CP value (movetime 600ms)
+  2. Evaluate player's move from starting position using `searchmoves` parameter
+  3. Compare both evaluations (same position, same depth)
   4. Send centipawn values to server
 - Display "Analyzing position..." during evaluation
-- Show win percentage changes in feedback messages
+- Show centipawn changes in feedback messages
+
+**Evaluation Strategy:**
+The system uses Stockfish's `searchmoves` parameter to evaluate both the best move and the player's move from the same starting position. This ensures:
+- Both evaluations start from identical positions
+- Same search depth and time allocation for fair comparison
+- Best move is determined with the same knowledge used to evaluate player's move
+- No perspective conversion needed (both from same side's perspective)
+- Prevents false positives where deeper search changes evaluation
 
 **Backend (backend.py):**
 - Modified `/check_puzzle` endpoint:
@@ -42,10 +50,13 @@ This means the win chance cannot decrease by more than 1 percentage point.
 **Stockfish Engine:**
 - File: `static/js/stockfish.js` (931KB from lichess-org)
 - Runs in Web Worker (non-blocking)
-- Evaluation time constraint: 450ms movetime (with 500ms timeout)
-- Responds in ~0.3-0.5 seconds for good responsiveness
+- Configuration: 2 threads via UCI
+- Evaluation time: 600ms movetime primary, depth 5 fallback
+- Three-tier fallback: movetime → depth 5 → error
+- Responds in ~0.5-0.7 seconds for good responsiveness
 - Visual feedback: Bootstrap spinner shown during evaluation
 - Buttons disabled during evaluation to prevent conflicts
+- Captures best move from engine output for consistency
 
 ### 3. User Experience Changes
 
