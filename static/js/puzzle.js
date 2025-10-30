@@ -544,17 +544,21 @@ async function loadPuzzle(){
  * @param {string} target - Target square (e.g. 'e4')
  * @param {string} startFEN - FEN string of the position before the move
  */
-function handleCheckPuzzleResponse(j, source, target, startFEN) {
+function handleCheckPuzzleResponse(j, source, target, startFEN, clientEval) {
   // Check if max attempts reached before locking board
   const maxAttemptsReached = j.max_attempts_reached || false
   const attemptsRemaining = j.attempts_remaining || 0
   const hasAttemptsLeft = !j.correct && !maxAttemptsReached && attemptsRemaining > 0
   
+  // Resolve CP values, falling back to client-evaluated numbers if server omits them
+  const resolvedInitialCp = (typeof j.initial_cp === 'number') ? j.initial_cp : (clientEval && typeof clientEval.initialCp === 'number' ? clientEval.initialCp : null)
+  const resolvedMoveCp = (typeof j.move_cp === 'number') ? j.move_cp : (clientEval && typeof clientEval.moveCp === 'number' ? clientEval.moveCp : null)
+
   // Log evaluation details for debugging
   if (window.__CP_DEBUG) {
     console.debug('Evaluation result:', {
-      initial_cp: j.initial_cp,
-      move_cp: j.move_cp,
+      initial_cp: resolvedInitialCp,
+      move_cp: resolvedMoveCp,
       initial_win: j.initial_win,
       move_win: j.move_win,
       win_change: j.win_change,
@@ -575,8 +579,8 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
     const infoEl = document.getElementById('info')
     if (infoEl) {
       // Format centipawn values (convert to pawn units: 100 cp = 1.0 pawns)
-      const initialPawns = (j.initial_cp / 100).toFixed(1)
-      const movePawns = (j.move_cp / 100).toFixed(1)
+      const initialPawns = (resolvedInitialCp != null) ? (resolvedInitialCp / 100).toFixed(1) : '—'
+      const movePawns = (resolvedMoveCp != null) ? (resolvedMoveCp / 100).toFixed(1) : '—'
       // Show evaluation details with centipawn notation
       infoEl.textContent = `Correct! Evaluation: ${initialPawns} → ${movePawns}. Win chance: ${j.initial_win}% → ${j.move_win}% (${j.win_change >= 0 ? '+' : ''}${j.win_change}%). Click Next to continue.`;
     }
@@ -602,14 +606,16 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
       const infoEl = document.getElementById('info');
       if (infoEl) {
         // Format centipawn values (convert to pawn units: 100 cp = 1.0 pawns)
-        const initialPawns = (j.initial_cp / 100).toFixed(1)
-        const movePawns = (j.move_cp / 100).toFixed(1)
+        const initialPawns = (resolvedInitialCp != null) ? (resolvedInitialCp / 100).toFixed(1) : '—'
+        const movePawns = (resolvedMoveCp != null) ? (resolvedMoveCp / 100).toFixed(1) : '—'
         infoEl.textContent = `Incorrect. Evaluation dropped: ${initialPawns} → ${movePawns}. Win chance: ${j.move_win}% (${j.win_change}%). You have ${attemptsRemaining} attempt${attemptsRemaining > 1 ? 's' : ''} remaining.`;
       }
       // Re-enable moves after a brief delay
       setTimeout(() => {
         resetBoard(startFEN);
         allowMoves = true;
+        // Re-enable the Hint button for subsequent attempts
+        setHintButtonEnabled(true);
       }, 1000);
       return;
     }
@@ -743,9 +749,10 @@ async function onDrop(source, target){
         });
       }
       
-      // Send to server (using adjusted moveCp)
-      const json = await sendMoveToServer(startFEN, moveFen, initialCp, moveCpAdjusted);
-      handleCheckPuzzleResponse(json, source, target, startFEN);
+  // Send to server (using adjusted moveCp)
+  const json = await sendMoveToServer(startFEN, moveFen, initialCp, moveCpAdjusted);
+  // Pass client-evaluated CPs to ensure UI can always show CP change
+  handleCheckPuzzleResponse(json, source, target, startFEN, { initialCp, moveCp: moveCpAdjusted });
     } catch(err) {
       console.error('Evaluation or server error:', err);
       hideEvaluatingSpinner();
