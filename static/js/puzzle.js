@@ -39,6 +39,15 @@ let evaluationInProgress = false
 let currentEvaluationCallback = null
 let evaluationTimeout = null
 
+// Pre-evaluation cache for responsiveness
+// Stores the best move and its CP from the starting position of the current puzzle
+let preEvalCache = {
+  fen: null,
+  bestMoveUci: null,
+  bestMoveCp: null,
+  inFlight: null // Promise while computing
+}
+
 // ============================================================================
 // Stockfish Engine Functions
 // ============================================================================
@@ -224,6 +233,42 @@ function hideEvaluatingSpinner() {
   const spinner = document.getElementById('evaluation-spinner');
   if (spinner && spinner.parentNode) {
     spinner.parentNode.removeChild(spinner);
+  }
+}
+
+/**
+ * Precompute the best move and its evaluation for the starting position.
+ * Retries briefly if the engine isn't ready yet.
+ */
+function precomputeBestEval(startFEN, attempt = 0) {
+  try {
+    // Reset cache if FEN changed
+    if (preEvalCache.fen !== startFEN) {
+      preEvalCache = { fen: startFEN, bestMoveUci: null, bestMoveCp: null, inFlight: null };
+    }
+    // If already computed or in progress, do nothing
+    if (preEvalCache.bestMoveUci || preEvalCache.inFlight) return;
+
+    // If engine not ready yet, retry shortly (cap attempts)
+    if (!stockfishReady) {
+      if (attempt < 15) {
+        setTimeout(() => precomputeBestEval(startFEN, attempt + 1), 200);
+      }
+      return;
+    }
+
+    // Kick off evaluation and store promise
+    preEvalCache.inFlight = evaluatePosition(startFEN)
+      .then(({ cp, bestMove }) => {
+        preEvalCache.bestMoveUci = bestMove || null;
+        preEvalCache.bestMoveCp = typeof cp === 'number' ? cp : null;
+      })
+      .catch(() => { /* ignore precompute failures; will fallback at move time */ })
+      .finally(() => {
+        preEvalCache.inFlight = null;
+      });
+  } catch(e) {
+    // ignore precompute errors to avoid impacting UI
   }
 }
 
@@ -594,6 +639,9 @@ async function loadPuzzle(){
   
   // Refresh ribbon XP/streak for this user
   refreshRibbonState();
+
+  // Precompute the best move evaluation for responsiveness while the user thinks
+  try { precomputeBestEval(currentPuzzle.fen) } catch(e) { /* ignore */ }
 }
 
 /**
@@ -789,9 +837,34 @@ async function onDrop(source, target){
       // same search depth and knowledge, preventing inconsistencies.
       
       // 1. Evaluate the starting position to find the best move and its evaluation
-      const bestEval = await evaluatePosition(startFEN);
-      const bestMoveUci = bestEval.bestMove;
-      const bestMoveCp = bestEval.cp;
+      // Prefer cached pre-evaluation if available; otherwise await the in-flight
+      // computation or compute now as a fallback.
+      let bestMoveUci = null;
+      let bestMoveCp = null;
+      try {
+        if (preEvalCache && preEvalCache.fen === startFEN) {
+          if (preEvalCache.bestMoveUci && typeof preEvalCache.bestMoveCp === 'number') {
+            bestMoveUci = preEvalCache.bestMoveUci;
+            bestMoveCp = preEvalCache.bestMoveCp;
+          } else if (preEvalCache.inFlight) {
+            await preEvalCache.inFlight;
+            if (preEvalCache.bestMoveUci && typeof preEvalCache.bestMoveCp === 'number') {
+              bestMoveUci = preEvalCache.bestMoveUci;
+              bestMoveCp = preEvalCache.bestMoveCp;
+            }
+          }
+        }
+      } catch(e) { /* ignore cache failures */ }
+
+      if (!bestMoveUci || typeof bestMoveCp !== 'number') {
+        const bestEvalNow = await evaluatePosition(startFEN);
+        bestMoveUci = bestEvalNow.bestMove;
+        bestMoveCp = bestEvalNow.cp;
+        // Store back into cache for potential reuse
+        try {
+          preEvalCache = { fen: startFEN, bestMoveUci, bestMoveCp, inFlight: null };
+        } catch(e) { /* ignore */ }
+      }
       
       if (!bestMoveUci) {
         throw new Error('Engine did not provide a best move');
@@ -801,6 +874,17 @@ async function onDrop(source, target){
       // The move has already been made in the game object (result contains the move details)
       const playerMoveUci = result.from + result.to + (result.promotion || '');
       
+      // If player's move matches the best move, we can short-circuit
+      if (playerMoveUci === bestMoveUci) {
+        hideEvaluatingSpinner();
+        if (window.__CP_DEBUG) {
+          console.debug('Best move played, short-circuiting evaluation', { bestMoveUci, bestMoveCp });
+        }
+        const json = await sendMoveToServer(bestMoveCp, bestMoveCp);
+        handleCheckPuzzleResponse(json, source, target, startFEN, { initialCp: bestMoveCp, moveCp: bestMoveCp });
+        return;
+      }
+
       // 3. Evaluate the player's move from the starting position using searchmoves
       const playerEval = await evaluatePosition(startFEN, playerMoveUci);
       const playerMoveCp = playerEval.cp;
