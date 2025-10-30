@@ -599,8 +599,11 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
     
     const infoEl = document.getElementById('info')
     if (infoEl) {
-      // Show evaluation details
-      infoEl.textContent = `Correct! Win chance: ${j.initial_win}% → ${j.move_win}% (${j.win_change >= 0 ? '+' : ''}${j.win_change}%). Click Next to continue.`;
+      // Format centipawn values (convert to pawn units: 100 cp = 1.0 pawns)
+      const initialPawns = (j.initial_cp / 100).toFixed(1)
+      const movePawns = (j.move_cp / 100).toFixed(1)
+      // Show evaluation details with centipawn notation
+      infoEl.textContent = `Correct! Evaluation: ${initialPawns} → ${movePawns}. Win chance: ${j.initial_win}% → ${j.move_win}% (${j.win_change >= 0 ? '+' : ''}${j.win_change}%). Click Next to continue.`;
     }
     
     // Update all UI elements
@@ -623,7 +626,10 @@ function handleCheckPuzzleResponse(j, source, target, startFEN) {
     if (!maxAttemptsReached && attemptsRemaining > 0) {
       const infoEl = document.getElementById('info');
       if (infoEl) {
-        infoEl.textContent = `Incorrect. Win chance dropped to ${j.move_win}% (${j.win_change}%). You have ${attemptsRemaining} attempt${attemptsRemaining > 1 ? 's' : ''} remaining.`;
+        // Format centipawn values (convert to pawn units: 100 cp = 1.0 pawns)
+        const initialPawns = (j.initial_cp / 100).toFixed(1)
+        const movePawns = (j.move_cp / 100).toFixed(1)
+        infoEl.textContent = `Incorrect. Evaluation dropped: ${initialPawns} → ${movePawns}. Win chance: ${j.move_win}% (${j.win_change}%). You have ${attemptsRemaining} attempt${attemptsRemaining > 1 ? 's' : ''} remaining.`;
       }
       // Re-enable moves after a brief delay
       setTimeout(() => {
