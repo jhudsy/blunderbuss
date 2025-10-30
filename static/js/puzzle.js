@@ -720,9 +720,14 @@ async function onDrop(source, target){
       // Hide spinner after evaluation completes
       hideEvaluatingSpinner();
       
+      // IMPORTANT: Stockfish evaluates from the perspective of the side to move.
+      // After the player's move, the evaluation is from the opponent's perspective,
+      // so we must negate it to compare with the initial evaluation.
+      const moveCpAdjusted = -moveCp;
+      
       // Calculate win likelihoods
       const initialWin = winLikelihood(initialCp);
-      const moveWin = winLikelihood(moveCp);
+      const moveWin = winLikelihood(moveCpAdjusted);
       const winChange = moveWin - initialWin;
       
       if (window.__CP_DEBUG) {
@@ -731,14 +736,15 @@ async function onDrop(source, target){
           moveFen,
           initialCp,
           moveCp,
+          moveCpAdjusted,
           initialWin: initialWin.toFixed(2) + '%',
           moveWin: moveWin.toFixed(2) + '%',
           winChange: winChange.toFixed(2) + '%'
         });
       }
       
-      // Send to server
-      const json = await sendMoveToServer(startFEN, moveFen, initialCp, moveCp);
+      // Send to server (using adjusted moveCp)
+      const json = await sendMoveToServer(startFEN, moveFen, initialCp, moveCpAdjusted);
       handleCheckPuzzleResponse(json, source, target, startFEN);
     } catch(err) {
       console.error('Evaluation or server error:', err);
