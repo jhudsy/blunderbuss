@@ -38,48 +38,19 @@ let evaluationTimeout = null
  */
 function initStockfish() {
   try {
-    // Create blob worker that loads Stockfish via importScripts
-    const workerCode = `
-      // Construct absolute URL for stockfish.js
-      const baseUrl = self.location.origin;
-      const stockfishUrl = baseUrl + '/static/js/stockfish.js';
-      
-      // Load Stockfish engine
-      try {
-        importScripts(stockfishUrl);
-      } catch(e) {
-        self.postMessage('ERROR: Failed to load Stockfish: ' + e.message);
-        throw e;
-      }
-      
-      // Set up message handling
-      self.onmessage = function(e) {
-        if (typeof Stockfish === 'function') {
-          if (!self.engine) {
-            self.engine = Stockfish();
-            self.engine.onmessage = function(msg) {
-              self.postMessage(msg);
-            };
-          }
-          self.engine.postMessage(e.data);
-        } else {
-          self.postMessage('ERROR: Stockfish not loaded');
-        }
-      };
-    `;
-    
-    const blob = new Blob([workerCode], { type: 'application/javascript' });
-    const blobUrl = URL.createObjectURL(blob);
-    stockfishWorker = new Worker(blobUrl);
+    // stockfish.js from lichess-org is self-contained worker code with its own onmessage handler
+    // We instantiate it directly as a Worker rather than importing it
+    const baseUrl = window.location.origin;
+    stockfishWorker = new Worker(baseUrl + '/static/js/stockfish.js');
     
     stockfishWorker.onmessage = function(e) {
       const message = e.data;
       
-      // Handle error messages from worker
-      if (message.startsWith('ERROR:')) {
-        logError('Stockfish initialization error:', message);
+      // Handle error messages
+      if (typeof message === 'string' && message.startsWith('ERROR:')) {
+        logError('Stockfish error:', message);
         stockfishReady = false;
-        showEngineError('Chess engine failed to load. Puzzle validation may not work correctly.');
+        showEngineError('Chess engine failed. Puzzle validation may not work correctly.');
         return;
       }
       
