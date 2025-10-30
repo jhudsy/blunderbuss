@@ -38,9 +38,18 @@
           <li class="nav-item">
             <a class="nav-link" href="/leaderboard_page">Leaderboard</a>
           </li>
+          {% if session.username %}
+          <li class="nav-item">
+            <a class="nav-link" href="/puzzle">Puzzles</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/logout">Logout</a>
+          </li>
+          {% else %}
           <li class="nav-item">
             <a class="nav-link" href="/login">Login with Lichess</a>
           </li>
+          {% endif %}
         </ul>
       </div>
     </div>
@@ -51,7 +60,11 @@
       <h1 class="display-3 fw-bold mb-3">Blunderbuss</h1>
       <p class="lead fs-4">Master Chess Through Your Own Mistakes</p>
       <p class="fs-5 mb-4">An intelligent chess puzzle trainer that learns from your Lichess games</p>
+      {% if session.username %}
+      <a href="/puzzle" class="btn btn-light btn-lg px-5 py-3">Go to Puzzles</a>
+      {% else %}
       <a href="/login" class="btn btn-light btn-lg px-5 py-3">Get Started with Lichess</a>
+      {% endif %}
     </div>
   </div>
 
@@ -142,7 +155,11 @@
 
     <div class="text-center">
       <h2 class="mb-4">Ready to Improve Your Chess?</h2>
+      {% if session.username %}
+      <a href="/puzzle" class="btn btn-primary btn-lg px-5 py-3">Start Training Now</a>
+      {% else %}
       <a href="/login" class="btn btn-primary btn-lg px-5 py-3">Start Training Now</a>
+      {% endif %}
     </div>
   </div>
 
