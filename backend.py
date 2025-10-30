@@ -34,9 +34,74 @@ import chess
 load_dotenv()
 
 import logging
+import math
 
 # named logger for the application
 logger = logging.getLogger('blunderbuss')
+
+# ============================================================================
+# Constants
+# ============================================================================
+
+# Puzzle correctness threshold: maximum allowable win likelihood decrease (percentage points)
+CORRECTNESS_THRESHOLD = -1.0
+
+# Max attempts range
+MIN_ATTEMPTS = 1
+MAX_ATTEMPTS = 3
+DEFAULT_ATTEMPTS = 3
+
+# XP penalty for repeated attempts (exponential: full, 1/2, 1/4, etc.)
+XP_HINT_PENALTY = 1  # XP when hint is used
+
+# Puzzle weight calculation constants
+MIN_PUZZLE_WEIGHT = 0.1
+PUZZLE_WEIGHT_DIVISOR = 5.0
+
+# ============================================================================
+# Helper Functions - Win Likelihood
+# ============================================================================
+
+def win_likelihood(cp):
+    """Convert centipawn evaluation to win probability percentage.
+    
+    Uses the formula: 50 + 50 * (2 / (e^(-0.00368*cp) + 1) - 1)
+    
+    This formula is used consistently in both backend validation and 
+    is documented in BACKEND.md and STOCKFISH_INTEGRATION.md.
+    
+    Args:
+        cp: Centipawn evaluation from Stockfish
+        
+    Returns:
+        Win probability as a percentage (0-100)
+    """
+    return 50 + 50 * (2 / (math.exp(-0.00368 * cp) + 1) - 1)
+
+
+def calculate_attempt_xp_penalty(gained_xp, attempt_number):
+    """Calculate XP after applying attempt penalty.
+    
+    Each incorrect attempt halves the XP reward:
+    - Attempt 1: full XP
+    - Attempt 2: 50% XP  
+    - Attempt 3: 25% XP
+    
+    Args:
+        gained_xp: Base XP amount before penalty
+        attempt_number: Current attempt number (1-indexed)
+        
+    Returns:
+        XP after penalty applied (integer division)
+    """
+    if attempt_number <= 1:
+        return gained_xp
+    return gained_xp // (2 ** (attempt_number - 1))
+
+
+# ============================================================================
+# Logging Configuration
+# ============================================================================
 
 
 def _configure_logging():
@@ -1142,69 +1207,62 @@ def check_puzzle():
         if not p:
             return jsonify({'error': 'puzzle not found'}), 404
 
-        # Calculate win likelihood using the formula: 50 + 50 * (2 / (e^(-0.00368*cp) + 1) - 1)
-        import math
-        def win_likelihood(cp):
-            """Convert centipawn evaluation to win probability percentage."""
-            return 50 + 50 * (2 / (math.exp(-0.00368 * cp) + 1) - 1)
-        
+        # Calculate win likelihood and correctness
         initial_win = win_likelihood(initial_cp)
         move_win = win_likelihood(move_cp)
         win_change = move_win - initial_win
         
-        # A move is correct if the win chance does not decrease by more than 1%
-        correct = win_change >= -1.0
+        # A move is correct if the win chance does not decrease by more than threshold
+        correct = win_change >= CORRECTNESS_THRESHOLD
         
         logger.debug('User answering puzzle id=%s user=%s initial_cp=%s move_cp=%s initial_win=%.2f%% move_win=%.2f%% change=%.2f%% correct=%s', 
                      pid, getattr(p.user, 'username', None), initial_cp, move_cp, initial_win, move_win, win_change, correct)
         logger.debug('Answer correctness for puzzle id=%s: %s', pid, correct)
-        # determine quality and update SM-2 fields
+        
+        # Update spaced repetition fields
         quality = quality_from_answer(correct, p.pre_eval, p.post_eval)
         reps, interval, ease = sm2_update(p.repetitions or 0, p.interval or 0, p.ease_factor or 2.5, quality)
         p.repetitions = reps
         p.interval = interval
         p.ease_factor = ease
-        # Store timestamps as timezone-aware datetimes (UTC). Pony/DB will
-        # persist these as timestamptz when using Postgres.
+        
+        # Update timestamps (timezone-aware UTC)
         last_dt = datetime.now(timezone.utc)
         next_dt = last_dt + timedelta(days=interval)
         p.last_reviewed = last_dt
         p.next_review = next_dt
+        
+        # Update success/failure counters
         if correct:
             p.successes = (p.successes or 0) + 1
         else:
             p.failures = (p.failures or 0) + 1
-        # update selection weight (lower weight for well-known items)
-        p.weight = max(0.1, 5.0 / (1 + reps))
+            
+        # Update selection weight (lower weight for well-known items)
+        p.weight = max(MIN_PUZZLE_WEIGHT, PUZZLE_WEIGHT_DIVISOR / (1 + reps))
         
-        # Award xp and badges (scale XP with user's cooldown and streak)
+        # Calculate XP and update user stats
         u = p.user
         cd = get_user_int_attr(u, 'cooldown_minutes', 10)
         consec = get_user_int_attr(u, 'consecutive_correct', 0)
-        
-        # Determine if a hint was used (server-side session record takes priority)
         hint_used = _is_hint_used(pid)
-        
-        # Get user's max_attempts setting (default 3, range 1-3)
-        max_attempts = max(1, min(3, get_user_int_attr(u, 'settings_max_attempts', 3)))
+        max_attempts = max(MIN_ATTEMPTS, min(MAX_ATTEMPTS, get_user_int_attr(u, 'settings_max_attempts', DEFAULT_ATTEMPTS)))
 
-        # Compute gained XP based on pre-existing consecutive count
+        # Compute base XP
         gained = xp_for_answer(correct, cooldown_minutes=cd, consecutive_correct=consec)
         
-        # Apply attempt penalty: halve XP for each incorrect attempt
-        # Attempt 1: full XP, Attempt 2: 50%, Attempt 3: 25%
+        # Apply attempt penalty for incorrect answers after first attempt
         if not correct and current_attempt > 1:
-            gained = gained // (2 ** (current_attempt - 1))
+            gained = calculate_attempt_xp_penalty(gained, current_attempt)
         
-        # If a hint was used, enforce the rule: only 1 XP can be gained for the puzzle
-        # and the puzzle streak should not increase.
+        # If hint was used, cap XP at minimum value
         if hint_used:
-            gained = 1 if gained > 0 else 0
+            gained = XP_HINT_PENALTY if gained > 0 else 0
         
         # Apply XP and update tracking
         update_user_xp(u, gained)
         
-        # Update user counters and streaks when the answer is correct
+        # Update user counters and streaks
         if correct:
             update_user_streaks(u, hint_used)
         else:
@@ -1213,25 +1271,19 @@ def check_puzzle():
             # Store current attempt count in session
             session[puzzle_attempts_key] = current_attempt
 
-        # Now determine which badges (if any) should be awarded. badge_updates
-        # expects the user's counters (xp, correct_count, consecutive_correct,
-        # streak_days) to reflect the latest answer.
+        # Award badges
         potential_badges = badge_updates(u, correct)
-        # Collect existing badge names BEFORE creating new ones to avoid
-        # UnrepeatableReadError when SQLite loses timezone info on datetime fields
         existing_badge_names = [b.name for b in u.badges]
-        # Track only the badges that are actually newly awarded
         newly_awarded_badges = []
         if potential_badges:
             for b in potential_badges:
-                # avoid duplicates
                 exists = Badge.get(user=u, name=b)
                 if not exists:
                     Badge(user=u, name=b)
                     existing_badge_names.append(b)
                     newly_awarded_badges.append(b)
-        # (streak updated earlier before badge calculation)
-        # prepare response while DB session is active to avoid session-is-over errors
+        
+        # Build response dictionary
         resp = {
             'correct': correct,
             'new_weight': p.weight,
@@ -1247,7 +1299,8 @@ def check_puzzle():
             'move_win': round(move_win, 2),
             'win_change': round(win_change, 2)
         }
-        # Check and update best puzzle streak record when appropriate
+        
+        # Check and update best puzzle streak record
         try:
             current_streak = int(getattr(u, 'consecutive_correct', 0) or 0)
             best = int(getattr(u, 'best_puzzle_streak', 0) or 0)
@@ -1262,24 +1315,18 @@ def check_puzzle():
         except Exception:
             # ignore record-tracking failures
             pass
-        # Reveal the correct SAN to the client only after an incorrect attempt.
-        # We intentionally do NOT include prev/next SAN or other PGN context.
-        # expose any newly awarded badges explicitly so the frontend can
-        # show a modal only when new badges were earned during this answer
+        
+        # Add newly awarded badges to response
         if newly_awarded_badges:
             resp['awarded_badges'] = newly_awarded_badges
 
-        # Reveal correct answer and evaluation target if incorrect OR if max attempts reached
+        # Reveal correct answer and evaluation target if incorrect
         if not correct:
             resp['correct_san'] = p.correct_san
             # Include the target evaluation that would have been acceptable
-            # (any move that keeps win chance within 1% of initial position)
-            resp['target_min_win'] = round(initial_win - 1.0, 2)
+            resp['target_min_win'] = round(initial_win + CORRECTNESS_THRESHOLD, 2)
             # Check if max attempts reached
-            if current_attempt >= max_attempts:
-                resp['max_attempts_reached'] = True
-            else:
-                resp['max_attempts_reached'] = False
+            resp['max_attempts_reached'] = current_attempt >= max_attempts
         
         # Clear attempt tracking and hint record when puzzle is solved or max attempts reached
         if correct or (not correct and current_attempt >= max_attempts):

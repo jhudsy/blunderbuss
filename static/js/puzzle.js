@@ -7,6 +7,16 @@ if (typeof window !== 'undefined') {
 }
 
 // ============================================================================
+// Constants
+// ============================================================================
+
+const STOCKFISH_INIT_TIMEOUT_MS = 5000;
+const EVALUATION_TIMEOUT_MS = 1000;
+const EVALUATION_MOVETIME_MS = 600;
+const EVALUATION_FALLBACK_DEPTH = 5;
+const STOCKFISH_THREADS = 2;
+
+// ============================================================================
 // Global State
 // ============================================================================
 
@@ -57,9 +67,11 @@ function initStockfish() {
       if (message === 'uciok') {
         stockfishReady = true;
         hideEngineError();
-        // Try to configure the engine to use 2 threads (if supported by this build)
-        try { stockfishWorker.postMessage('setoption name Threads value 2') } catch(e) { /* ignored */ }
-        if (window.__CP_DEBUG) console.debug('Stockfish engine ready (Threads=2 requested)');
+        // Try to configure the engine to use multiple threads (if supported by this build)
+        try { 
+          stockfishWorker.postMessage(`setoption name Threads value ${STOCKFISH_THREADS}`) 
+        } catch(e) { /* ignored */ }
+        if (window.__CP_DEBUG) console.debug(`Stockfish engine ready (Threads=${STOCKFISH_THREADS} requested)`);
       } else if (message.startsWith('info') && currentEvaluationCallback) {
         // Parse centipawn score from info messages
         const cpMatch = message.match(/score cp (-?\d+)/);
@@ -98,7 +110,7 @@ function initStockfish() {
           }
           
           // Fall back to a quick depth search to ensure we get a score
-          if (window.__CP_DEBUG) console.debug('No cp from movetime, retrying with depth 5');
+          if (window.__CP_DEBUG) console.debug(`No cp from movetime, retrying with depth ${EVALUATION_FALLBACK_DEPTH}`);
           
           // Set up for fallback evaluation
           evaluationInProgress = true;
@@ -113,7 +125,7 @@ function initStockfish() {
           // Use a shallow depth for quick fallback
           try {
             stockfishWorker.postMessage('position fen ' + callback.fen);
-            stockfishWorker.postMessage('go depth 5');
+            stockfishWorker.postMessage(`go depth ${EVALUATION_FALLBACK_DEPTH}`);
           } catch(e) {
             // If we can't even send the command, engine has failed
             evaluationInProgress = false;
@@ -134,12 +146,12 @@ function initStockfish() {
     // Initialize UCI protocol with timeout
     stockfishWorker.postMessage('uci');
     
-    // If engine doesn't respond within 5 seconds, show error
+    // If engine doesn't respond within timeout, show error
     setTimeout(() => {
       if (!stockfishReady) {
         showEngineError('Chess engine is taking longer than expected to load. Puzzle validation may not work correctly.');
       }
-    }, 5000);
+    }, STOCKFISH_INIT_TIMEOUT_MS);
     
   } catch(e) {
     logError('Failed to initialize Stockfish:', e);
@@ -228,7 +240,7 @@ function evaluatePosition(fen) {
       fen: fen
     };
     
-  // Set timeout for evaluation - allow a bit over movetime to receive bestmove
+    // Set timeout for evaluation - allow a bit over movetime to receive bestmove
     evaluationTimeout = setTimeout(() => {
       if (currentEvaluationCallback) {
         const callback = currentEvaluationCallback;
@@ -251,25 +263,14 @@ function evaluatePosition(fen) {
           }
         }
       }
-  }, 1000); // keep overall timeout at 1000ms; engine movetime is set to 600ms
+    }, EVALUATION_TIMEOUT_MS);
     
     // Send position and request evaluation with a fixed movetime budget
-    // Using movetime here allows a modest +100ms increase over earlier 500ms
     stockfishWorker.postMessage('ucinewgame');
     stockfishWorker.postMessage('position fen ' + fen);
-    // Request 600ms of thinking time; we continue capturing the latest cp from info lines
-    stockfishWorker.postMessage('go movetime 600');
+    // Request thinking time; we continue capturing the latest cp from info lines
+    stockfishWorker.postMessage(`go movetime ${EVALUATION_MOVETIME_MS}`);
   });
-}
-
-/**
- * Calculate win likelihood from centipawn evaluation
- * Formula: 50 + 50 * (2 / (e^(-0.00368*cp) + 1) - 1)
- * @param {number} cp - Centipawn evaluation
- * @returns {number} - Win probability as percentage (0-100)
- */
-function winLikelihood(cp) {
-  return 50 + 50 * (2 / (Math.exp(-0.00368 * cp) + 1) - 1);
 }
 
 // ============================================================================
@@ -314,7 +315,7 @@ function setElementDisplay(elementId, display) {
 /**
  * Send a move to the server for validation
  */
-async function sendMoveToServer(initialFen, moveFen, initialCp, moveCp) {
+async function sendMoveToServer(initialCp, moveCp) {
   try {
     const response = await fetch('/check_puzzle', {
       method: 'POST',
@@ -779,28 +780,20 @@ async function onDrop(source, target){
       // so we must negate it to compare with the initial evaluation.
       const moveCpAdjusted = -moveCp;
       
-      // Calculate win likelihoods
-      const initialWin = winLikelihood(initialCp);
-      const moveWin = winLikelihood(moveCpAdjusted);
-      const winChange = moveWin - initialWin;
-      
       if (window.__CP_DEBUG) {
         console.debug('Evaluation:', {
           startFEN,
           moveFen,
           initialCp,
           moveCp,
-          moveCpAdjusted,
-          initialWin: initialWin.toFixed(2) + '%',
-          moveWin: moveWin.toFixed(2) + '%',
-          winChange: winChange.toFixed(2) + '%'
+          moveCpAdjusted
         });
       }
       
-  // Send to server (using adjusted moveCp)
-  const json = await sendMoveToServer(startFEN, moveFen, initialCp, moveCpAdjusted);
-  // Pass client-evaluated CPs to ensure UI can always show CP change
-  handleCheckPuzzleResponse(json, source, target, startFEN, { initialCp, moveCp: moveCpAdjusted });
+      // Send to server (using adjusted moveCp)
+      const json = await sendMoveToServer(initialCp, moveCpAdjusted);
+      // Pass client-evaluated CPs to ensure UI can always show CP change
+      handleCheckPuzzleResponse(json, source, target, startFEN, { initialCp, moveCp: moveCpAdjusted });
     } catch(err) {
       console.error('Evaluation or server error:', err);
       hideEvaluatingSpinner();
