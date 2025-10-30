@@ -87,10 +87,9 @@ function initStockfish() {
         if (callback.latestCp !== null) {
           callback.resolve(callback.latestCp);
         } else {
-          // If no evaluation received yet, use 0 as neutral evaluation
-          // This can happen with very fast responses or simple positions
-          if (window.__CP_DEBUG) console.warn('No evaluation found, using 0');
-          callback.resolve(0);
+          // This shouldn't happen with depth-based search
+          // If it does, it indicates an engine problem
+          callback.reject(new Error('No evaluation received from engine'));
         }
       }
     };
@@ -203,21 +202,22 @@ function evaluatePosition(fen) {
         const callback = currentEvaluationCallback;
         currentEvaluationCallback = null;
         evaluationInProgress = false;
-        // If we have any evaluation, use it; otherwise use 0 as neutral
+        // If we have any evaluation, use it; otherwise timeout error
         if (callback.latestCp !== null) {
           callback.resolve(callback.latestCp);
         } else {
-          if (window.__CP_DEBUG) console.warn('Evaluation timeout, using 0');
-          callback.resolve(0);
+          // Timeout without evaluation - this shouldn't happen with depth-based search
+          callback.reject(new Error('Evaluation timeout - no score received'));
         }
       }
     }, 1000); // 1000ms timeout for reliable evaluation
     
-    // Send position and request evaluation with movetime constraint
+    // Send position and request evaluation with depth constraint
+    // Using depth ensures we ALWAYS get an evaluation score in the info lines
     stockfishWorker.postMessage('ucinewgame');
     stockfishWorker.postMessage('position fen ' + fen);
-    // Use movetime for time-constrained evaluation (leaves margin before timeout)
-    stockfishWorker.postMessage('go movetime 800');
+    // Use depth 10 for quick but reliable evaluation (typically completes in <500ms)
+    stockfishWorker.postMessage('go depth 10');
   });
 }
 
