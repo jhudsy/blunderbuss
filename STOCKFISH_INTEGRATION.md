@@ -2,7 +2,7 @@
 
 ## Overview
 
-This branch (`feature/stockfish-evaluation`) introduces a major change to how puzzle moves are validated in Blunderbuss. Instead of requiring an exact match to a predetermined correct move (SAN comparison), the system now uses Stockfish chess engine to evaluate positions and accepts any move that maintains the win likelihood within a 10% threshold.
+This branch (`feature/stockfish-evaluation`) introduces a major change to how puzzle moves are validated in Blunderbuss. Instead of requiring an exact match to a predetermined correct move (SAN comparison), the system now uses Stockfish chess engine to evaluate positions and accepts any move that maintains the win likelihood within a 1% threshold.
 
 ## Key Changes
 
@@ -16,9 +16,9 @@ win_likelihood = 50 + 50 * (2 / (e^(-0.00368 * cp) + 1) - 1)
 Where `cp` is the centipawn evaluation from Stockfish.
 
 **Correctness Criterion:**
-A move is correct if: `(move_win - initial_win) >= -10.0`
+A move is correct if: `(move_win - initial_win) >= -1.0`
 
-This means the win chance cannot decrease by more than 10 percentage points.
+This means the win chance cannot decrease by more than 1 percentage point.
 
 ### 2. Technical Implementation
 
@@ -34,7 +34,7 @@ This means the win chance cannot decrease by more than 10 percentage points.
 
 **Backend (backend.py):**
 - Modified `/check_puzzle` endpoint:
-  - Accepts: `initial_fen`, `move_fen`, `initial_cp`, `move_cp`
+  - Accepts: `initial_cp`, `move_cp`
   - Calculates win likelihoods server-side (validation)
   - Returns evaluation details in response
   - No longer compares SAN strings
@@ -52,13 +52,13 @@ This means the win chance cannot decrease by more than 10 percentage points.
 **Correct Move Feedback:**
 ```
 [Spinner] Analyzing position...  (during evaluation)
-Correct! Win chance: 65% → 70% (+5%). Click Next to continue.
+Correct! Centipawn change: +25. Click Next to continue.
 ```
 
 **Incorrect Move Feedback:**
 ```
 [Spinner] Analyzing position...  (during evaluation)
-Incorrect. Win chance dropped to 40% (-25%). You have 2 attempts remaining.
+Incorrect. Centipawn change: -250. You have 2 attempts remaining.
 ```
 
 **Engine Loading:**

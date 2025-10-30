@@ -16,8 +16,6 @@ The backend exposes the following routes:
 - For presenting a puzzle
      - /get_puzzle. Selects a puzzle using spaced repetition and returns the puzzle's ID and FEN (move details are not exposed to the client). Clears attempt tracking for the new puzzle.
      - /check_puzzle. Accepts evaluation data from the client and returns whether the move was correct based on win likelihood analysis. The endpoint expects:
-       - `initial_fen`: FEN string before the move
-       - `move_fen`: FEN string after the move  
        - `initial_cp`: Centipawn evaluation of initial position (from Stockfish)
        - `move_cp`: Centipawn evaluation of position after move (from Stockfish)
        
@@ -26,9 +24,9 @@ The backend exposes the following routes:
        win_likelihood = 50 + 50 * (2 / (e^(-0.00368 * cp) + 1) - 1)
        ```
        
-       A move is considered correct if the win chance does not decrease by more than 10%:
+       A move is considered correct if the win chance does not decrease by more than 1%:
        ```
-       correct = (move_win - initial_win) >= -10.0
+       correct = (move_win - initial_win) >= -1.0
        ```
        
        The response includes `current_attempt`, `max_attempts`, `attempts_remaining`, `max_attempts_reached`, and evaluation details (`initial_cp`, `move_cp`, `initial_win`, `move_win`, `win_change`) to support the multiple attempts feature and client-side display. XP is automatically reduced by half for each incorrect attempt (attempt 1: full XP, attempt 2: 50%, attempt 3: 25%). The response also includes `target_min_win` when incorrect, showing the minimum acceptable win percentage.
@@ -60,7 +58,7 @@ Unlike traditional puzzle systems that require an exact move match, this system 
 
 - The client evaluates both the initial position and the position after the user's move using Stockfish.js (depth 15)
 - Each centipawn evaluation is converted to a win probability: `50 + 50 * (2 / (e^(-0.00368*cp) + 1) - 1)`
-- A move is correct if win likelihood doesn't decrease by more than 10%
+- A move is correct if win likelihood doesn't decrease by more than 1%
 - This allows multiple valid moves while still catching blunders and serious mistakes
 
 The original best move from the PGN annotation (e.g., "f6" in the example above) is still stored in the database and used for hints, but any move maintaining the position's win likelihood is accepted.
@@ -107,7 +105,7 @@ above — include them here for completeness:
 - `GET /puzzle` — UI route that renders the puzzle page (`templates/puzzle.html`). The frontend uses this as the entry point for the puzzle UI.
 - `POST /puzzle_hint` — Returns a minimal hint for the current puzzle. Request body should include `{ "id": <puzzle_id> }` (optional in tests). Response is `{ "from": "e2" }`. Calling this endpoint also marks the puzzle as having had a hint used in the server-side session so `/check_puzzle` can enforce rules (XP cap and no streak increment).
   
-     **Note on evaluation-based system**: With the new Stockfish evaluation system, hints still highlight the from-square of the stored correct move. While the system now accepts any move that maintains win likelihood within 10%, the hint points to the originally identified best move from the puzzle data. This provides guidance while still allowing flexibility in move choice.
+     **Note on evaluation-based system**: With the new Stockfish evaluation system, hints still highlight the from-square of the stored correct move. While the system now accepts any move that maintains win likelihood within 1%, the hint points to the originally identified best move from the puzzle data. This provides guidance while still allowing flexibility in move choice.
      
      Implementation notes:
      - The server centralizes session hint access behind tiny helpers (`_get_hints_map`, `_is_hint_used`, `_mark_hint_used`, `_clear_hint_used`) in `backend.py` to avoid repeated try/except patterns and make the session usage easier to test.

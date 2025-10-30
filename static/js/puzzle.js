@@ -321,8 +321,6 @@ async function sendMoveToServer(initialFen, moveFen, initialCp, moveCp) {
       headers: {'content-type': 'application/json'},
       body: JSON.stringify({
         id: currentPuzzle.id,
-        initial_fen: initialFen,
-        move_fen: moveFen,
         initial_cp: initialCp,
         move_cp: moveCp,
         hint_used: hintUsedForCurrent

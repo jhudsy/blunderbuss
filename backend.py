@@ -1109,11 +1109,9 @@ def leaderboard_page():
 def check_puzzle():
     data = request.get_json() or {}
     pid = data.get('id')
-    # New evaluation-based API: accept centipawn values and FEN strings
+    # New evaluation-based API: accept centipawn values
     initial_cp = data.get('initial_cp')
     move_cp = data.get('move_cp')
-    initial_fen = data.get('initial_fen')
-    move_fen = data.get('move_fen')
     
     # Ignore client-supplied hint flag; prefer server-side session record
     hint_used = False
