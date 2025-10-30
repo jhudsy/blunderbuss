@@ -1154,8 +1154,8 @@ def check_puzzle():
         move_win = win_likelihood(move_cp)
         win_change = move_win - initial_win
         
-        # A move is correct if the win chance does not decrease by more than 10%
-        correct = win_change >= -10.0
+        # A move is correct if the win chance does not decrease by more than 1%
+        correct = win_change >= -1.0
         
         logger.debug('User answering puzzle id=%s user=%s initial_cp=%s move_cp=%s initial_win=%.2f%% move_win=%.2f%% change=%.2f%% correct=%s', 
                      pid, getattr(p.user, 'username', None), initial_cp, move_cp, initial_win, move_win, win_change, correct)
@@ -1275,8 +1275,8 @@ def check_puzzle():
         if not correct:
             resp['correct_san'] = p.correct_san
             # Include the target evaluation that would have been acceptable
-            # (any move that keeps win chance within 10% of initial position)
-            resp['target_min_win'] = round(initial_win - 10.0, 2)
+            # (any move that keeps win chance within 1% of initial position)
+            resp['target_min_win'] = round(initial_win - 1.0, 2)
             # Check if max attempts reached
             if current_attempt >= max_attempts:
                 resp['max_attempts_reached'] = True

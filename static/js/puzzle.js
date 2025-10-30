@@ -57,7 +57,9 @@ function initStockfish() {
       if (message === 'uciok') {
         stockfishReady = true;
         hideEngineError();
-        if (window.__CP_DEBUG) console.debug('Stockfish engine ready');
+        // Try to configure the engine to use 2 threads (if supported by this build)
+        try { stockfishWorker.postMessage('setoption name Threads value 2') } catch(e) { /* ignored */ }
+        if (window.__CP_DEBUG) console.debug('Stockfish engine ready (Threads=2 requested)');
       } else if (message.startsWith('info') && currentEvaluationCallback) {
         // Parse centipawn score from info messages
         const cpMatch = message.match(/score cp (-?\d+)/);
@@ -196,7 +198,7 @@ function evaluatePosition(fen) {
       latestCp: null
     };
     
-    // Set timeout for evaluation - 1000ms for reliable results
+  // Set timeout for evaluation - allow a bit over movetime to receive bestmove
     evaluationTimeout = setTimeout(() => {
       if (currentEvaluationCallback) {
         const callback = currentEvaluationCallback;
@@ -210,14 +212,14 @@ function evaluatePosition(fen) {
           callback.reject(new Error('Evaluation timeout - no score received'));
         }
       }
-    }, 1000); // 1000ms timeout for reliable evaluation
+  }, 1000); // keep overall timeout at 1000ms; engine movetime is set to 600ms
     
-    // Send position and request evaluation with depth constraint
-    // Using depth ensures we ALWAYS get an evaluation score in the info lines
+    // Send position and request evaluation with a fixed movetime budget
+    // Using movetime here allows a modest +100ms increase over earlier 500ms
     stockfishWorker.postMessage('ucinewgame');
     stockfishWorker.postMessage('position fen ' + fen);
-    // Use depth 10 for quick but reliable evaluation (typically completes in <500ms)
-    stockfishWorker.postMessage('go depth 10');
+    // Request 600ms of thinking time; we continue capturing the latest cp from info lines
+    stockfishWorker.postMessage('go movetime 600');
   });
 }
 
