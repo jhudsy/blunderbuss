@@ -338,6 +338,18 @@ function interruptPrecompute() {
     if (window.__CP_DEBUG) console.debug('Failed to send stop command:', e);
   }
   
+  // Clear the evaluation state so new evaluations can proceed
+  if (evaluationInProgress && currentEvaluationCallback) {
+    clearTimeout(evaluationTimeout);
+    evaluationInProgress = false;
+    currentEvaluationCallback = null;
+  }
+  
+  // Clear the precompute in-flight state
+  preEvalCache.inFlight = null;
+  preEvalCache.startTime = null;
+  preEvalCache.canInterrupt = false;
+  
   // Return whatever result we have so far (may be incomplete)
   if (preEvalCache.bestMoveUci && typeof preEvalCache.bestMoveCp === 'number') {
     return {
