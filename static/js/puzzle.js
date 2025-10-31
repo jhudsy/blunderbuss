@@ -13,6 +13,8 @@ if (typeof window !== 'undefined') {
 const STOCKFISH_INIT_TIMEOUT_MS = 5000;
 const EVALUATION_TIMEOUT_MS = 1000;
 const EVALUATION_MOVETIME_MS = 850;
+const EVALUATION_MOVETIME_PRECOMPUTE_MS = 5000; // Longer thinking time for initial position
+const EVALUATION_MIN_MOVETIME_MS = 850; // Minimum thinking time before interruption
 const EVALUATION_FALLBACK_DEPTH = 7;
 const STOCKFISH_THREADS = 2;
 
@@ -45,7 +47,9 @@ let preEvalCache = {
   fen: null,
   bestMoveUci: null,
   bestMoveCp: null,
-  inFlight: null // Promise while computing
+  inFlight: null, // Promise while computing
+  startTime: null, // Track when evaluation started
+  canInterrupt: false // Flag indicating if evaluation can be interrupted
 }
 
 // ============================================================================
@@ -103,6 +107,16 @@ function initStockfish() {
           // Capture best move from PV line - always take the latest one
           if (pvMatch) {
             currentEvaluationCallback.bestMove = pvMatch[1];
+          }
+          
+          // For precompute evaluations, also update the cache in real-time
+          if (currentEvaluationCallback.isPrecompute && preEvalCache.fen === currentEvaluationCallback.fen) {
+            if (currentEvaluationCallback.bestMove) {
+              preEvalCache.bestMoveUci = currentEvaluationCallback.bestMove;
+            }
+            if (currentEvaluationCallback.latestCp !== null) {
+              preEvalCache.bestMoveCp = currentEvaluationCallback.latestCp;
+            }
           }
         }
       } else if (message.startsWith('bestmove') && currentEvaluationCallback) {
@@ -247,7 +261,7 @@ function precomputeBestEval(startFEN, attempt = 0) {
   try {
     // Reset cache if FEN changed
     if (preEvalCache.fen !== startFEN) {
-      preEvalCache = { fen: startFEN, bestMoveUci: null, bestMoveCp: null, inFlight: null };
+      preEvalCache = { fen: startFEN, bestMoveUci: null, bestMoveCp: null, inFlight: null, startTime: null, canInterrupt: false };
     }
     // If already computed or in progress, do nothing
     if (preEvalCache.bestMoveUci || preEvalCache.inFlight) return;
@@ -261,7 +275,17 @@ function precomputeBestEval(startFEN, attempt = 0) {
     }
 
     // Kick off evaluation and store promise
-    preEvalCache.inFlight = evaluatePosition(startFEN)
+    preEvalCache.startTime = Date.now();
+    preEvalCache.canInterrupt = false; // Will be set to true after minimum time
+    
+    // Set flag to allow interruption after minimum time has elapsed
+    setTimeout(() => {
+      if (preEvalCache.fen === startFEN && preEvalCache.inFlight) {
+        preEvalCache.canInterrupt = true;
+      }
+    }, EVALUATION_MIN_MOVETIME_MS);
+    
+    preEvalCache.inFlight = evaluatePosition(startFEN, null, EVALUATION_MOVETIME_PRECOMPUTE_MS, true)
       .then(({ cp, bestMove }) => {
         preEvalCache.bestMoveUci = bestMove || null;
         preEvalCache.bestMoveCp = typeof cp === 'number' ? cp : null;
@@ -269,28 +293,71 @@ function precomputeBestEval(startFEN, attempt = 0) {
           console.debug('Precomputed evaluation cached:', {
             fen: startFEN,
             bestMove: bestMove,
-            cp: cp
+            cp: cp,
+            thinkTime: Date.now() - (preEvalCache.startTime || Date.now())
           });
         }
       })
       .catch(() => { /* ignore precompute failures; will fallback at move time */ })
       .finally(() => {
         preEvalCache.inFlight = null;
+        preEvalCache.startTime = null;
+        preEvalCache.canInterrupt = false;
       });
   } catch(e) {
     // ignore precompute errors to avoid impacting UI
   }
 }
 
-// Removed 'stopCurrentSearch' to respect full engine computations.
+/**
+ * Stop the current precomputation if it's interruptible.
+ * Returns the best result found so far, or null if not enough time has elapsed.
+ */
+function interruptPrecompute() {
+  if (!preEvalCache.inFlight) return null;
+  
+  // Only interrupt if minimum time has elapsed
+  if (!preEvalCache.canInterrupt) {
+    if (window.__CP_DEBUG) {
+      console.debug('Precompute cannot be interrupted yet (minimum time not elapsed)');
+    }
+    return null;
+  }
+  
+  if (window.__CP_DEBUG) {
+    console.debug('Interrupting precomputation', {
+      elapsed: Date.now() - (preEvalCache.startTime || Date.now()),
+      hasResult: !!(preEvalCache.bestMoveUci && typeof preEvalCache.bestMoveCp === 'number')
+    });
+  }
+  
+  // Stop the engine
+  try {
+    stockfishWorker.postMessage('stop');
+  } catch(e) {
+    if (window.__CP_DEBUG) console.debug('Failed to send stop command:', e);
+  }
+  
+  // Return whatever result we have so far (may be incomplete)
+  if (preEvalCache.bestMoveUci && typeof preEvalCache.bestMoveCp === 'number') {
+    return {
+      bestMoveUci: preEvalCache.bestMoveUci,
+      bestMoveCp: preEvalCache.bestMoveCp
+    };
+  }
+  
+  return null;
+}
 
 /**
  * Evaluate a FEN position using Stockfish
  * @param {string} fen - The FEN position to evaluate
  * @param {string} searchMove - Optional UCI move to restrict search to (e.g., "e2e4")
+ * @param {number} movetime - Optional movetime in milliseconds (defaults to EVALUATION_MOVETIME_MS)
+ * @param {boolean} isPrecompute - Whether this is a precomputation (affects timeout handling)
  * @returns {Promise<{cp: number, bestMove: string}>} - The centipawn evaluation and best move
  */
-function evaluatePosition(fen, searchMove = null) {
+function evaluatePosition(fen, searchMove = null, movetime = null, isPrecompute = false) {
   return new Promise((resolve, reject) => {
     if (!stockfishReady) {
       reject(new Error('Stockfish not ready'));
@@ -302,16 +369,21 @@ function evaluatePosition(fen, searchMove = null) {
       return;
     }
     
+    // Use provided movetime or default
+    const actualMovetime = movetime !== null ? movetime : EVALUATION_MOVETIME_MS;
+    
     evaluationInProgress = true;
     currentEvaluationCallback = {
       resolve: resolve,
       reject: reject,
       latestCp: null,
       bestMove: null,
-      fen: fen
+      fen: fen,
+      isPrecompute: isPrecompute
     };
     
-    // Set timeout for evaluation - allow a bit over movetime to receive bestmove
+    // Set timeout for evaluation - allow extra time for precompute and a bit over movetime to receive bestmove
+    const timeoutDuration = isPrecompute ? (actualMovetime + 500) : EVALUATION_TIMEOUT_MS;
     evaluationTimeout = setTimeout(() => {
       if (currentEvaluationCallback) {
         const callback = currentEvaluationCallback;
@@ -334,7 +406,7 @@ function evaluatePosition(fen, searchMove = null) {
           }
         }
       }
-    }, EVALUATION_TIMEOUT_MS);
+    }, timeoutDuration);
     
     // Send position and request evaluation with a fixed movetime budget
     stockfishWorker.postMessage('ucinewgame');
@@ -342,9 +414,9 @@ function evaluatePosition(fen, searchMove = null) {
     // Request thinking time; we continue capturing the latest cp from info lines
     // If searchMove is specified, restrict search to that move only
     if (searchMove) {
-      stockfishWorker.postMessage(`go movetime ${EVALUATION_MOVETIME_MS} searchmoves ${searchMove}`);
+      stockfishWorker.postMessage(`go movetime ${actualMovetime} searchmoves ${searchMove}`);
     } else {
-      stockfishWorker.postMessage(`go movetime ${EVALUATION_MOVETIME_MS}`);
+      stockfishWorker.postMessage(`go movetime ${actualMovetime}`);
     }
   });
 }
@@ -848,6 +920,12 @@ async function onDrop(source, target){
       // same search depth and knowledge, preventing inconsistencies.
       
       // 1. Evaluate the starting position to find the best move and its evaluation
+      // First, try to interrupt the precomputation if it's still running
+      let interruptedResult = null;
+      if (preEvalCache && preEvalCache.fen === startFEN && preEvalCache.inFlight) {
+        interruptedResult = interruptPrecompute();
+      }
+      
       // Prefer cached pre-evaluation if available; otherwise await the in-flight
       // computation or compute now as a fallback.
       let bestMoveUci = null;
@@ -857,6 +935,13 @@ async function onDrop(source, target){
           if (preEvalCache.bestMoveUci && typeof preEvalCache.bestMoveCp === 'number') {
             bestMoveUci = preEvalCache.bestMoveUci;
             bestMoveCp = preEvalCache.bestMoveCp;
+          } else if (interruptedResult) {
+            // Use the interrupted result if we got one
+            bestMoveUci = interruptedResult.bestMoveUci;
+            bestMoveCp = interruptedResult.bestMoveCp;
+            if (window.__CP_DEBUG) {
+              console.debug('Using interrupted precomputation result:', interruptedResult);
+            }
           } else if (preEvalCache.inFlight) {
             // Allow the precomputation to finish naturally
             await preEvalCache.inFlight;
@@ -874,7 +959,7 @@ async function onDrop(source, target){
         bestMoveCp = bestEvalNow.cp;
         // Store back into cache for potential reuse
         try {
-          preEvalCache = { fen: startFEN, bestMoveUci, bestMoveCp, inFlight: null };
+          preEvalCache = { fen: startFEN, bestMoveUci, bestMoveCp, inFlight: null, startTime: null, canInterrupt: false };
         } catch(e) { /* ignore */ }
       }
       
