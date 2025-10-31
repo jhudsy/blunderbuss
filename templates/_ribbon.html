@@ -5,10 +5,11 @@
     @keyframes ribbonPulse{0%{transform:scale(1);}50%{transform:scale(1.25);}100%{transform:scale(1);}}
   </style>
   <div class="container d-flex justify-content-between align-items-center">
-    <div>
-  <span class="me-3">XP: <strong id="ribbonXP">-</strong></span>
-  <span class="me-3" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Day streak: how many days in a row you've attempted puzzles. Keep it going!">Days: <strong id="ribbonDaysStreak">-</strong></span>
-  <span class="me-3" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Puzzle streak: how many puzzles in a row you've answered correctly. The first number is your current streak, and the number in brackets is your best ever streak. Nice work!">Puzzle: <strong id="ribbonPuzzleStreak">-</strong></span>
+    <div class="d-flex align-items-center">
+      <img src="/static/img/blunderbuss.png" alt="Blunderbuss Logo" style="height:32px;width:auto;margin-right:16px;vertical-align:middle;">
+      <span class="me-3">XP: <strong id="ribbonXP">-</strong></span>
+      <span class="me-3" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Day streak: how many days in a row you've attempted puzzles. Keep it going!">Days: <strong id="ribbonDaysStreak">-</strong></span>
+      <span class="me-3" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Puzzle streak: how many puzzles in a row you've answered correctly. The first number is your current streak, and the number in brackets is your best ever streak. Nice work!">Puzzle: <strong id="ribbonPuzzleStreak">-</strong></span>
     </div>
     <div>
       {% set cur = request.path %}
