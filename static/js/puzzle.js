@@ -57,15 +57,16 @@ let preEvalCache = {
 // ============================================================================
 
 /**
- * Initialize the Stockfish engine
+ * Initialize the Stockfish engine (17.1 lite via Web Worker + WASM)
  */
 function initStockfish() {
   try {
-    // stockfish.js from lichess-org is self-contained worker code with its own onmessage handler
-    // We instantiate it directly as a Worker rather than importing it
-    const baseUrl = window.location.origin;
-    stockfishWorker = new Worker(baseUrl + '/static/js/stockfish.js');
-    
+    // Show engine loading spinner while WASM is downloaded/initialized
+    showEngineLoadingSpinner();
+
+    // Use dedicated worker wrapper that loads Stockfish 17.1 lite WASM
+    stockfishWorker = new Worker('/static/js/engine-worker.js');
+
     stockfishWorker.onmessage = function(e) {
       const message = e.data;
       
@@ -80,6 +81,7 @@ function initStockfish() {
       if (message === 'uciok') {
         stockfishReady = true;
         hideEngineError();
+        hideEngineLoadingSpinner();
         // Try to configure the engine to use multiple threads (if supported by this build)
         try { 
           stockfishWorker.postMessage(`setoption name Threads value ${STOCKFISH_THREADS}`) 
@@ -174,11 +176,12 @@ function initStockfish() {
         }
       }
     };
-    
+
     stockfishWorker.onerror = function(error) {
       logError('Stockfish worker error:', error);
       stockfishReady = false;
       showEngineError('Chess engine encountered an error. Please refresh the page.');
+      hideEngineLoadingSpinner();
     };
     
     // Initialize UCI protocol with timeout
@@ -195,6 +198,7 @@ function initStockfish() {
     logError('Failed to initialize Stockfish:', e);
     stockfishReady = false;
     showEngineError('Failed to initialize chess engine. Please refresh the page.');
+    hideEngineLoadingSpinner();
   }
 }
 
@@ -216,6 +220,44 @@ function hideEngineError() {
   const infoEl = document.getElementById('info');
   if (infoEl && infoEl.style.color === 'rgb(220, 53, 69)') {
     infoEl.style.color = '';
+  }
+}
+
+/**
+ * Show spinner while the engine (WASM) loads
+ */
+function showEngineLoadingSpinner() {
+  const infoEl = document.getElementById('info');
+  if (!infoEl) return;
+  // Create spinner element if it doesn't exist
+  let spinner = document.getElementById('engine-loading-spinner');
+  if (!spinner) {
+    spinner = document.createElement('span');
+    spinner.id = 'engine-loading-spinner';
+    spinner.className = 'spinner-border spinner-border-sm me-2';
+    spinner.setAttribute('role', 'status');
+    spinner.setAttribute('aria-hidden', 'true');
+  }
+  // Insert spinner at the beginning of info text
+  if (infoEl.firstChild) {
+    infoEl.insertBefore(spinner, infoEl.firstChild);
+  } else {
+    infoEl.appendChild(spinner);
+  }
+  // Set loading text if empty or currently showing ready text
+  if (!infoEl.textContent || /Make the correct move\.?/.test(infoEl.textContent)) {
+    infoEl.textContent = ' Loading chess engine...';
+    infoEl.insertBefore(spinner, infoEl.firstChild);
+  }
+}
+
+/**
+ * Hide engine loading spinner
+ */
+function hideEngineLoadingSpinner() {
+  const spinner = document.getElementById('engine-loading-spinner');
+  if (spinner && spinner.parentNode) {
+    spinner.parentNode.removeChild(spinner);
   }
 }
 
