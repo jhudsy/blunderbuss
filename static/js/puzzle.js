@@ -1,9 +1,30 @@
-// Ensure CP_DEBUG exists and silence debug logs in production UI
+// Ensure CP_DEBUG exists and provide easy runtime toggles; silence debug logs unless enabled
 if (typeof window !== 'undefined') {
-  if (typeof window.__CP_DEBUG === 'undefined') window.__CP_DEBUG = false
-  if (!window.__CP_DEBUG) { 
-    try { console.debug = function(){} } catch(e){ /* Intentionally ignore */ } 
+  try {
+    // Allow enabling debug via URL (?debug=1) or cookie (cp_debug=1)
+    const params = new URLSearchParams(window.location.search || '')
+    const wantDebug = params.get('debug') === '1'
+    const cookieDebug = (document.cookie || '').indexOf('cp_debug=1') !== -1
+    if (wantDebug) {
+      // Persist a cookie for subsequent page loads
+      document.cookie = 'cp_debug=1; path=/'
+      window.__CP_DEBUG = true
+    } else if (typeof window.__CP_DEBUG === 'undefined') {
+      // If template didn't set it, fall back to cookie
+      window.__CP_DEBUG = cookieDebug
+    }
+  } catch(e) { /* ignore */ }
+  if (window.__CP_DEBUG) {
+    try { if (!console.debug) console.debug = console.log.bind(console) } catch(e){}
+  } else {
+    try { console.debug = function(){} } catch(e){}
   }
+}
+
+// Safe debug logger
+function dbg(){
+  if (!window || !window.__CP_DEBUG) return
+  try { console.debug.apply(console, arguments) } catch(e) { try { console.log.apply(console, arguments) } catch(_){} }
 }
 
 // ============================================================================
@@ -64,10 +85,12 @@ let preEvalCache = {
  */
 function initStockfish() {
   try {
+    dbg('[SF] initStockfish(): starting initialization')
     // Detect if SharedArrayBuffer is available and context is isolated
     // Stockfish WASM builds with pthreads require cross-origin isolation
     if (typeof SharedArrayBuffer === 'undefined' || (typeof crossOriginIsolated !== 'undefined' && !crossOriginIsolated)) {
       showEngineError('Chess engine requires cross-origin isolation (COOP/COEP). Please use HTTPS and ensure server sends proper headers.');
+      dbg('[SF] initStockfish(): SharedArrayBuffer not available or not cross-origin isolated')
       return;
     }
     // Show engine loading spinner while WASM is downloaded/initialized
@@ -77,32 +100,54 @@ function initStockfish() {
     const workerScript = ENGINE_CHOICE === 'full'
       ? '/static/js/engine-worker-full.js'
       : '/static/js/engine-worker.js'
+    dbg('[SF] initStockfish(): creating worker', { choice: ENGINE_CHOICE, workerScript })
 
     // Use dedicated worker wrapper that loads the selected Stockfish WASM
     stockfishWorker = new Worker(workerScript);
+    dbg('[SF] initStockfish(): worker created')
 
     stockfishWorker.onmessage = function(e) {
       const message = e.data;
+      // Only log first info line to avoid flooding
+      if (typeof message === 'string' && message.startsWith('info')) {
+        if (!stockfishWorker.__loggedFirstInfo) {
+          dbg('[SF] onmessage: first info line received')
+          stockfishWorker.__loggedFirstInfo = true
+        }
+      }
       
       // Handle error messages
       if (typeof message === 'string' && message.startsWith('ERROR:')) {
         logError('Stockfish error:', message);
+        dbg('[SF] onmessage: ERROR from worker', message)
         stockfishReady = false;
         showEngineError('Chess engine failed. Puzzle validation may not work correctly.');
         return;
       }
       
       if (message === 'uciok') {
+        dbg('[SF] onmessage: uciok (engine ready)')
         stockfishReady = true;
         hideEngineError();
         hideEngineLoadingSpinner();
+        // Allow moves again once engine is ready
+        allowMoves = true;
+        // Restore default info text if we were showing loading state
+        try {
+          const infoEl = document.getElementById('info');
+          if (infoEl && /Loading chess engine/i.test(infoEl.textContent)) {
+            infoEl.textContent = 'Make the correct move.';
+          }
+        } catch(e) { /* ignore */ }
         // Try to configure the engine to use multiple threads (if supported by this build)
         try { 
           stockfishWorker.postMessage(`setoption name Threads value ${STOCKFISH_THREADS}`) 
         } catch(e) { /* ignored */ }
-        if (window.__CP_DEBUG) console.debug(`Stockfish engine ready (Threads=${STOCKFISH_THREADS} requested, choice=${ENGINE_CHOICE})`);
+        dbg('[SF] ready:', { threadsRequested: STOCKFISH_THREADS, choice: ENGINE_CHOICE })
         // Update dropdown label if present
         try { updateEngineDropdownLabel(); } catch(e) {}
+        // If a puzzle is active, kick off (or re-kick) precompute for responsiveness
+        try { if (currentPuzzle && currentPuzzle.fen) precomputeBestEval(currentPuzzle.fen) } catch(e) {}
       } else if (message.startsWith('info') && currentEvaluationCallback) {
         // Parse centipawn score from info messages
         const cpMatch = message.match(/score cp (-?\d+)/);
@@ -195,6 +240,7 @@ function initStockfish() {
 
     stockfishWorker.onerror = function(error) {
       logError('Stockfish worker error:', error);
+      dbg('[SF] worker.onerror', error)
       stockfishReady = false;
       showEngineError('Chess engine encountered an error. Please refresh the page.');
       hideEngineLoadingSpinner();
@@ -202,16 +248,19 @@ function initStockfish() {
     
     // Initialize UCI protocol with timeout
     stockfishWorker.postMessage('uci');
+    dbg('[SF] sent: uci')
     
     // If engine doesn't respond within timeout, show error
     setTimeout(() => {
       if (!stockfishReady) {
+        dbg('[SF] init timeout exceeded (showing warning)')
         showEngineError('Chess engine is taking longer than expected to load. Puzzle validation may not work correctly.');
       }
     }, STOCKFISH_INIT_TIMEOUT_MS);
     
   } catch(e) {
     logError('Failed to initialize Stockfish:', e);
+    dbg('[SF] initStockfish(): exception during init', e)
     stockfishReady = false;
     showEngineError('Failed to initialize chess engine. Please refresh the page.');
     hideEngineLoadingSpinner();
@@ -224,9 +273,11 @@ function initStockfish() {
  */
 function switchEngine(choice) {
   const normalized = (choice || '').toLowerCase() === 'full' ? 'full' : 'lite'
+  dbg('[SF] switchEngine(): request', { from: ENGINE_CHOICE, to: normalized })
   if (normalized === ENGINE_CHOICE && stockfishReady) {
     // Nothing to do; just update label
     try { updateEngineDropdownLabel(); } catch(e) {}
+    dbg('[SF] switchEngine(): already on requested engine and ready; no-op')
     return
   }
   // Cancel any ongoing evaluations and precompute
@@ -245,6 +296,12 @@ function switchEngine(choice) {
   stockfishWorker = null
   stockfishReady = false
 
+  // Temporarily disallow moves during engine switch
+  allowMoves = false
+  // Show loading state
+  try { showEngineLoadingSpinner(); } catch(e) {}
+  try { const infoEl = document.getElementById('info'); if (infoEl) infoEl.textContent = 'Loading chess engine...'; } catch(e) {}
+
   // Persist preference and update label
   ENGINE_CHOICE = normalized
   try { setCookie('sf_engine', ENGINE_CHOICE, 365); } catch(e) {}
@@ -252,6 +309,7 @@ function switchEngine(choice) {
 
   // Re-init engine; spinner will show inside
   initStockfish()
+  dbg('[SF] switchEngine(): re-initializing worker')
 
   // If a puzzle is already loaded, optionally kick precompute again
   try { if (currentPuzzle && currentPuzzle.fen) precomputeBestEval(currentPuzzle.fen) } catch(e) {}
@@ -365,6 +423,7 @@ function hideEvaluatingSpinner() {
  */
 function precomputeBestEval(startFEN, attempt = 0) {
   try {
+    dbg('[SF] precomputeBestEval(): called', { attempt, ready: stockfishReady })
     // Reset cache if FEN changed
     if (preEvalCache.fen !== startFEN) {
       preEvalCache = { fen: startFEN, bestMoveUci: null, bestMoveCp: null, inFlight: null, startTime: null, canInterrupt: false };
@@ -375,6 +434,7 @@ function precomputeBestEval(startFEN, attempt = 0) {
     // If engine not ready yet, retry shortly (cap attempts)
     if (!stockfishReady) {
       if (attempt < 15) {
+        dbg('[SF] precomputeBestEval(): engine not ready; retry soon', { nextAttempt: attempt + 1 })
         setTimeout(() => precomputeBestEval(startFEN, attempt + 1), 200);
       }
       return;
@@ -383,11 +443,13 @@ function precomputeBestEval(startFEN, attempt = 0) {
     // Kick off evaluation and store promise
     preEvalCache.startTime = Date.now();
     preEvalCache.canInterrupt = false; // Will be set to true after minimum time
+    dbg('[SF] precomputeBestEval(): starting engine analysis', { movetime: EVALUATION_MOVETIME_PRECOMPUTE_MS })
     
     // Set flag to allow interruption after minimum time has elapsed
     setTimeout(() => {
       if (preEvalCache.fen === startFEN && preEvalCache.inFlight) {
         preEvalCache.canInterrupt = true;
+        dbg('[SF] precomputeBestEval(): canInterrupt set true')
       }
     }, EVALUATION_MIN_MOVETIME_MS);
     
@@ -395,20 +457,14 @@ function precomputeBestEval(startFEN, attempt = 0) {
       .then(({ cp, bestMove }) => {
         preEvalCache.bestMoveUci = bestMove || null;
         preEvalCache.bestMoveCp = typeof cp === 'number' ? cp : null;
-        if (window.__CP_DEBUG) {
-          console.debug('Precomputed evaluation cached:', {
-            fen: startFEN,
-            bestMove: bestMove,
-            cp: cp,
-            thinkTime: Date.now() - (preEvalCache.startTime || Date.now())
-          });
-        }
+        dbg('[SF] precomputeBestEval(): cached', { bestMove, cp, thinkTime: Date.now() - (preEvalCache.startTime || Date.now()) })
       })
       .catch(() => { /* ignore precompute failures; will fallback at move time */ })
       .finally(() => {
         preEvalCache.inFlight = null;
         preEvalCache.startTime = null;
         preEvalCache.canInterrupt = false;
+        dbg('[SF] precomputeBestEval(): finished')
       });
   } catch(e) {
     // ignore precompute errors to avoid impacting UI
@@ -424,24 +480,17 @@ function interruptPrecompute() {
   
   // Only interrupt if minimum time has elapsed
   if (!preEvalCache.canInterrupt) {
-    if (window.__CP_DEBUG) {
-      console.debug('Precompute cannot be interrupted yet (minimum time not elapsed)');
-    }
+    dbg('[SF] interruptPrecompute(): cannot interrupt yet (minimum time not elapsed)')
     return null;
   }
   
-  if (window.__CP_DEBUG) {
-    console.debug('Interrupting precomputation', {
-      elapsed: Date.now() - (preEvalCache.startTime || Date.now()),
-      hasResult: !!(preEvalCache.bestMoveUci && typeof preEvalCache.bestMoveCp === 'number')
-    });
-  }
+  dbg('[SF] interruptPrecompute(): stopping engine', { elapsed: Date.now() - (preEvalCache.startTime || Date.now()), hasResult: !!(preEvalCache.bestMoveUci && typeof preEvalCache.bestMoveCp === 'number') })
   
   // Stop the engine
   try {
     stockfishWorker.postMessage('stop');
   } catch(e) {
-    if (window.__CP_DEBUG) console.debug('Failed to send stop command:', e);
+    dbg('[SF] interruptPrecompute(): failed to send stop', e)
   }
   
   // Clear the evaluation state so new evaluations can proceed
@@ -458,12 +507,14 @@ function interruptPrecompute() {
   
   // Return whatever result we have so far (may be incomplete)
   if (preEvalCache.bestMoveUci && typeof preEvalCache.bestMoveCp === 'number') {
+    dbg('[SF] interruptPrecompute(): returning partial result')
     return {
       bestMoveUci: preEvalCache.bestMoveUci,
       bestMoveCp: preEvalCache.bestMoveCp
     };
   }
   
+  dbg('[SF] interruptPrecompute(): no partial result available')
   return null;
 }
 
@@ -489,6 +540,7 @@ function evaluatePosition(fen, searchMove = null, movetime = null, isPrecompute 
     
     // Use provided movetime or default
     const actualMovetime = movetime !== null ? movetime : EVALUATION_MOVETIME_MS;
+    dbg('[SF] evaluatePosition(): start', { hasSearchMove: !!searchMove, movetime: actualMovetime, isPrecompute })
     
     evaluationInProgress = true;
     currentEvaluationCallback = {
@@ -509,17 +561,18 @@ function evaluatePosition(fen, searchMove = null, movetime = null, isPrecompute 
         evaluationInProgress = false;
         // If we have any evaluation, use it
         if (callback.latestCp !== null) {
+          dbg('[SF] evaluatePosition(): timeout but have cp; resolving', { cp: callback.latestCp, bestMove: callback.bestMove })
           callback.resolve({ cp: callback.latestCp, bestMove: callback.bestMove || null });
         } else {
           // Timeout without evaluation
           // If this was a fallback attempt, it's a real engine failure
           if (callback.isFallback) {
-            if (window.__CP_DEBUG) console.debug('Fallback evaluation timeout - engine failure');
+            dbg('[SF] evaluatePosition(): fallback timeout — engine failure')
             callback.reject(new Error('Chess engine failed to evaluate position'));
           } else {
             // Primary evaluation timeout - this shouldn't happen but use neutral 0
             // The bestmove handler will trigger a fallback if needed
-            if (window.__CP_DEBUG) console.debug('Primary evaluation timeout, using neutral 0');
+            dbg('[SF] evaluatePosition(): primary timeout, returning neutral 0 and waiting for bestmove')
             callback.resolve({ cp: 0, bestMove: null });
           }
         }
@@ -529,13 +582,32 @@ function evaluatePosition(fen, searchMove = null, movetime = null, isPrecompute 
     // Send position and request evaluation with a fixed movetime budget
     stockfishWorker.postMessage('ucinewgame');
     stockfishWorker.postMessage('position fen ' + fen);
+    dbg('[SF] evaluatePosition(): sent position')
     // Request thinking time; we continue capturing the latest cp from info lines
     // If searchMove is specified, restrict search to that move only
     if (searchMove) {
       stockfishWorker.postMessage(`go movetime ${actualMovetime} searchmoves ${searchMove}`);
+      dbg('[SF] evaluatePosition(): sent go movetime with searchmoves', { searchMove })
     } else {
       stockfishWorker.postMessage(`go movetime ${actualMovetime}`);
+      dbg('[SF] evaluatePosition(): sent go movetime')
     }
+  });
+}
+
+/**
+ * Wait for the engine to become ready, with a timeout
+ */
+function awaitEngineReady(timeoutMs = 6000) {
+  return new Promise((resolve, reject) => {
+    if (stockfishReady) return resolve();
+    const start = Date.now();
+    const check = () => {
+      if (stockfishReady) return resolve();
+      if (Date.now() - start >= timeoutMs) return reject(new Error('Stockfish not ready'));
+      setTimeout(check, 100);
+    };
+    check();
   });
 }
 
@@ -1049,6 +1121,31 @@ async function onDrop(source, target){
   // Helper: evaluate both positions and send to server
   async function evaluateAndSendMove(result, startFEN){
     try {
+  // If the engine isn't ready yet, wait briefly and show a loading state
+  if (!stockfishReady) {
+    try { showEngineLoadingSpinner(); } catch(e) {}
+    try { const infoEl2 = document.getElementById('info'); if (infoEl2) infoEl2.textContent = 'Loading chess engine...'; } catch(e) {}
+    try {
+      await awaitEngineReady(6000);
+    } catch(e) {
+      // Still not ready — inform the user and revert move after a short delay
+      hideEngineLoadingSpinner();
+      const infoEl = document.getElementById('info');
+      if (infoEl) {
+        infoEl.textContent = 'Chess engine not ready. Please wait a moment and try again.';
+      }
+      // Re-enable Hint and allow another try shortly
+      setHintButtonEnabled(true);
+      setTimeout(() => {
+        resetBoard(startFEN);
+        allowMoves = true;
+      }, 1200);
+      return;
+    } finally {
+      // If the engine became ready, hide the loading spinner (evaluation spinner may be shown later)
+      hideEngineLoadingSpinner();
+    }
+  }
   // Disable buttons to prevent double actions
   setNextButtonEnabled(false);
   setHintButtonEnabled(false);
