@@ -823,11 +823,8 @@ function handleCheckPuzzleResponse(j, source, target, startFEN, clientEval) {
     
     const infoEl = document.getElementById('info')
     if (infoEl) {
-      // Format centipawn values (convert to pawn units: 100 cp = 1.0 pawns)
-      const initialPawns = (resolvedInitialCp != null) ? (resolvedInitialCp / 100).toFixed(1) : '—'
-      const movePawns = (resolvedMoveCp != null) ? (resolvedMoveCp / 100).toFixed(1) : '—'
-      // Show evaluation details with centipawn notation
-      infoEl.textContent = `Correct! Evaluation: ${initialPawns} → ${movePawns}. Click Next to continue.`;
+      // Hide evaluation details on correct move; keep the message concise
+      infoEl.textContent = 'Correct! Click Next to continue.';
     }
     
     // Update all UI elements
