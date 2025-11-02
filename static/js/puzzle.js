@@ -64,6 +64,12 @@ let preEvalCache = {
  */
 function initStockfish() {
   try {
+    // Detect if SharedArrayBuffer is available and context is isolated
+    // Stockfish WASM builds with pthreads require cross-origin isolation
+    if (typeof SharedArrayBuffer === 'undefined' || (typeof crossOriginIsolated !== 'undefined' && !crossOriginIsolated)) {
+      showEngineError('Chess engine requires cross-origin isolation (COOP/COEP). Please use HTTPS and ensure server sends proper headers.');
+      return;
+    }
     // Show engine loading spinner while WASM is downloaded/initialized
     showEngineLoadingSpinner();
 
