@@ -86,6 +86,8 @@ let preEvalCache = {
 function initStockfish() {
   try {
     dbg('[SF] initStockfish(): starting initialization')
+    // Friendly hint for users not in debug mode
+    try { if (!window.__CP_DEBUG) console.info('[SF] Tip: add ?debug=1 to the URL to enable verbose engine logs'); } catch(e){}
     // Detect if SharedArrayBuffer is available and context is isolated
     // Stockfish WASM builds with pthreads require cross-origin isolation
     if (typeof SharedArrayBuffer === 'undefined' || (typeof crossOriginIsolated !== 'undefined' && !crossOriginIsolated)) {
@@ -254,6 +256,7 @@ function initStockfish() {
     setTimeout(() => {
       if (!stockfishReady) {
         dbg('[SF] init timeout exceeded (showing warning)')
+        try { console.warn('[SF] Engine initialization is taking longer than expected. Check network panel for worker and WASM file loads.'); } catch(e){}
         showEngineError('Chess engine is taking longer than expected to load. Puzzle validation may not work correctly.');
       }
     }, STOCKFISH_INIT_TIMEOUT_MS);
@@ -616,12 +619,10 @@ function awaitEngineReady(timeoutMs = 6000) {
 // ============================================================================
 
 /**
- * Safe error logger - only logs in debug mode
+ * Error logger — always logs to console.error so issues are visible without debug.
  */
 function logError(message, error) {
-  if (window.__CP_DEBUG) {
-    console.error(message, error)
-  }
+  try { console.error(message, error) } catch(e) { /* ignore */ }
 }
 
 /** Cookie helpers for persisting engine selection */
