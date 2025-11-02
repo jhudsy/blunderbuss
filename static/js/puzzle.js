@@ -41,6 +41,9 @@ let evaluationInProgress = false
 let currentEvaluationCallback = null
 let evaluationTimeout = null
 
+// Engine preference ("lite" | "full"). Default to lite; persisted via cookie
+let ENGINE_CHOICE = 'lite'
+
 // Pre-evaluation cache for responsiveness
 // Stores the best move and its CP from the starting position of the current puzzle
 let preEvalCache = {
@@ -64,8 +67,13 @@ function initStockfish() {
     // Show engine loading spinner while WASM is downloaded/initialized
     showEngineLoadingSpinner();
 
-    // Use dedicated worker wrapper that loads Stockfish 17.1 lite WASM
-    stockfishWorker = new Worker('/static/js/engine-worker.js');
+    // Select worker based on engine choice
+    const workerScript = ENGINE_CHOICE === 'full'
+      ? '/static/js/engine-worker-full.js'
+      : '/static/js/engine-worker.js'
+
+    // Use dedicated worker wrapper that loads the selected Stockfish WASM
+    stockfishWorker = new Worker(workerScript);
 
     stockfishWorker.onmessage = function(e) {
       const message = e.data;
@@ -86,7 +94,9 @@ function initStockfish() {
         try { 
           stockfishWorker.postMessage(`setoption name Threads value ${STOCKFISH_THREADS}`) 
         } catch(e) { /* ignored */ }
-        if (window.__CP_DEBUG) console.debug(`Stockfish engine ready (Threads=${STOCKFISH_THREADS} requested)`);
+        if (window.__CP_DEBUG) console.debug(`Stockfish engine ready (Threads=${STOCKFISH_THREADS} requested, choice=${ENGINE_CHOICE})`);
+        // Update dropdown label if present
+        try { updateEngineDropdownLabel(); } catch(e) {}
       } else if (message.startsWith('info') && currentEvaluationCallback) {
         // Parse centipawn score from info messages
         const cpMatch = message.match(/score cp (-?\d+)/);
@@ -203,6 +213,45 @@ function initStockfish() {
 }
 
 /**
+ * Switch engine at runtime. Terminates current worker, clears state,
+ * persists selection to cookie, shows spinner, and reinitializes.
+ */
+function switchEngine(choice) {
+  const normalized = (choice || '').toLowerCase() === 'full' ? 'full' : 'lite'
+  if (normalized === ENGINE_CHOICE && stockfishReady) {
+    // Nothing to do; just update label
+    try { updateEngineDropdownLabel(); } catch(e) {}
+    return
+  }
+  // Cancel any ongoing evaluations and precompute
+  try { stockfishWorker && stockfishWorker.postMessage('stop') } catch(e) {}
+  try { clearTimeout(evaluationTimeout) } catch(e) {}
+  evaluationInProgress = false
+  currentEvaluationCallback = null
+  preEvalCache.inFlight = null
+  preEvalCache.startTime = null
+  preEvalCache.canInterrupt = false
+  preEvalCache.bestMoveUci = null
+  preEvalCache.bestMoveCp = null
+
+  // Terminate existing worker
+  try { if (stockfishWorker) stockfishWorker.terminate() } catch(e) {}
+  stockfishWorker = null
+  stockfishReady = false
+
+  // Persist preference and update label
+  ENGINE_CHOICE = normalized
+  try { setCookie('sf_engine', ENGINE_CHOICE, 365); } catch(e) {}
+  try { updateEngineDropdownLabel(); } catch(e) {}
+
+  // Re-init engine; spinner will show inside
+  initStockfish()
+
+  // If a puzzle is already loaded, optionally kick precompute again
+  try { if (currentPuzzle && currentPuzzle.fen) precomputeBestEval(currentPuzzle.fen) } catch(e) {}
+}
+
+/**
  * Show engine error message to user
  */
 function showEngineError(message) {
@@ -259,6 +308,15 @@ function hideEngineLoadingSpinner() {
   if (spinner && spinner.parentNode) {
     spinner.parentNode.removeChild(spinner);
   }
+}
+
+/**
+ * Update the engine dropdown label to reflect current selection
+ */
+function updateEngineDropdownLabel(){
+  const el = document.getElementById('engineDropdownLabel')
+  if (!el) return
+  el.textContent = ENGINE_CHOICE === 'full' ? 'Full' : 'Lite'
 }
 
 /**
@@ -486,6 +544,32 @@ function logError(message, error) {
   if (window.__CP_DEBUG) {
     console.error(message, error)
   }
+}
+
+/** Cookie helpers for persisting engine selection */
+function setCookie(name, value, days) {
+  try {
+    let expires = ''
+    if (days) {
+      const d = new Date()
+      d.setTime(d.getTime() + (days*24*60*60*1000))
+      expires = '; expires=' + d.toUTCString()
+    }
+    document.cookie = name + '=' + encodeURIComponent(value) + expires + '; path=/'
+  } catch(e) { /* ignore */ }
+}
+
+function getCookie(name) {
+  try {
+    const nameEQ = name + '='
+    const ca = document.cookie.split(';')
+    for (let i = 0; i < ca.length; i++) {
+      let c = ca[i]
+      while (c.charAt(0) === ' ') c = c.substring(1, c.length)
+      if (c.indexOf(nameEQ) === 0) return decodeURIComponent(c.substring(nameEQ.length, c.length))
+    }
+  } catch(e) { /* ignore */ }
+  return null
 }
 
 /**
@@ -1554,6 +1638,12 @@ let isDragInProgress = false
 let dragStartSquare = null // Track where drag started from
 
 window.addEventListener('DOMContentLoaded', ()=>{
+  // Load engine preference from cookie and update label
+  try {
+    const pref = getCookie('sf_engine')
+    ENGINE_CHOICE = (pref === 'full' || pref === 'lite') ? pref : 'lite'
+    updateEngineDropdownLabel()
+  } catch(e) {}
   // Initialize Stockfish engine
   initStockfish();
   
@@ -1823,6 +1913,15 @@ window.addEventListener('DOMContentLoaded', ()=>{
   window.addEventListener('orientationchange', scheduleResize)
   
   document.getElementById('next').addEventListener('click', loadPuzzle)
+  // Engine dropdown bindings
+  try {
+    const menuItems = document.querySelectorAll('[data-engine-choice]')
+    menuItems.forEach(a => a.addEventListener('click', (ev) => {
+      ev.preventDefault()
+      const choice = (ev.currentTarget.getAttribute('data-engine-choice') || '').toLowerCase()
+      switchEngine(choice)
+    }))
+  } catch(e) {}
   // ensure Hint button matches Next button styling and initial enabled/disabled state
   try{
     const nextBtn = document.getElementById('next')
