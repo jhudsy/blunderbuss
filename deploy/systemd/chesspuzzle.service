@@ -6,14 +6,14 @@ After=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/home/deploy/chesspuzzle
+WorkingDirectory=/root/chesspuzzle
 # Load .env file if it exists (contains DOMAIN, secrets, etc.)
 # The "-" prefix makes this optional - systemd won't fail if the file is missing
-EnvironmentFile=-/home/deploy/chesspuzzle/.env
+EnvironmentFile=-/root/chesspuzzle/.env
 
 # Start the production docker-compose stack
-ExecStart=/usr/bin/docker compose -f /home/deploy/chesspuzzle/docker-compose.prod.yml up -d
-ExecStop=/usr/bin/docker compose -f /home/deploy/chesspuzzle/docker-compose.prod.yml down
+ExecStart=/usr/bin/docker compose -f /root/chesspuzzle/docker-compose.prod.yml up -d
+ExecStop=/usr/bin/docker compose -f /root/chesspuzzle/docker-compose.prod.yml down
 
 [Install]
 WantedBy=multi-user.target
