@@ -100,15 +100,7 @@ This prevents the bug where premature moves would capture wrong CP values (e.g.,
 - Buttons disabled during analysis to prevent conflicts
 - Engine selection: User can switch between Lite (faster) and Full (stronger)
 
-### 3. User Experience Changes
-
-**UI Improvements:**
-- **Win Percentage Display:** Instead of showing raw centipawn values, the system now displays win percentages for better user understanding
-- **Color-Coded Attempts Counter:** 
-  - Green: Full attempts remaining
-  - Orange: Some attempts used
-  - Red: Last attempt remaining
-- **Format:** "Incorrect. White winning chances changed from 57.1% to 66.6%. Attempts remaining: 2/3"
+### 3. Move Evaluation Flow
 
 **Correct Move Feedback:**
 ```
@@ -131,9 +123,7 @@ Correct! Click Next to continue.
   delta_cp: -10,
   win_change_pct: "+0.83"
 }
-Incorrect. White winning chances changed from 64.98% to 65.81%.
-Attempts remaining: 2/3
-The best move was e4.
+[Move evaluated and sent to server]
 ```
 
 **Engine Loading:**

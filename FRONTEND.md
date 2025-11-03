@@ -41,19 +41,43 @@ The system evaluates moves based on win likelihood rather than comparing against
 3. **Determines correctness**: A move is considered correct if the win chance does not decrease by more than 10%. This allows for multiple valid moves that maintain a good position, rather than requiring one specific move.
 
 4. **Visual feedback**: 
-   - During evaluation (2-3 seconds), displays "Analyzing position..." status
-   - Correct moves: square turns green, shows win percentage change (e.g., "Correct! Win chance: 65% → 70% (+5%)")
-   - Incorrect moves: square turns red, shows win percentage drop (e.g., "Incorrect. Win chance dropped to 40% (-25%)")
+   - During evaluation (850ms for player moves, ~5 seconds for precomputation), displays "Analyzing position..." with spinner
+   - Correct moves: square turns green, shows "Correct! Click Next to continue."
+   - Incorrect moves: shows win percentage change with color-coded attempts counter
+     - **Win Percentage Display**: Instead of raw centipawn values, displays user-friendly win percentages
+       - Format: "Incorrect. White winning chances changed from 57.1% to 66.6%."
+       - Shows which player's perspective (White/Black) based on side to move
+     - **Color-coded Attempts Counter**: 
+       - Green background: Full attempts remaining
+       - Orange background: Some attempts used  
+       - Red background: Last attempt remaining
+       - Format: "Attempts remaining: 2/3"
    - After a short delay, if incorrect and attempts remain, the board resets
    - If max attempts reached, the correct move is revealed (animated in green)
 
 **Technical Implementation:**
 
-- Stockfish.js (931KB) is loaded from `/static/js/stockfish.js`
+- Stockfish 17.1 WASM (Lite and Full versions) loaded via Web Workers
+  - Lite: `static/js/engine-worker.js` (~3MB compressed)
+  - Full: `static/js/engine-worker-full.js` (~9MB compressed, stronger evaluation)
 - Engine runs in a Web Worker (background thread) to avoid blocking the UI
-- Evaluations use depth 15 (balance between speed and accuracy)
+- User can switch between Lite and Full engines (preference persisted via cookie)
+- **Two-phase evaluation for optimal performance:**
+  1. **Precomputation** (5000ms): Runs in background when puzzle loads, caches best move and CP
+  2. **Move evaluation** (850ms): Only needed if player doesn't play the best move
+     - If player plays best move: instant feedback using cached CP (0ms delay)
+     - If player plays different move: evaluate with `searchmoves` parameter (850ms)
+- **Perspective handling**: All centipawn evaluations kept in white's perspective
+  - Positive CP = good for white, Negative CP = good for black
+  - No negation based on side to move for consistency
+- **Race condition prevention**: When moves made before precompute finishes
+  - 100ms delay after interrupting precompute to flush stale engine messages
+  - Evaluation ID tracking for debugging
+  - goCommandSent flag filters stale info lines from previous evaluations
 - Win likelihood formula matches the one used server-side for consistency
 - Client calculates evaluations and sends centipawn values to server for validation
+- Visual feedback includes Bootstrap spinners during evaluation
+- Buttons disabled during analysis to prevent conflicts
 
 The user receives feedback showing their XP earned, any badges/achievements, and evaluation details. After answering (correct or after max attempts), a link to the game on lichess is provided.
 

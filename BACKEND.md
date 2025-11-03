@@ -16,8 +16,10 @@ The backend exposes the following routes:
 - For presenting a puzzle
      - /get_puzzle. Selects a puzzle using spaced repetition and returns the puzzle's ID and FEN (move details are not exposed to the client). Clears attempt tracking for the new puzzle.
      - /check_puzzle. Accepts evaluation data from the client and returns whether the move was correct based on win likelihood analysis. The endpoint expects:
-       - `initial_cp`: Centipawn evaluation of initial position (from Stockfish)
-       - `move_cp`: Centipawn evaluation of position after move (from Stockfish)
+       - `initial_cp`: Centipawn evaluation of initial position (from Stockfish, in white's perspective)
+       - `move_cp`: Centipawn evaluation of position after move (from Stockfish, in white's perspective)
+       
+       **Note on CP perspective**: All centipawn values are provided in white's perspective (positive = good for white, negative = good for black), regardless of which side is to move. This ensures consistent evaluation comparison without perspective conversion.
        
        The server calculates win likelihood for both positions using the formula:
        ```
