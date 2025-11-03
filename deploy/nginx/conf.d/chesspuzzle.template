@@ -47,14 +47,20 @@ server {
     }
 
     # Static assets with aggressive caching
-    # The CORP headers from the parent location block are inherited
+    # Repeat COOP/COEP/CORP headers here because nginx add_header doesn't inherit when child location defines add_header
     location ^~ /static/ {
         proxy_pass http://web:5000;
+        add_header Cross-Origin-Opener-Policy "same-origin" always;
+        add_header Cross-Origin-Embedder-Policy "require-corp" always;
+        add_header Cross-Origin-Resource-Policy "same-origin" always;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
         
-        # Ensure WASM files have correct content type
+        # Ensure WASM files have correct content type and isolation headers
         location ~* \.wasm$ {
             proxy_pass http://web:5000;
+            add_header Cross-Origin-Opener-Policy "same-origin" always;
+            add_header Cross-Origin-Embedder-Policy "require-corp" always;
+            add_header Cross-Origin-Resource-Policy "same-origin" always;
             add_header Content-Type "application/wasm" always;
             add_header Cache-Control "public, max-age=31536000, immutable" always;
         }
