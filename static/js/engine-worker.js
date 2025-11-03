@@ -4,12 +4,12 @@
 self.Module = self.Module || {};
 self.Module.locateFile = function(path) {
   // The stockfish JS will request its .wasm by name; point to our dedicated asset route
-  return '/assets/stockfish/' + path;
+  return '/static/vendor/stockfish/' + path;
 };
 // Help Emscripten resolve paths correctly inside a wrapper worker
-self.Module.mainScriptUrlOrBlob = '/assets/stockfish/stockfish-17.1-lite-51f59da.js';
+self.Module.mainScriptUrlOrBlob = '/static/vendor/stockfish/stockfish-17.1-lite-51f59da.js';
 // Explicitly set the wasm binary path for the lite build
-self.Module.wasmBinaryFile = '/assets/stockfish/stockfish-17.1-lite-51f59da.wasm';
+self.Module.wasmBinaryFile = '/static/vendor/stockfish/stockfish-17.1-lite-51f59da.wasm';
 
 // Debug: capture all fetches from the glue code to identify incorrect URLs
 try {
@@ -31,7 +31,7 @@ try {
 } catch(e) { /* ignore */ }
 
 // Load the Stockfish 17.1 Lite JS glue (will fetch corresponding .wasm)
-importScripts('/assets/stockfish/stockfish-17.1-lite-51f59da.js');
+importScripts('/static/vendor/stockfish/stockfish-17.1-lite-51f59da.js');
 
 // Instantiate engine
 let engine = null;

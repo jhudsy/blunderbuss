@@ -4,10 +4,10 @@
 self.Module = self.Module || {};
 self.Module.locateFile = function(path) {
   // The stockfish JS will request its .wasm or part files by name; point to our dedicated asset route
-  return '/assets/stockfish/' + path;
+  return '/static/vendor/stockfish/' + path;
 };
 // Help Emscripten resolve paths correctly inside a wrapper worker
-self.Module.mainScriptUrlOrBlob = '/assets/stockfish/stockfish-17.1-8e4d048.js';
+self.Module.mainScriptUrlOrBlob = '/static/vendor/stockfish/stockfish-17.1-8e4d048.js';
 
 // Debug: capture all fetches from the glue code to identify incorrect URLs
 try {
@@ -29,7 +29,7 @@ try {
 } catch(e) { /* ignore */ }
 
 // Load the Stockfish 17.1 Full JS glue (will fetch corresponding .wasm shards)
-importScripts('/assets/stockfish/stockfish-17.1-8e4d048.js');
+importScripts('/static/vendor/stockfish/stockfish-17.1-8e4d048.js');
 
 // Instantiate engine
 let engine = null;

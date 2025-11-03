@@ -126,8 +126,8 @@ function initStockfish() {
     // Select worker script: load the engine's own worker JS directly so it resolves
     // its WASM relative to itself (avoids wrapper path inference issues)
     const workerScript = ENGINE_CHOICE === 'full'
-      ? '/assets/stockfish/stockfish-17.1-8e4d048.js'
-      : '/assets/stockfish/stockfish-17.1-lite-51f59da.js'
+      ? '/static/vendor/stockfish/stockfish-17.1-8e4d048.js'
+      : '/static/vendor/stockfish/stockfish-17.1-lite-51f59da.js'
     dbg('[SF] initStockfish(): creating worker', { choice: ENGINE_CHOICE, workerScript })
 
     // Use dedicated worker wrapper that loads the selected Stockfish WASM
