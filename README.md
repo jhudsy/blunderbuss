@@ -161,6 +161,25 @@ Credits & license
 - The frontend uses chessboard.js (MIT) and chess.js (MIT).
 - This project is MIT-licensed (see LICENSE if present).
 
+Documentation
+-------------
+
+The project documentation is organized into focused files in the `docs/` directory:
+
+- **README.md** (this file) - Quick start, development setup, testing
+- **docs/DEPLOYMENT.md** - Production deployment with Docker, nginx, systemd, and security headers
+- **docs/BACKEND.md** - Backend routes, API contracts, authentication, security notes
+- **docs/FRONTEND.md** - UI requirements, evaluation-based validation, user interactions
+- **docs/STOCKFISH_INTEGRATION.md** - Stockfish engine integration, evaluation system, debugging
+- **docs/SCHEMA.md** - Database schema reference (PonyORM models)
+- **docs/MIGRATIONS.md** - Database migration notes and scripts
+
+For deployment:
+1. Start with README.md for development setup
+2. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment with Docker and nginx
+3. Check [docs/BACKEND.md](docs/BACKEND.md) for API details and [docs/FRONTEND.md](docs/FRONTEND.md) for UI behavior
+4. Refer to [docs/STOCKFISH_INTEGRATION.md](docs/STOCKFISH_INTEGRATION.md) for chess engine specifics
+
 If you want, I can:
 - Add a pinned `requirements-lock.txt` and a small `README` section documenting `.venv` usage in CI.
 - Add a Dockerfile and GitHub Actions workflow for CI/deploy.

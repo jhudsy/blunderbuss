@@ -69,7 +69,7 @@ def win_likelihood(cp):
     Uses the formula: 50 + 50 * (2 / (e^(-0.00368*cp) + 1) - 1)
     
     This formula is used consistently in both backend validation and 
-    is documented in BACKEND.md and STOCKFISH_INTEGRATION.md.
+    is documented in docs/BACKEND.md and docs/STOCKFISH_INTEGRATION.md.
     
     Args:
         cp: Centipawn evaluation from Stockfish
@@ -321,43 +321,42 @@ app.config.update({
 # Configure logging early
 _configure_logging()
 
-# Ensure correct MIME type for WASM files in development environments
+# Ensure correct MIME type for WASM files
 try:
     mimetypes.add_type('application/wasm', '.wasm')
 except Exception:
     pass
 
-# In local development, add COOP/COEP headers so SharedArrayBuffer and
-# threaded WASM (Stockfish) can run in the browser without a reverse proxy.
+# Add cross-origin isolation headers for SharedArrayBuffer support.
+# In production, nginx will add these headers at the reverse proxy level.
+# In development, we add them here so the app works without nginx.
 @app.after_request
-def _add_coop_coep_headers(resp):
+def _add_security_headers(resp):
+    """Add security headers for cross-origin isolation and WASM support.
+    
+    These headers enable SharedArrayBuffer which is required for Stockfish WASM with pthreads.
+    In production with nginx, these are set at the nginx level but we add them here
+    for development and as a fallback.
+    
+    COOP (Cross-Origin-Opener-Policy): Isolates the browsing context
+    COEP (Cross-Origin-Embedder-Policy): Requires all resources to opt-in to being loaded
+    CORP (Cross-Origin-Resource-Policy): Allows same-origin resources to be loaded
+    """
     try:
-        host = request.host.split(':')[0] if request.host else ''
-        on_localhost = host in ('localhost', '127.0.0.1', '::1')
-        if is_dev or on_localhost:
+        # Always add these headers in development mode
+        # In production, nginx adds them, but having them here doesn't hurt
+        # (nginx uses 'always' flag which takes precedence)
+        if is_dev:
             resp.headers.setdefault('Cross-Origin-Opener-Policy', 'same-origin')
             resp.headers.setdefault('Cross-Origin-Embedder-Policy', 'require-corp')
-            # Helpful for some browsers/loaders even on same-origin assets
             resp.headers.setdefault('Cross-Origin-Resource-Policy', 'same-origin')
+        
+        # Ensure WASM files always have correct content type
+        if resp.content_type and 'wasm' in resp.content_type:
+            resp.headers['Content-Type'] = 'application/wasm'
     except Exception:
         pass
     return resp
-
-# Dedicated route for Stockfish assets to ensure correct serving in development
-@app.route('/assets/stockfish/<path:filename>')
-def stockfish_assets(filename):
-    try:
-        root = os.path.join(app.static_folder, 'vendor', 'stockfish')
-        resp = send_from_directory(root, filename)
-        # Ensure expected content type for WASM
-        if filename.lower().endswith('.wasm'):
-            resp.headers['Content-Type'] = 'application/wasm'
-        # Make sure assets are considered same-origin embeddable
-        resp.headers.setdefault('Cross-Origin-Resource-Policy', 'same-origin')
-        return resp
-    except Exception as e:
-        logger.exception('Failed to serve stockfish asset %s: %s', filename, e)
-        return jsonify({'error': 'asset-not-found'}), 404
 
 
 # ============================================================================

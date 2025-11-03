@@ -120,7 +120,7 @@ def extract_puzzles_from_pgn(pgn_text):
             if meta and (meta.get('tag') or '').lower() in ('blunder', 'mistake','inaccuracy'):
                 pre = meta['pre_eval']
                 post = meta['post_eval']
-                # New selection rules (see BACKEND.md):
+                # New selection rules (see docs/BACKEND.md):
                 # - Prioritize blunders where the engine evaluation changes sign
                 #   (e.g., positive -> negative or negative -> positive).
                 # - Ignore blunders where the position was already deeply

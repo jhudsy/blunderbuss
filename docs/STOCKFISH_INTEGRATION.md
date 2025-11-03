@@ -383,6 +383,24 @@ if (message.startsWith('info') && currentEvaluationCallback) {
 - SharedArrayBuffer/COOP: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer
 - WebAssembly: https://developer.mozilla.org/en-US/docs/WebAssembly
 
+## Security: Cross-Origin Isolation
+
+Stockfish WASM with pthreads requires SharedArrayBuffer, which needs cross-origin
+isolation. Three security headers enable this:
+
+- `Cross-Origin-Opener-Policy: same-origin`
+- `Cross-Origin-Embedder-Policy: require-corp`
+- `Cross-Origin-Resource-Policy: same-origin`
+
+**In development:** Flask adds these headers automatically (see `backend.py`)
+
+**In production:** nginx sets headers at reverse proxy level (see `deploy/nginx/conf.d/chesspuzzle.template`)
+
+**Critical:** All assets (JS, CSS, WASM) must be same-origin. No external CDN links
+allowed as they fail COEP checks. All vendor files are in `/static/vendor/`.
+
+See DEPLOYMENT.md for detailed security header documentation and troubleshooting.
+
 ## Debugging Tips
 
 **Enable debug logging:**

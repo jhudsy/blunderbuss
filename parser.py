@@ -118,7 +118,7 @@ def extract_puzzles_from_pgn(pgn_text):
             if meta and (meta.get('tag') or '').lower() in ('blunder', 'mistake'):
                 pre = meta['pre_eval']
                 post = meta['post_eval']
-                # Apply the rules from BACKEND.md:
+                # Apply the rules from docs/BACKEND.md:
                 # - prioritize blunders where eval goes from positive to negative
                 # - ignore blunders where pre_eval < -1.5 and goes to a larger negative
                 # Rule: ignore cases where the position was already deeply

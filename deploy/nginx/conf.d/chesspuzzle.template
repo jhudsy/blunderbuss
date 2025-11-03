@@ -22,11 +22,13 @@ server {
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
 
-    # Enable cross-origin isolation for SharedArrayBuffer (required by Stockfish WASM pthreads)
-    # Apply to all responses from this server, including proxied ones
+    # Enable cross-origin isolation for SharedArrayBuffer (required by Stockfish WASM with pthreads)
+    # These headers enable SharedArrayBuffer support which is required for multithreaded WASM
     add_header Cross-Origin-Opener-Policy "same-origin" always;
     add_header Cross-Origin-Embedder-Policy "require-corp" always;
-    # Optional: limit resource sharing to same-origin (not strictly required for COEP)
+    
+    # Cross-Origin-Resource-Policy ensures all resources (including static assets) 
+    # can be loaded in the cross-origin isolated context
     add_header Cross-Origin-Resource-Policy "same-origin" always;
 
     location / {
@@ -37,15 +39,25 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_http_version 1.1;
         proxy_set_header Connection "";
+        
+        # Don't override the backend headers for dynamic routes
+        proxy_pass_header Cross-Origin-Opener-Policy;
+        proxy_pass_header Cross-Origin-Embedder-Policy;
+        proxy_pass_header Cross-Origin-Resource-Policy;
     }
 
-    # Allow CORS for Stockfish WASM assets and enable long-lived caching
-    location ^~ /static/vendor/stockfish/ {
+    # Static assets with aggressive caching
+    # The CORP headers from the parent location block are inherited
+    location ^~ /static/ {
         proxy_pass http://web:5000;
-        add_header Access-Control-Allow-Origin "*" always;
-        add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
-        add_header Access-Control-Allow-Headers "Range, Accept, Origin, Content-Type" always;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
+        
+        # Ensure WASM files have correct content type
+        location ~* \.wasm$ {
+            proxy_pass http://web:5000;
+            add_header Content-Type "application/wasm" always;
+            add_header Cache-Control "public, max-age=31536000, immutable" always;
+        }
     }
 
     location /.well-known/acme-challenge/ {

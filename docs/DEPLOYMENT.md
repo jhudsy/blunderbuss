@@ -51,6 +51,83 @@ Operational tips
 - Scale Celery worker count separately from web workers.
 - Use a TLS-terminating proxy in front of the web container.
 
+Security headers for cross-origin isolation (COOP/COEP/CORP)
+------------------------------------------------------------
+
+**Why these headers are needed:**
+
+Blunderbuss uses Stockfish WASM with pthreads for chess position evaluation.
+Modern browsers require cross-origin isolation to enable SharedArrayBuffer (used
+by pthreads) due to Spectre/Meltdown security concerns. The application sets
+three security headers to enable this:
+
+- **Cross-Origin-Opener-Policy (COOP)**: `same-origin`
+  Isolates the browsing context from other origins, preventing other windows/tabs
+  from different origins from accessing this window's context.
+
+- **Cross-Origin-Embedder-Policy (COEP)**: `require-corp`
+  Requires all resources loaded by the page to explicitly opt-in to being loaded
+  (via CORS or same-origin).
+
+- **Cross-Origin-Resource-Policy (CORP)**: `same-origin`
+  Declares that resources can only be loaded from the same origin, satisfying
+  the COEP requirement for same-origin resources.
+
+**Implementation:**
+
+In development (Flask only):
+- Headers added via `@app.after_request` in `backend.py` when `is_dev=True`
+- Allows local testing without nginx
+
+In production (nginx + Flask):
+- nginx sets headers at reverse proxy level (more efficient)
+- Configured in `deploy/nginx/conf.d/chesspuzzle.template`:
+  ```nginx
+  add_header Cross-Origin-Opener-Policy "same-origin" always;
+  add_header Cross-Origin-Embedder-Policy "require-corp" always;
+  add_header Cross-Origin-Resource-Policy "same-origin" always;
+  ```
+
+**Important: No external CDN resources**
+
+All JavaScript, CSS, fonts, and assets are served from `/static/vendor/` to avoid
+CORS issues. Do NOT use external CDN links as they will fail COEP checks unless
+they explicitly support cross-origin isolation.
+
+**Verification:**
+
+Check headers are present:
+```bash
+curl -I https://your-domain.com/
+# Should show: Cross-Origin-Opener-Policy: same-origin
+#              Cross-Origin-Embedder-Policy: require-corp
+#              Cross-Origin-Resource-Policy: same-origin
+```
+
+Verify SharedArrayBuffer is available (browser console):
+```javascript
+typeof SharedArrayBuffer !== 'undefined'  // Should be true
+```
+
+**Troubleshooting:**
+
+Issue: SharedArrayBuffer not available
+- Ensure you're using HTTPS in production (HTTP works only on localhost)
+- Check headers are present using browser DevTools → Network tab
+- Verify nginx configuration is correctly processing template variables
+- Confirm all resources are same-origin (no CDN links in templates)
+
+Issue: Resources failing to load with COEP errors
+- All resources must be same-origin (check for external CDN URLs)
+- Verify files exist in `/static/vendor/` directory
+- Check Flask static folder is correctly mounted in docker-compose
+
+Issue: OAuth login fails
+- OAuth redirects still work (create isolated contexts, cookies persist)
+- Verify `SESSION_COOKIE_SECURE` is False in dev, True in production
+- Check `SESSION_COOKIE_SAMESITE=Lax` in backend.py
+- Ensure `USE_PROXY_FIX=1` is set when behind nginx
+
 Running on a Linux host and configuring automatic start (systemd)
 --------------------------------------------------------------
 
