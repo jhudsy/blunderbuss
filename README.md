@@ -1,4 +1,5 @@
-ChessPuzzle — lightweight puzzle trainer
+````markdown
+Blunderbuss — lightweight puzzle trainer
 ======================================
 
 What this repo is
@@ -59,7 +60,7 @@ What changed recently (important)
 ---------------------------------
 - `parser.py` was renamed to `pgn_parser.py` to avoid shadowing the Python stdlib module `parser`.
 * Notes:
-  - Logging: you can control app logging with the `LOG_LEVEL` or `CHESSPUZZLE_LOG_LEVEL` environment variable (e.g. `LOG_LEVEL=DEBUG`). This is respected at app startup.
+  - Logging: you can control app logging with the `LOG_LEVEL` or `BLUNDERBUSS_LOG_LEVEL` environment variable (e.g. `LOG_LEVEL=DEBUG`). This is respected at app startup.
   - Settings/perf types: perftypes are stored as a JSON array in the DB (e.g. `["blitz","rapid"]`) and the settings page posts/accepts JSON lists.
   - Migration: the repository includes `scripts/migrate_perftypes.py` to convert legacy CSV perftype values to JSON arrays in `db.sqlite` (it backs up your DB before modifying it).
 - Frontend highlights are animated and configurable via CSS variables in `static/css/site.css`:
@@ -160,6 +161,25 @@ Credits & license
 - The frontend uses chessboard.js (MIT) and chess.js (MIT).
 - This project is MIT-licensed (see LICENSE if present).
 
+Documentation
+-------------
+
+The project documentation is organized into focused files in the `docs/` directory:
+
+- **README.md** (this file) - Quick start, development setup, testing
+- **docs/DEPLOYMENT.md** - Production deployment with Docker, nginx, systemd, and security headers
+- **docs/BACKEND.md** - Backend routes, API contracts, authentication, security notes
+- **docs/FRONTEND.md** - UI requirements, evaluation-based validation, user interactions
+- **docs/STOCKFISH_INTEGRATION.md** - Stockfish engine integration, evaluation system, debugging
+- **docs/SCHEMA.md** - Database schema reference (PonyORM models)
+- **docs/MIGRATIONS.md** - Database migration notes and scripts
+
+For deployment:
+1. Start with README.md for development setup
+2. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for production deployment with Docker and nginx
+3. Check [docs/BACKEND.md](docs/BACKEND.md) for API details and [docs/FRONTEND.md](docs/FRONTEND.md) for UI behavior
+4. Refer to [docs/STOCKFISH_INTEGRATION.md](docs/STOCKFISH_INTEGRATION.md) for chess engine specifics
+
 If you want, I can:
 - Add a pinned `requirements-lock.txt` and a small `README` section documenting `.venv` usage in CI.
 - Add a Dockerfile and GitHub Actions workflow for CI/deploy.
@@ -168,7 +188,7 @@ Which would you like next?
 
 Production deployment (Docker + Redis)
 -------------------------------------
-This section outlines practical steps to run ChessPuzzle in a production-like
+This section outlines practical steps to run Blunderbuss in a production-like
 environment using Docker. It assumes Redis is run as a separate container and
 that you will mount a persistent volume for the SQLite database (or switch to
 Postgres for higher concurrency).
@@ -238,7 +258,7 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
     volumes:
-      - chesspuzzle-data:/data
+      - blunderbuss-data:/data
     ports:
       - "5000:5000"
     depends_on:
@@ -253,12 +273,12 @@ services:
       - DATABASE_FILE=/data/db.sqlite
       - REDIS_PASSWORD=${REDIS_PASSWORD}
     volumes:
-      - chesspuzzle-data:/data
+      - blunderbuss-data:/data
     depends_on:
       - redis
 
 volumes:
-  chesspuzzle-data:
+  blunderbuss-data:
   redis-data:
 ```
 

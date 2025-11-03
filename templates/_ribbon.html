@@ -5,17 +5,22 @@
     @keyframes ribbonPulse{0%{transform:scale(1);}50%{transform:scale(1.25);}100%{transform:scale(1);}}
   </style>
   <div class="container d-flex justify-content-between align-items-center">
-    <div>
-  <span class="me-3">XP: <strong id="ribbonXP">-</strong></span>
-  <span class="me-3" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Day streak: how many days in a row you've attempted puzzles. Keep it going!">Days: <strong id="ribbonDaysStreak">-</strong></span>
-  <span class="me-3" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Puzzle streak: how many puzzles in a row you've answered correctly. The first number is your current streak, and the number in brackets is your best ever streak. Nice work!">Puzzle: <strong id="ribbonPuzzleStreak">-</strong></span>
+    <div class="d-flex align-items-center">
+  <img src="/static/img/blunderbuss.png" alt="Blunderbuss Logo" style="height:56px;width:auto;margin-right:20px;vertical-align:middle;box-shadow:0 2px 8px rgba(0,0,0,0.10);border-radius:8px;">
+      <span class="me-3">XP: <strong id="ribbonXP">-</strong></span>
+      <span class="me-3" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Day streak: how many days in a row you've attempted puzzles. Keep it going!">Days: <strong id="ribbonDaysStreak">-</strong></span>
+      <span class="me-3" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Puzzle streak: how many puzzles in a row you've answered correctly. The first number is your current streak, and the number in brackets is your best ever streak. Nice work!">Puzzle: <strong id="ribbonPuzzleStreak">-</strong></span>
     </div>
     <div>
       {% set cur = request.path %}
-  {% set puzzle_url = url_for('puzzle_page') %}
+      {% set puzzle_url = url_for('puzzle_page') %}
       {% set leaderboard_url = url_for('leaderboard_page') %}
       {% set settings_url = url_for('settings') %}
       {% set badges_url = url_for('badge_gallery') %}
+      {% set about_url = url_for('about_page') %}
+      {% if cur != about_url %}
+        <a class="btn btn-sm btn-outline-secondary me-2" href="{{ about_url }}">About</a>
+      {% endif %}
       {% if cur != puzzle_url %}
         <a class="btn btn-sm btn-outline-secondary me-2" href="{{ puzzle_url }}">Back to Puzzles</a>
       {% endif %}

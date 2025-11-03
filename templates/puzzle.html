@@ -3,6 +3,11 @@
   <head>
     <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/static/favicon-96x96.png" type="image/png" sizes="96x96">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+    <link rel="manifest" href="/static/site.webmanifest">
     <script>
       window.__CP_DEBUG = {{ CP_DEBUG|tojson }};
       if (!window.__CP_DEBUG) { try { console.debug = function(){} } catch(e){} }
@@ -32,9 +37,22 @@
         <div class="col-md-6 order-2 order-md-2 mt-3 mt-md-0">
           <div id="info" class="mb-3"></div>
           <div id="puzzleMeta" class="text-muted mb-3"></div>
-          <div class="d-flex flex-wrap gap-2">
+          <div class="d-flex flex-wrap gap-2 align-items-center">
             <button id="hint" class="btn btn-outline-secondary">Hint</button>
             <button id="next" class="btn btn-primary" disabled>Next</button>
+            <div class="ms-auto dropdown">
+              <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="engineDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                Engine: <span id="engineDropdownLabel">Lite</span>
+              </button>
+              <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="engineDropdown">
+                <li>
+                  <a class="dropdown-item" href="#" data-engine-choice="lite">Lite (default)</a>
+                </li>
+                <li>
+                  <a class="dropdown-item" href="#" data-engine-choice="full">Full (slower, stronger)</a>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>
@@ -52,6 +70,6 @@
   <script src="/static/vendor/bootstrap.bundle.min.js"></script>
   <script src="/static/js/ribbon.js"></script>
   <script>window.addEventListener('DOMContentLoaded', ()=>{ if (window.initRibbon) window.initRibbon() })</script>
-    <script src="/static/js/puzzle.js?v=7"></script>
+    <script src="/static/js/puzzle.js?v=27"></script>
   </body>
 </html>
