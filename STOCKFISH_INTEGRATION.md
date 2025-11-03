@@ -60,8 +60,25 @@ Starting position: white to move
 Best move: e2e4, CP = +168 (white's advantage)
 Player move: h2h3, CP = +158 (white's advantage)
 Delta: +158 - +168 = -10 CP (player's move is 0.10 pawns worse)
-Win% change: 65.81% - 64.98% = +0.83% (barely maintaining position)
+Win% change: 64.98% → 65.81% (barely maintaining position)
 ```
+
+**Perspective Handling:**
+All centipawn evaluations are kept in **white's perspective** for consistency:
+- Positive CP = good for white
+- Negative CP = good for black
+- No negation based on side to move
+- Direct comparison: `delta_cp = playerMoveCp - bestMoveCp`
+
+**Race Condition Prevention:**
+When a player moves before precomputation finishes:
+1. **Interrupt mechanism**: Send `stop` command to engine, clear callback
+2. **100ms delay**: Wait for engine to flush stale info lines from message queue
+3. **Evaluation ID tracking**: Each evaluation gets unique ID for debugging
+4. **goCommandSent flag**: Only process info lines after `go` command sent
+5. **Stale message filtering**: Ignore info lines from previous evaluations
+
+This prevents the bug where premature moves would capture wrong CP values (e.g., capturing best move's CP ~-42 instead of played move's CP ~-130).
 
 **Backend (backend.py):**
 - Modified `/check_puzzle` endpoint:
@@ -85,6 +102,14 @@ Win% change: 65.81% - 64.98% = +0.83% (barely maintaining position)
 
 ### 3. User Experience Changes
 
+**UI Improvements:**
+- **Win Percentage Display:** Instead of showing raw centipawn values, the system now displays win percentages for better user understanding
+- **Color-Coded Attempts Counter:** 
+  - Green: Full attempts remaining
+  - Orange: Some attempts used
+  - Red: Last attempt remaining
+- **Format:** "Incorrect. White winning chances changed from 57.1% to 66.6%. Attempts remaining: 2/3"
+
 **Correct Move Feedback:**
 ```
 [Precompute phase during puzzle load]
@@ -106,7 +131,8 @@ Correct! Click Next to continue.
   delta_cp: -10,
   win_change_pct: "+0.83"
 }
-Incorrect. Win change: +0.83%. You have 2 attempts remaining.
+Incorrect. White winning chances changed from 64.98% to 65.81%.
+Attempts remaining: 2/3
 The best move was e4.
 ```
 
@@ -134,14 +160,16 @@ The best move was e4.
 ## Files Modified
 
 1. `backend.py` - Update `/check_puzzle` endpoint for evaluation-based validation; add COOP/COEP/CORP headers for dev
-2. `static/js/puzzle.js` - Integrate Stockfish engine, precomputation, and evaluation logic with searchmoves
-3. `static/vendor/stockfish/` - NEW: Chess engine files (WASM + JS glue)
+2. `static/js/puzzle.js` - Integrate Stockfish engine, precomputation, and evaluation logic with searchmoves; refactor for maintainability; fix race conditions; add win percentage display
+3. `static/js/engine-worker.js` - Web Worker for Stockfish Lite engine
+4. `static/js/engine-worker-full.js` - Web Worker for Stockfish Full engine  
+5. `static/vendor/stockfish/` - NEW: Chess engine files (WASM + JS glue)
    - `stockfish-17.1-lite-51f59da.js` and `.wasm` (Lite version)
    - `stockfish-17.1-8e4d048.js` and multiple `.wasm` shards (Full version)
-4. `templates/puzzle.html` - Script versioning for cache busting
-5. `FRONTEND.md` - Document evaluation system and UI behavior
-6. `BACKEND.md` - Document new API contract and win likelihood formula
-7. `STOCKFISH_INTEGRATION.md` - This document (implementation details)
+6. `templates/puzzle.html` - Script versioning for cache busting; add attempts counter element
+7. `FRONTEND.md` - Document evaluation system and UI behavior
+8. `BACKEND.md` - Document new API contract and win likelihood formula
+9. `STOCKFISH_INTEGRATION.md` - This document (implementation details)
 
 ## Testing Recommendations
 
@@ -163,11 +191,13 @@ The best move was e4.
 3. **Performance:**
    - Precomputation: ~5-6 seconds in background (doesn't block UI)
    - Best move played: instant (0ms, uses cache)
-   - Different move: ~850ms evaluation
+   - Different move: ~850ms evaluation + 100ms delay if interrupted
    - Verify spinner appears and disappears correctly
    - Check browser console for [SF][precompute] and [SF][eval] logs
    - Verify Web Worker doesn't block UI
    - Test button disabling during evaluation
+   - Test premature moves (before precompute finishes) - should show correct CP
+   - Verify no stale CP values captured (check console logs for evalId tracking)
 
 4. **Hint System:**
    - Verify hints still work (highlight from-square)
@@ -254,6 +284,7 @@ EVALUATION_MIN_MOVETIME_MS = 850          // Min time before interrupt
 EVALUATION_FALLBACK_DEPTH = 7             // Fallback depth search
 STOCKFISH_THREADS = 2                     // UCI threads option
 CORRECTNESS_THRESHOLD = -1.0              // Max win% drop allowed
+INTERRUPT_DELAY_MS = 100                  // Delay after interrupt to clear stale messages
 ```
 
 ### searchmoves Behavior
@@ -274,6 +305,19 @@ preEvalCache = {
   startTime: 1699000000000,
   canInterrupt: true       // true after min time elapsed
 }
+
+// Evaluation callback structure
+currentEvaluationCallback = {
+  resolve: Function,
+  reject: Function,
+  latestCp: null,
+  bestMove: null,
+  fen: string,
+  isPrecompute: boolean,
+  searchMove: string | null,
+  evalId: number,          // Unique ID for race condition prevention
+  goCommandSent: boolean   // Flag to filter stale info lines
+}
 ```
 
 ### Error Handling
@@ -282,6 +326,61 @@ preEvalCache = {
 3. **No CP returned**: Fallback to depth search
 4. **Fallback fails**: Reject with error, reset board
 5. **Network error**: Show error, allow retry
+6. **Race condition (premature moves)**: 100ms delay + info line filtering prevents stale CP capture
+
+### Race Condition Fix (Premature Moves)
+
+**Problem:** When a player moved before precomputation finished, the evaluation would capture wrong CP values:
+- Precompute starts: evaluates best move, sends info lines with CP
+- User moves before precompute completes
+- `stop` command sent, but info lines already queued in message buffer
+- New `searchmoves` evaluation starts immediately
+- Stale info lines from precompute captured by new evaluation
+- Result: Wrong CP attributed to played move (e.g., best move's -42 instead of played move's -130)
+
+**Solution - Multi-layered approach:**
+
+1. **Evaluation ID tracking** (line ~86):
+   - Global counter `evaluationIdCounter` increments for each evaluation
+   - Each callback tagged with unique `evalId` for debugging
+
+2. **goCommandSent flag** (line ~646):
+   - Added to evaluation callback structure
+   - Set to `true` when `go` command sent to engine
+   - Info lines only processed if flag is `true`
+
+3. **100ms delay after interrupt** (line ~1407):
+   - When interrupting precompute, wait 100ms before starting new evaluation
+   - Allows engine to flush stale info lines from message queue
+   - Only applied when `interruptedResult` is not null
+
+4. **Stale info line filtering** (line ~199):
+   - Worker message handler checks `goCommandSent` flag
+   - Ignores info lines that arrive before `go` command sent
+   - Prevents contamination from previous evaluation
+
+**Code example:**
+```javascript
+// After interrupt, add delay before new evaluation
+if (interruptedResult) {
+  await new Promise(resolve => setTimeout(resolve, 100));
+  if (window.__CP_DEBUG) {
+    console.log('[SF][delay] waited 100ms after interrupt to clear stale engine messages');
+  }
+}
+
+// In worker message handler
+if (message.startsWith('info') && currentEvaluationCallback) {
+  // Ignore stale info lines from previous evaluations
+  if (!currentEvaluationCallback.goCommandSent) {
+    if (window.__CP_DEBUG) {
+      console.debug('[SF][stale] ignoring info line before go command sent');
+    }
+    return;
+  }
+  // Process info line normally...
+}
+```
 
 ## Resources
 
@@ -318,6 +417,8 @@ window.__cp_lastEval        // Last evaluation details
 [SF][precompute] info { depth: 20, score: "1.68", pv: "e2e4" }
 [SF][precompute] bestmove { uci: "e2e4", cp: 168, pawns: "1.68" }
 [SF][eval] played best move; using precomputed CP
+[SF][delay] waited 100ms after interrupt to clear stale engine messages
+[SF][stale] ignoring info line before go command sent { evalId: 5 }
 [SF][eval] summary { best: {...}, played: {...}, delta_cp: -10, ... }
 ```
 
