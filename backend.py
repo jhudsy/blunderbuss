@@ -45,7 +45,7 @@ logger = logging.getLogger('blunderbuss')
 # ============================================================================
 
 # Puzzle correctness threshold: maximum allowable win likelihood decrease (percentage points)
-CORRECTNESS_THRESHOLD = -1.0
+CORRECTNESS_THRESHOLD = -2.0
 
 # Max attempts range
 MIN_ATTEMPTS = 1
