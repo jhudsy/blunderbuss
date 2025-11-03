@@ -48,6 +48,11 @@ services:
   web:
     build: .
     env_file: .env
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - FLASK_ENV=production
       - SECRET_KEY=${SECRET_KEY}
@@ -81,6 +86,11 @@ services:
   worker:
     build: .
     env_file: .env
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     # Wait for Postgres (if configured) before starting the Celery worker to
     # avoid a race where the worker starts, cannot bind to Postgres, and
     # falls back to sqlite. The wait_for_db script exits quickly when no
@@ -117,6 +127,11 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - redis-data:/data
     command: ["sh","-c","if [ -n \"${REDIS_PASSWORD}\" ]; then exec redis-server --requirepass \"${REDIS_PASSWORD}\"; else exec redis-server; fi"]
@@ -124,6 +139,11 @@ services:
   postgres:
     image: postgres:15-alpine
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -139,6 +159,11 @@ services:
   nginx:
     image: nginx:stable-alpine
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "80:80"
       - "443:443"
@@ -158,6 +183,11 @@ services:
 
   certbot:
     image: certbot/certbot
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     volumes:
       - certs:/etc/letsencrypt
       - webroot:/var/www/certbot
