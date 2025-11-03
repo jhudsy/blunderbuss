@@ -3,12 +3,33 @@
 // Ensure WASM files are loaded from the correct directory regardless of worker origin
 self.Module = self.Module || {};
 self.Module.locateFile = function(path) {
-  // The stockfish JS will request its .wasm or part files by name; point to vendor dir
-  return '/static/vendor/stockfish/' + path;
+  // The stockfish JS will request its .wasm or part files by name; point to our dedicated asset route
+  return '/assets/stockfish/' + path;
 };
+// Help Emscripten resolve paths correctly inside a wrapper worker
+self.Module.mainScriptUrlOrBlob = '/assets/stockfish/stockfish-17.1-8e4d048.js';
+
+// Debug: capture all fetches from the glue code to identify incorrect URLs
+try {
+  const __origFetch = self.fetch;
+  self.fetch = function(url, options){
+    try { self.postMessage('DEBUG_FETCH ' + url); } catch(e){}
+    try {
+      return __origFetch(url, options).then(r => {
+        try {
+          const ct = r && r.headers ? r.headers.get('content-type') : null
+          self.postMessage('DEBUG_FETCH_STATUS ' + url + ' ' + (r && r.status) + ' ' + (ct || ''))
+        } catch(e){}
+        return r
+      })
+    } catch(e) {
+      return __origFetch(url, options)
+    }
+  }
+} catch(e) { /* ignore */ }
 
 // Load the Stockfish 17.1 Full JS glue (will fetch corresponding .wasm shards)
-importScripts('/static/vendor/stockfish/stockfish-17.1-8e4d048.js');
+importScripts('/assets/stockfish/stockfish-17.1-8e4d048.js');
 
 // Instantiate engine
 let engine = null;

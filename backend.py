@@ -35,6 +35,7 @@ load_dotenv()
 
 import logging
 import math
+import mimetypes
 
 # named logger for the application
 logger = logging.getLogger('blunderbuss')
@@ -319,6 +320,44 @@ app.config.update({
 
 # Configure logging early
 _configure_logging()
+
+# Ensure correct MIME type for WASM files in development environments
+try:
+    mimetypes.add_type('application/wasm', '.wasm')
+except Exception:
+    pass
+
+# In local development, add COOP/COEP headers so SharedArrayBuffer and
+# threaded WASM (Stockfish) can run in the browser without a reverse proxy.
+@app.after_request
+def _add_coop_coep_headers(resp):
+    try:
+        host = request.host.split(':')[0] if request.host else ''
+        on_localhost = host in ('localhost', '127.0.0.1', '::1')
+        if is_dev or on_localhost:
+            resp.headers.setdefault('Cross-Origin-Opener-Policy', 'same-origin')
+            resp.headers.setdefault('Cross-Origin-Embedder-Policy', 'require-corp')
+            # Helpful for some browsers/loaders even on same-origin assets
+            resp.headers.setdefault('Cross-Origin-Resource-Policy', 'same-origin')
+    except Exception:
+        pass
+    return resp
+
+# Dedicated route for Stockfish assets to ensure correct serving in development
+@app.route('/assets/stockfish/<path:filename>')
+def stockfish_assets(filename):
+    try:
+        root = os.path.join(app.static_folder, 'vendor', 'stockfish')
+        resp = send_from_directory(root, filename)
+        # Ensure expected content type for WASM
+        if filename.lower().endswith('.wasm'):
+            resp.headers['Content-Type'] = 'application/wasm'
+        # Make sure assets are considered same-origin embeddable
+        resp.headers.setdefault('Cross-Origin-Resource-Policy', 'same-origin')
+        return resp
+    except Exception as e:
+        logger.exception('Failed to serve stockfish asset %s: %s', filename, e)
+        return jsonify({'error': 'asset-not-found'}), 404
 
 
 # ============================================================================
