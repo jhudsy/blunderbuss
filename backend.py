@@ -1307,8 +1307,13 @@ def check_puzzle():
         # Compute base XP
         gained = xp_for_answer(correct, cooldown_minutes=cd, consecutive_correct=consec)
         
-        # Apply attempt penalty for incorrect answers after first attempt
-        if not correct and current_attempt > 1:
+        # Apply attempt penalty based on the number of attempts on THIS puzzle.
+        # Only the correct attempt awards XP, but its value is halved per prior incorrect attempt:
+        #  - Attempt 1: full XP
+        #  - Attempt 2: 50% XP
+        #  - Attempt 3: 25% XP
+        # (Incorrect attempts award 0 XP regardless.)
+        if correct and current_attempt > 1:
             gained = calculate_attempt_xp_penalty(gained, current_attempt)
         
         # If hint was used, cap XP at minimum value
