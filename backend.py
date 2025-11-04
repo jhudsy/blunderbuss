@@ -80,24 +80,8 @@ def win_likelihood(cp):
     return 50 + 50 * (2 / (math.exp(-0.00368 * cp) + 1) - 1)
 
 
-def calculate_attempt_xp_penalty(gained_xp, attempt_number):
-    """Calculate XP after applying attempt penalty.
-    
-    Each incorrect attempt halves the XP reward:
-    - Attempt 1: full XP
-    - Attempt 2: 50% XP  
-    - Attempt 3: 25% XP
-    
-    Args:
-        gained_xp: Base XP amount before penalty
-        attempt_number: Current attempt number (1-indexed)
-        
-    Returns:
-        XP after penalty applied (integer division)
-    """
-    if attempt_number <= 1:
-        return gained_xp
-    return gained_xp // (2 ** (attempt_number - 1))
+# NOTE: XP attempt penalty is inlined in /check_puzzle. The rule is:
+# Attempt 1: full XP; Attempt 2: XP // 2; Attempt 3: XP // 4; etc.
 
 
 # ============================================================================
@@ -1307,9 +1291,14 @@ def check_puzzle():
         # Compute base XP
         gained = xp_for_answer(correct, cooldown_minutes=cd, consecutive_correct=consec)
         
-        # Apply attempt penalty for incorrect answers after first attempt
-        if not correct and current_attempt > 1:
-            gained = calculate_attempt_xp_penalty(gained, current_attempt)
+        # Apply attempt penalty based on the number of attempts on THIS puzzle.
+        # Only the correct attempt awards XP, but its value is halved per prior incorrect attempt:
+        #  - Attempt 1: full XP
+        #  - Attempt 2: 50% XP
+        #  - Attempt 3: 25% XP
+        # (Incorrect attempts award 0 XP regardless.)
+        if correct and current_attempt > 1:
+            gained = gained // (2 ** (current_attempt - 1))
         
         # If hint was used, cap XP at minimum value
         if hint_used:
