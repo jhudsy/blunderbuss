@@ -1085,11 +1085,11 @@ def api_reset_achievements():
         user.best_streak_days = 0
         user.correct_count = 0
         
-        # Also reset daily/weekly XP tracking
+        # Also reset daily/weekly XP tracking (use empty string instead of None)
         user.xp_today = 0
-        user.xp_today_date = None
+        user.xp_today_date = ''
         user.xp_this_week = 0
-        user.week_start_date = None
+        user.week_start_date = ''
         
         return jsonify({'status': 'ok', 'message': 'Achievements reset successfully'})
 
