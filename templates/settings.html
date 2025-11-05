@@ -91,7 +91,42 @@
           <input type="number" name="cooldown" id="cooldown" class="form-control" value="{{ cooldown }}">
           <div class="form-text">Minimum time before a puzzle can be shown again.</div>
         </div>
+        <div class="mb-3 border-top pt-3">
+          <label class="form-label text-danger">Danger Zone</label>
+          <button type="button" class="btn btn-outline-danger" id="resetAchievementsBtn">
+            Reset All Achievements
+          </button>
+          <div class="form-text">This will reset your XP, puzzle streak, streak record, and days active to 0. This cannot be undone.</div>
+        </div>
       </form>
+    </div>
+
+    <!-- Reset Achievements Confirmation Modal -->
+    <div class="modal fade" id="resetAchievementsModal" tabindex="-1" aria-labelledby="resetAchievementsModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="resetAchievementsModalLabel">Reset All Achievements?</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p class="text-danger fw-bold">Warning: This action cannot be undone!</p>
+            <p>This will permanently reset the following to 0:</p>
+            <ul>
+              <li>Total XP</li>
+              <li>Current puzzle streak</li>
+              <li>Best puzzle streak record</li>
+              <li>Current days active streak</li>
+              <li>Best days active streak record</li>
+            </ul>
+            <p>Your puzzles and other settings will not be affected.</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-danger" id="confirmResetBtn">Reset Achievements</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script src="/static/vendor/jquery-3.6.0.min.js"></script>
@@ -249,6 +284,38 @@
         // Auto-save on checkbox changes
         Array.from(document.querySelectorAll('#perfCheckboxes input[type=checkbox], #tagCheckboxes input[type=checkbox]')).forEach(ch => {
           ch.addEventListener('change', saveSettings);
+        });
+      });
+
+      // Reset achievements functionality
+      window.addEventListener('DOMContentLoaded', () => {
+        const resetBtn = document.getElementById('resetAchievementsBtn');
+        const confirmBtn = document.getElementById('confirmResetBtn');
+        const modal = new bootstrap.Modal(document.getElementById('resetAchievementsModal'));
+
+        resetBtn.addEventListener('click', () => {
+          modal.show();
+        });
+
+        confirmBtn.addEventListener('click', async () => {
+          try {
+            const response = await fetch('/api/reset_achievements', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' }
+            });
+            
+            if (response.ok) {
+              modal.hide();
+              // Refresh the page to show updated values
+              window.location.reload();
+            } else {
+              const data = await response.json();
+              alert('Failed to reset achievements: ' + (data.error || 'Unknown error'));
+            }
+          } catch (e) {
+            console.error('Error resetting achievements:', e);
+            alert('Failed to reset achievements. Please try again.');
+          }
         });
       });
     </script>

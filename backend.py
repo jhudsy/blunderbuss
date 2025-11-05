@@ -1061,6 +1061,37 @@ def api_puzzle_counts():
         return jsonify({'available': len(filtered), 'total': total})
 
 
+@app.route('/api/reset_achievements', methods=['POST'])
+def api_reset_achievements():
+    """Reset user's achievements (XP, streaks, days active) to 0.
+    
+    This is a destructive operation that cannot be undone.
+    Only resets achievement-related fields, not puzzles or settings.
+    """
+    u = get_current_user()
+    if not u:
+        return jsonify({'error': 'not logged in'}), 401
+    
+    with db_session:
+        user = User.get(username=u.username)
+        if not user:
+            return jsonify({'error': 'user not found'}), 404
+        
+        # Reset all achievement-related fields
+        user.xp = 0
+        user.consecutive_correct = 0
+        user.best_puzzle_streak = 0
+        user.streak_days = 0
+        user.best_streak_days = 0
+        user.correct_count = 0
+        
+        # Also reset daily/weekly XP tracking
+        user.xp_today = 0
+        user.xp_today_date = None
+        user.xp_this_week = 0
+        user.week_start_date = None
+        
+        return jsonify({'status': 'ok', 'message': 'Achievements reset successfully'})
 
 
 
