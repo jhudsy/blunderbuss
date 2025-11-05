@@ -1091,6 +1091,9 @@ def api_reset_achievements():
         user.xp_this_week = 0
         user.week_start_date = ''
         
+        # Reset last successful activity date so streak properly starts at 1
+        user._last_successful_activity_date = ''
+        
         return jsonify({'status': 'ok', 'message': 'Achievements reset successfully'})
 
 
