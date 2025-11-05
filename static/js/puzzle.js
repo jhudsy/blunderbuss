@@ -1849,33 +1849,61 @@ function showBadgeToast(badges){
 
 // Show a small +XP animation near the ribbon XP element
 function animateXpIncrement(delta){
-  try{
-    // only animate for meaningful gains
-    if (!delta || delta < 5) return
-    const xpEl = $('ribbonXP')
-    if (!xpEl) return
-    const rect = xpEl.getBoundingClientRect()
+  animateRibbonIncrement('ribbonXP', `+${delta} XP`, delta >= 5)
+}
+
+/**
+ * Generic function to animate value increments near ribbon elements
+ * @param {string} elementId - ID of the ribbon element
+ * @param {string} text - Text to display in animation (e.g., "+10 XP", "🔥 Streak!")
+ * @param {boolean} shouldAnimate - Whether to show animation (allows conditional logic)
+ * @param {object} options - Optional styling overrides
+ */
+function animateRibbonIncrement(elementId, text, shouldAnimate = true, options = {}) {
+  if (!shouldAnimate) return
+  
+  try {
+    const targetEl = $(elementId)
+    if (!targetEl) return
+    
+    const rect = targetEl.getBoundingClientRect()
     const el = document.createElement('div')
-    el.textContent = `+${delta} XP`
-    el.style.position = 'fixed'
-    el.style.left = (rect.right - 10) + 'px'
-    el.style.top = (rect.top - 6) + 'px'
-    el.style.zIndex = 2000
-    el.style.fontWeight = '600'
-    el.style.color = '#28a745'
-    el.style.transition = 'transform 900ms ease-out, opacity 900ms ease-out'
-    el.style.transform = 'translateY(0px)'
-    el.style.opacity = '1'
+    el.textContent = text
+    
+    // Default styles (can be overridden)
+    const defaults = {
+      position: 'fixed',
+      left: (rect.right - 10) + 'px',
+      top: (rect.top - 6) + 'px',
+      zIndex: 2000,
+      fontWeight: '600',
+      color: '#28a745',
+      transition: 'transform 900ms ease-out, opacity 900ms ease-out',
+      transform: 'translateY(0px)',
+      opacity: '1'
+    }
+    
+    // Apply styles (defaults + overrides)
+    Object.assign(el.style, defaults, options)
     document.body.appendChild(el)
-    // force layout then animate up and fade
-    requestAnimationFrame(()=>{
+    
+    // Force layout then animate up and fade
+    requestAnimationFrame(() => {
       el.style.transform = 'translateY(-30px)'
       el.style.opacity = '0'
     })
-    // cleanup
-    setTimeout(()=>{ try{ document.body.removeChild(el) }catch(e){} }, 1200)
-  }catch(e){ /* ignore animation failures */ }
+    
+    // Cleanup
+    setTimeout(() => { 
+      try { document.body.removeChild(el) } catch(e) {} 
+    }, 1200)
+  } catch(e) { 
+    /* ignore animation failures */ 
+  }
 }
+
+// Expose globally for ribbon.js to use
+window.animateRibbonIncrement = animateRibbonIncrement
 
 function clearAllHighlights(){
   // remove highlight classes and inline styles on all board squares

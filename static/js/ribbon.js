@@ -54,14 +54,49 @@
       // briefly add an animated class.
       if (elPuzzle){
         const prev = parseInt(elPuzzle.getAttribute('data-prev') || '0', 10)
+        const prevBest = parseInt(elPuzzle.getAttribute('data-prev-best') || '0', 10)
         const now = parseInt(j.puzzle_streak || 0, 10)
         const best = parseInt(j.best_puzzle_streak || 0, 10)
+        
         // display current streak and best in brackets if best present
         elPuzzle.textContent = now + (best ? ` (${best})` : '')
         elPuzzle.setAttribute('data-prev', String(now))
-        if (now > prev){
-          elPuzzle.classList.add('ribbon-pulse')
-          setTimeout(()=>elPuzzle.classList.remove('ribbon-pulse'), 900)
+        elPuzzle.setAttribute('data-prev-best', String(best))
+        
+        // Animate puzzle streak increments
+        if (now > prev && now > 0) {
+          // Check if this is also a new record
+          const isNewRecord = best > prevBest && best > 0
+          
+          if (isNewRecord) {
+            // Prominent animation for new record
+            elPuzzle.classList.remove('streak-pulse-normal', 'streak-pulse-record')
+            // Force reflow to restart animation
+            void elPuzzle.offsetWidth
+            elPuzzle.classList.add('streak-pulse-record')
+            setTimeout(() => elPuzzle.classList.remove('streak-pulse-record'), 1200)
+            
+            // Show floating animation with special styling
+            if (window.animateRibbonIncrement) {
+              window.animateRibbonIncrement('ribbonPuzzleStreak', `🏆 Record! ${best}`, true, {
+                color: '#ffc107',
+                fontSize: '1.1rem',
+                fontWeight: '700'
+              })
+            }
+          } else {
+            // Normal animation for streak increment
+            elPuzzle.classList.remove('streak-pulse-normal', 'streak-pulse-record')
+            // Force reflow to restart animation
+            void elPuzzle.offsetWidth
+            elPuzzle.classList.add('streak-pulse-normal')
+            setTimeout(() => elPuzzle.classList.remove('streak-pulse-normal'), 600)
+            
+            // Show floating animation
+            if (window.animateRibbonIncrement) {
+              window.animateRibbonIncrement('ribbonPuzzleStreak', `🔥 ${now}`, true)
+            }
+          }
         }
       }
       if (elUser) {
