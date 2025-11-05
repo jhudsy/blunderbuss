@@ -56,7 +56,7 @@
 }
 
 .streak-pulse-normal {
-  animation: streak-pulse-normal 0.8s ease-in-out;
+  animation: streak-pulse-normal 1s ease-in-out;
 }
 
 .streak-pulse-record {

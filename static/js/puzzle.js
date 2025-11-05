@@ -1878,7 +1878,7 @@ function animateRibbonIncrement(elementId, text, shouldAnimate = true, options =
       zIndex: 2000,
       fontWeight: '600',
       color: '#28a745',
-      transition: 'transform 800ms ease-out, opacity 800ms ease-out',
+      transition: 'transform 1000ms ease-out, opacity 1000ms ease-out',
       transform: 'translateY(0px)',
       opacity: '1'
     }
@@ -1896,7 +1896,7 @@ function animateRibbonIncrement(elementId, text, shouldAnimate = true, options =
     // Cleanup
     setTimeout(() => { 
       try { document.body.removeChild(el) } catch(e) {} 
-    }, 800)
+    }, 1000)
   } catch(e) { 
     /* ignore animation failures */ 
   }
