@@ -1094,6 +1094,10 @@ def api_reset_achievements():
         # Reset last successful activity date so streak properly starts at 1
         user._last_successful_activity_date = ''
         
+        # Delete all badges/trophies
+        for badge in user.badges:
+            badge.delete()
+        
         return jsonify({'status': 'ok', 'message': 'Achievements reset successfully'})
 
 
