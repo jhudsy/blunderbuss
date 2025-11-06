@@ -2071,6 +2071,8 @@ window.addEventListener('DOMContentLoaded', ()=>{
   board = Chessboard('board', {
     position: 'start',
     draggable: true,
+    moveSpeed: 'slow',  // Enable animations with visible speed
+    appearSpeed: 'slow',  // Speed for pieces appearing/disappearing
     onDrop: async function(source, target) {
       // Check if this is a valid drop or a snapback
       const result = await onDrop(source, target)
