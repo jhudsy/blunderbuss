@@ -129,11 +129,15 @@ def import_games_task(self, username, perftypes, days):
                     if existing:
                         logger.debug('Skipping duplicate puzzle for user=%s game_id=%s move=%s (already exists)', username, p.get('game_id'), p.get('move_number'))
                         continue
+                    logger.info('Creating puzzle for user=%s game_id=%s move=%s with previous_fen=%s', 
+                               username, p.get('game_id'), p.get('move_number'), 
+                               str(p.get('previous_fen'))[:60] if p.get('previous_fen') else 'None')
                     Puzzle(
                         user=u,
                         game_id=p['game_id'],
                         move_number=p['move_number'],
                         fen=p['fen'],
+                        previous_fen=p.get('previous_fen'),
                         correct_san=p['correct_san'],
                         weight=p.get('initial_weight', 1.0),
                         white=p.get('white'),
