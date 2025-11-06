@@ -165,12 +165,15 @@ def extract_puzzles_from_pgn(pgn_text):
                         # Get board state from parent node (before opponent's move)
                         previous_board = node.parent.board()
                         previous_fen = previous_board.fen()
+                        logger.debug('Puzzle at move %s: has parent, previous_fen=%s', board.fullmove_number, previous_fen[:50])
                     else:
                         # No parent (this is the starting position), no previous_fen
                         previous_fen = None
+                        logger.debug('Puzzle at move %s: no parent node', board.fullmove_number)
                     
                     # Current board is the decision point (after opponent's move, before user's blunder)
                     fen = board.fen()
+                    logger.debug('Puzzle at move %s: fen=%s, previous_fen=%s', board.fullmove_number, fen[:50], str(previous_fen)[:50] if previous_fen else 'None')
                     # next_san computation removed
 
                     # initial weight: use the magnitude of the eval swing.
