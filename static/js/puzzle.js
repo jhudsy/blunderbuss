@@ -208,19 +208,19 @@ function initStockfish() {
         const pvMatch = message.match(/\bpv\s+(\S+)/);
         
         // Log info lines when searchMove is active (to debug searchmoves issues)
-        if (currentEvaluationCallback.searchMove && window.__CP_DEBUG) {
-          const d = depthMatch ? parseInt(depthMatch[1]) : null
-          const scoreStr = cpMatch ? cpMatch[1] : (mateMatch ? ('mate ' + mateMatch[1]) : '?')
-          if (d && d % 3 === 0) { // Log every 3rd depth
-            dbg('[SF][searchmoves] info', { 
-              searchMove: currentEvaluationCallback.searchMove, 
-              depth: d, 
-              score: scoreStr, 
-              pv: pvMatch ? pvMatch[1] : '(none)',
-              fullMsg: message.substring(0, 120)
-            })
-          }
-        }
+        //if (currentEvaluationCallback.searchMove && window.__CP_DEBUG) {
+        //  const d = depthMatch ? parseInt(depthMatch[1]) : null
+        //  const scoreStr = cpMatch ? cpMatch[1] : (mateMatch ? ('mate ' + mateMatch[1]) : '?')
+        //  if (d && d % 3 === 0) { // Log every 3rd depth
+        //    dbg('[SF][searchmoves] info', { 
+        //      searchMove: currentEvaluationCallback.searchMove, 
+        //      depth: d, 
+        //      score: scoreStr, 
+        //      pv: pvMatch ? pvMatch[1] : '(none)',
+        //      fullMsg: message.substring(0, 120)
+        //    })
+        //  }
+        //}
         
         // Accept any depth result for fast response (movetime mode)
         if (depthMatch) {
@@ -281,12 +281,12 @@ function initStockfish() {
         evaluationInProgress = false;
         
         // Debug log for bestmove resolution
-        dbg('[SF][bestmove] resolving evaluation', {
+        /*dbg('[SF][bestmove] resolving evaluation', {
           searchMove: callback ? callback.searchMove : null,
           latestCp: callback ? callback.latestCp : null,
           bestMove: callback ? callback.bestMove : null,
           willFallback: callback && callback.latestCp === null && !callback.isFallback
-        });
+        });*/
         
         if (callback.latestCp !== null) {
           callback.resolve({ cp: callback.latestCp, bestMove: callback.bestMove || null });
@@ -483,7 +483,7 @@ function hideEvaluatingSpinner() {
  */
 function precomputeBestEval(startFEN, attempt = 0) {
   try {
-    dbg('[SF] precomputeBestEval(): called', { attempt, ready: stockfishReady })
+    //dbg('[SF] precomputeBestEval(): called', { attempt, ready: stockfishReady })
     // Reset cache if FEN changed
     if (preEvalCache.fen !== startFEN) {
       preEvalCache = { fen: startFEN, bestMoveUci: null, bestMoveCp: null, inFlight: null, startTime: null, canInterrupt: false };
@@ -503,13 +503,13 @@ function precomputeBestEval(startFEN, attempt = 0) {
     // Kick off evaluation and store promise
     preEvalCache.startTime = Date.now();
     preEvalCache.canInterrupt = false; // Will be set to true after minimum time
-    dbg('[SF] precomputeBestEval(): starting engine analysis', { movetime: EVALUATION_MOVETIME_PRECOMPUTE_MS })
+    //dbg('[SF] precomputeBestEval(): starting engine analysis', { movetime: EVALUATION_MOVETIME_PRECOMPUTE_MS })
     
     // Set flag to allow interruption after minimum time has elapsed
     setTimeout(() => {
       if (preEvalCache.fen === startFEN && preEvalCache.inFlight) {
         preEvalCache.canInterrupt = true;
-        dbg('[SF] precomputeBestEval(): canInterrupt set true')
+        //dbg('[SF] precomputeBestEval(): canInterrupt set true')
       }
     }, EVALUATION_MIN_MOVETIME_MS);
     
