@@ -148,7 +148,7 @@ function initStockfish() {
             }
           }
         } else if (message.startsWith('bestmove')) {
-          console.log('[SF][bestmove received]', {
+          dbg('[SF][bestmove received]', {
             hasCallback: !!currentEvaluationCallback,
             searchMove: currentEvaluationCallback ? currentEvaluationCallback.searchMove : null,
             msg: message
@@ -186,7 +186,7 @@ function initStockfish() {
         // Try to configure the engine to use multiple threads
         stockfishWorker.postMessage(`setoption name Threads value ${STOCKFISH_THREADS}`)
         dbg('[SF] ready:', { threadsRequested: STOCKFISH_THREADS, choice: ENGINE_CHOICE })
-        console.debug('[SF] engine options: Threads=' + STOCKFISH_THREADS)
+        dbg('[SF] engine options: Threads=' + STOCKFISH_THREADS)
         
         updateEngineDropdownLabel()
         if (currentPuzzle && currentPuzzle.fen) precomputeBestEval(currentPuzzle.fen)
@@ -195,7 +195,7 @@ function initStockfish() {
         // Only process info lines after the go command has been sent for this evaluation
         if (!currentEvaluationCallback.goCommandSent) {
           if (window.__CP_DEBUG) {
-            console.debug('[SF][stale] ignoring info line before go command sent', {
+            dbg('[SF][stale] ignoring info line before go command sent', {
               evalId: currentEvaluationCallback.evalId,
               message: message.substring(0, 80)
             });
@@ -214,7 +214,7 @@ function initStockfish() {
           const d = depthMatch ? parseInt(depthMatch[1]) : null
           const scoreStr = cpMatch ? cpMatch[1] : (mateMatch ? ('mate ' + mateMatch[1]) : '?')
           if (d && d % 3 === 0) { // Log every 3rd depth
-            console.debug('[SF][searchmoves] info', { 
+            dbg('[SF][searchmoves] info', { 
               searchMove: currentEvaluationCallback.searchMove, 
               depth: d, 
               score: scoreStr, 
@@ -272,7 +272,7 @@ function initStockfish() {
         if (__cb && __cb.isPrecompute) {
           const cpVal = (typeof __cb.latestCp === 'number') ? __cb.latestCp : null
           const pawnsStr = (cpVal !== null) ? (cpVal/100).toFixed(2) : null
-          console.log('[SF][precompute] bestmove', { uci: __cb.bestMove || '(none)', cp: cpVal, pawns: pawnsStr })
+          dbg('[SF][precompute] bestmove', { uci: __cb.bestMove || '(none)', cp: cpVal, pawns: pawnsStr })
         }
         dbg('[SF] bestmove:', __cb ? (__cb.bestMove || '(none)') : '(none)')
         
@@ -284,7 +284,7 @@ function initStockfish() {
         
         // Debug log for bestmove resolution
         if (window.__CP_DEBUG) {
-          console.log('[SF][bestmove] resolving evaluation', {
+          dbg('[SF][bestmove] resolving evaluation', {
             searchMove: callback ? callback.searchMove : null,
             latestCp: callback ? callback.latestCp : null,
             bestMove: callback ? callback.bestMove : null,
@@ -354,7 +354,7 @@ function initStockfish() {
     setTimeout(() => {
       if (!stockfishReady) {
         dbg('[SF] init timeout exceeded (showing warning)')
-        try { console.warn('[SF] Engine initialization is taking longer than expected. Check network panel for worker and WASM file loads.'); } catch(e){}
+        try { dbg('[SF] Engine initialization is taking longer than expected. Check network panel for worker and WASM file loads.'); } catch(e){}
         showEngineError('Chess engine is taking longer than expected to load. Puzzle validation may not work correctly.');
       }
     }, STOCKFISH_INIT_TIMEOUT_MS);
@@ -629,7 +629,7 @@ function evaluatePosition(fen, searchMove = null, movetime = null, isPrecompute 
     
     // Log evaluation start for debugging
     if (window.__CP_DEBUG) {
-      console.log('[SF][evaluatePosition] starting', {
+      dbg('[SF][evaluatePosition] starting', {
         evalId: evalId,
         hasSearchMove: !!searchMove,
         searchMove: searchMove,
@@ -1187,7 +1187,7 @@ function handleCheckPuzzleResponse(j, source, target, startFEN, clientEval) {
 
   // Log evaluation details for debugging
   if (window.__CP_DEBUG) {
-    console.debug('Evaluation result:', {
+    dbg('Evaluation result:', {
       initial_cp: resolvedInitialCp,
       move_cp: resolvedMoveCp,
       initial_win: j.initial_win,
@@ -1410,7 +1410,7 @@ async function onDrop(source, target){
           } else if (interruptedResult && interruptedResult.bestMoveUci) {
             bestMoveUci = interruptedResult.bestMoveUci;
             if (window.__CP_DEBUG) {
-              console.debug('Using interrupted precomputation result:', interruptedResult);
+              dbg('Using interrupted precomputation result:', interruptedResult);
             }
           } else if (preEvalCache.inFlight) {
             // Allow the precomputation to finish naturally
@@ -1455,7 +1455,7 @@ async function onDrop(source, target){
       
       // Debug: log both UCI moves before comparison
       if (window.__CP_DEBUG) {
-        console.log('[SF][compare moves]', {
+        dbg('[SF][compare moves]', {
           playerMoveUci,
           bestMoveUci: String(bestMoveUci).toLowerCase(),
           isMatch: playerMoveUci === String(bestMoveUci).toLowerCase()
@@ -1466,7 +1466,7 @@ if (bestMoveUci && playerMoveUci === String(bestMoveUci).toLowerCase()) {
   const cp = (typeof baselineCp === 'number') ? baselineCp : 0;
   if (window.__CP_DEBUG) {
     const san = uciToSan(startFEN, playerMoveUci);
-    console.log('[SF][eval] played best move; using precomputed baseline', {
+    dbg('[SF][eval] played best move; using precomputed baseline', {
       fen: startFEN,
       sideToMove: isWhiteToMove ? 'white' : 'black',
       move: { uci: playerMoveUci, san },
@@ -1487,7 +1487,7 @@ if (bestMoveUci && playerMoveUci === String(bestMoveUci).toLowerCase()) {
       if (interruptedResult) {
         await new Promise(resolve => setTimeout(resolve, 100));
         if (window.__CP_DEBUG) {
-          console.log('[SF][delay] waited 100ms after interrupt to clear stale engine messages');
+          dbg('[SF][delay] waited 100ms after interrupt to clear stale engine messages');
         }
       }
       
@@ -1504,7 +1504,7 @@ if (bestMoveUci && playerMoveUci === String(bestMoveUci).toLowerCase()) {
           const playedSan = uciToSan(startFEN, playerMoveUci)
           const initialWin = winLikelihoodJS(baselineCp)
           const moveWin = winLikelihoodJS(playerCp)
-          console.log('[SF][eval] summary', {
+          dbg('[SF][eval] summary', {
             fen: startFEN,
             sideToMove: isWhiteToMove ? 'white' : 'black',
             best: { uci: bestMoveUci, san: bestSan, cp: baselineCp, pawns: format.pawns(baselineCp) },
