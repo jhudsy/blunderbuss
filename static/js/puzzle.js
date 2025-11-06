@@ -1697,8 +1697,10 @@ window.addEventListener('DOMContentLoaded', ()=>{
         }
         const j = await r.json().catch(e=>null)
         if (!j || !j.from) return
-  hintUsedForCurrent = true
-  // keep the hint button enabled so the user can press it again to re-highlight
+        hintUsedForCurrent = true
+        // Clear any selected piece so the hint highlight is visible
+        clearClickToMoveSelection()
+        // keep the hint button enabled so the user can press it again to re-highlight
         hintHighlightSquare(j.from, 3000)
       }catch(e){ dbg('Hint failed', e) }
     })
