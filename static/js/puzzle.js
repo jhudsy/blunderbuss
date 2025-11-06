@@ -1053,14 +1053,26 @@ async function loadPuzzle(){
         // Animate the opponent's move using chessboard.js move() method
         const moveNotation = opponentMove.from + '-' + opponentMove.to
         await new Promise(resolve => {
-          dbg('[loadPuzzle] Calling board.move() with:', moveNotation)
-          board.move(moveNotation)
-          dbg('[loadPuzzle] board.move() called, waiting for animation to complete')
-          // Wait for animation to complete (chessboard.js 'slow' speed is ~300ms)
+          // Brief pause before starting animation
           setTimeout(() => {
-            dbg('[loadPuzzle] Animation timeout completed')
-            resolve()
-          }, 350) // slightly longer than animation for smooth transition
+            dbg('[loadPuzzle] Starting animation after pause')
+            // Set slow speed for opponent move animation
+            if (typeof board.moveSpeed === 'function') {
+              board.moveSpeed('slow')
+            }
+            dbg('[loadPuzzle] Calling board.move() with:', moveNotation)
+            board.move(moveNotation)
+            dbg('[loadPuzzle] board.move() called, waiting for animation to complete')
+            // Wait for slow animation to complete (~300ms) plus a bit extra
+            setTimeout(() => {
+              // Reset to fast speed for user moves
+              if (typeof board.moveSpeed === 'function') {
+                board.moveSpeed('fast')
+              }
+              dbg('[loadPuzzle] Animation timeout completed, speed reset to fast')
+              resolve()
+            }, 400) // slow animation duration + buffer
+          }, 500) // 500ms pause before animation starts
         })
         
         dbg('[loadPuzzle] Animation complete, updating game state')
