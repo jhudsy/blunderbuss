@@ -194,12 +194,10 @@ function initStockfish() {
         // Ignore stale info lines from previous evaluations
         // Only process info lines after the go command has been sent for this evaluation
         if (!currentEvaluationCallback.goCommandSent) {
-          if (window.__CP_DEBUG) {
-            dbg('[SF][stale] ignoring info line before go command sent', {
-              evalId: currentEvaluationCallback.evalId,
-              message: message.substring(0, 80)
-            });
-          }
+          dbg('[SF][stale] ignoring info line before go command sent', {
+            evalId: currentEvaluationCallback.evalId,
+            message: message.substring(0, 80)
+          });
           return;
         }
         
@@ -283,14 +281,12 @@ function initStockfish() {
         evaluationInProgress = false;
         
         // Debug log for bestmove resolution
-        if (window.__CP_DEBUG) {
-          dbg('[SF][bestmove] resolving evaluation', {
-            searchMove: callback ? callback.searchMove : null,
-            latestCp: callback ? callback.latestCp : null,
-            bestMove: callback ? callback.bestMove : null,
-            willFallback: callback && callback.latestCp === null && !callback.isFallback
-          });
-        }
+        dbg('[SF][bestmove] resolving evaluation', {
+          searchMove: callback ? callback.searchMove : null,
+          latestCp: callback ? callback.latestCp : null,
+          bestMove: callback ? callback.bestMove : null,
+          willFallback: callback && callback.latestCp === null && !callback.isFallback
+        });
         
         if (callback.latestCp !== null) {
           callback.resolve({ cp: callback.latestCp, bestMove: callback.bestMove || null });
@@ -628,16 +624,14 @@ function evaluatePosition(fen, searchMove = null, movetime = null, isPrecompute 
     };
     
     // Log evaluation start for debugging
-    if (window.__CP_DEBUG) {
-      dbg('[SF][evaluatePosition] starting', {
-        evalId: evalId,
-        hasSearchMove: !!searchMove,
-        searchMove: searchMove,
-        movetime: actualMovetime,
-        isPrecompute: isPrecompute,
-        fen: fen.substring(0, 50) + '...'
-      });
-    }
+    dbg('[SF][evaluatePosition] starting', {
+    evalId: evalId,
+    hasSearchMove: !!searchMove,
+    searchMove: searchMove,
+    movetime: actualMovetime,
+    isPrecompute: isPrecompute,
+    fen: fen.substring(0, 50) + '...'
+    });
     
     // Set timeout for evaluation - allow extra time for precompute and a bit over movetime to receive bestmove
   const timeoutDuration = isPrecompute ? (actualMovetime + 500) : EVALUATION_TIMEOUT_MS;
@@ -1186,16 +1180,14 @@ function handleCheckPuzzleResponse(j, source, target, startFEN, clientEval) {
   const resolvedMoveCp = (typeof j.move_cp === 'number') ? j.move_cp : (clientEval && typeof clientEval.moveCp === 'number' ? clientEval.moveCp : null)
 
   // Log evaluation details for debugging
-  if (window.__CP_DEBUG) {
-    dbg('Evaluation result:', {
-      initial_cp: resolvedInitialCp,
-      move_cp: resolvedMoveCp,
-      initial_win: j.initial_win,
-      move_win: j.move_win,
-      win_change: j.win_change,
-      correct: j.correct
-    });
-  }
+  dbg('Evaluation result:', {
+  initial_cp: resolvedInitialCp,
+  move_cp: resolvedMoveCp,
+  initial_win: j.initial_win,
+  move_win: j.move_win,
+  win_change: j.win_change,
+  correct: j.correct
+  });
   
   // Only lock board interactions if answer is correct OR max attempts reached
   if (!hasAttemptsLeft) {
@@ -1409,9 +1401,7 @@ async function onDrop(source, target){
             bestMoveUci = preEvalCache.bestMoveUci;
           } else if (interruptedResult && interruptedResult.bestMoveUci) {
             bestMoveUci = interruptedResult.bestMoveUci;
-            if (window.__CP_DEBUG) {
-              dbg('Using interrupted precomputation result:', interruptedResult);
-            }
+            dbg('Using interrupted precomputation result:', interruptedResult);
           } else if (preEvalCache.inFlight) {
             // Allow the precomputation to finish naturally
             await preEvalCache.inFlight;
@@ -1454,13 +1444,11 @@ async function onDrop(source, target){
       const playerMoveUci = (result.from + result.to + (result.promotion || '')).toLowerCase();
       
       // Debug: log both UCI moves before comparison
-      if (window.__CP_DEBUG) {
-        dbg('[SF][compare moves]', {
-          playerMoveUci,
-          bestMoveUci: String(bestMoveUci).toLowerCase(),
-          isMatch: playerMoveUci === String(bestMoveUci).toLowerCase()
-        });
-      }
+      dbg('[SF][compare moves]', {
+      playerMoveUci,
+      bestMoveUci: String(bestMoveUci).toLowerCase(),
+      isMatch: playerMoveUci === String(bestMoveUci).toLowerCase()
+      });
       // 3. If player's move matches best move, avoid any further evaluation and use baseline
 if (bestMoveUci && playerMoveUci === String(bestMoveUci).toLowerCase()) {
   const cp = (typeof baselineCp === 'number') ? baselineCp : 0;
@@ -1486,9 +1474,7 @@ if (bestMoveUci && playerMoveUci === String(bestMoveUci).toLowerCase()) {
       // If we interrupted precompute, add a small delay to allow engine to flush stale info lines
       if (interruptedResult) {
         await new Promise(resolve => setTimeout(resolve, 100));
-        if (window.__CP_DEBUG) {
-          dbg('[SF][delay] waited 100ms after interrupt to clear stale engine messages');
-        }
+        dbg('[SF][delay] waited 100ms after interrupt to clear stale engine messages');
       }
       
       // Evaluate the starting position with searchmoves restricted to player's move
