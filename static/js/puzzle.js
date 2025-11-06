@@ -984,6 +984,12 @@ async function loadPuzzle(){
   // Clear any pending castling animation from previous puzzle
   __castlingPending = null
 
+  // Disable hint button until puzzle is fully loaded and ready
+  try {
+    const hintBtn = $('hint')
+    if (hintBtn) hintBtn.disabled = true
+  } catch(e) {}
+
   // Check if we have a previous_fen to animate the opponent's move
   const hasPreviousFen = currentPuzzle.previous_fen && typeof currentPuzzle.previous_fen === 'string'
   
@@ -1754,6 +1760,8 @@ window.addEventListener('DOMContentLoaded', ()=>{
   if (hintBtn){
     hintBtn.addEventListener('click', async ()=>{
       try{
+        // Block hint if moves are disabled or button is disabled
+        if (!allowMoves || hintBtn.disabled) return
         if (!currentPuzzle) return
         // Ask the server for the hint (from-square) so we don't need to expose correct_san
         const r = await fetch('/puzzle_hint', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({id: currentPuzzle.id})})
