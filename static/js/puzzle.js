@@ -1,17 +1,13 @@
 // Ensure CP_DEBUG exists and provide easy runtime toggles; silence debug logs unless enabled
 if (typeof window !== 'undefined') {
   try {
-    // Allow enabling debug via URL (?debug=1) or cookie (cp_debug=1)
+    // Allow enabling debug via URL (?debug=1)
     const params = new URLSearchParams(window.location.search || '')
     const wantDebug = params.get('debug') === '1'
-    const cookieDebug = (document.cookie || '').indexOf('cp_debug=1') !== -1
     if (wantDebug) {
-      // Persist a cookie for subsequent page loads
-      document.cookie = 'cp_debug=1; path=/'
       window.__CP_DEBUG = true
     } else if (typeof window.__CP_DEBUG === 'undefined') {
-      // If template didn't set it, fall back to cookie
-      window.__CP_DEBUG = cookieDebug
+      window.__CP_DEBUG = false
     }
   } catch(e) { /* ignore */ }
   if (window.__CP_DEBUG) {
