@@ -105,10 +105,14 @@ let preEvalCache = {
  */
 function initStockfish() {
   try {
+    dbg('[SF] initStockfish(): starting initialization')
+    if (!window.__CP_DEBUG) safeLog(console.info, '[SF] Tip: add ?debug=1 to the URL to enable verbose engine logs')
     
     // Detect if SharedArrayBuffer is available and context is isolated
     if (typeof SharedArrayBuffer === 'undefined' || (typeof crossOriginIsolated !== 'undefined' && !crossOriginIsolated)) {
+      safeLog(console.info, '[SF] crossOriginIsolated =', (typeof crossOriginIsolated !== 'undefined' ? crossOriginIsolated : '(undefined)'))
       showEngineError('Chess engine requires cross-origin isolation (COOP/COEP). Please use HTTPS and ensure server sends proper headers.');
+      dbg('[SF] initStockfish(): SharedArrayBuffer not available or not cross-origin isolated')
       return;
     }
     
@@ -119,22 +123,56 @@ function initStockfish() {
     const workerScript = ENGINE_CHOICE === 'full'
       ? '/static/vendor/stockfish/stockfish-17.1-8e4d048.js'
       : '/static/vendor/stockfish/stockfish-17.1-lite-51f59da.js'
+    dbg('[SF] initStockfish(): creating worker', { choice: ENGINE_CHOICE, workerScript })
 
     // Use dedicated worker wrapper that loads the selected Stockfish WASM
     stockfishWorker = new Worker(workerScript);
+    dbg('[SF] initStockfish(): worker created')
 
     stockfishWorker.onmessage = function(e) {
       const message = e.data;
+      if (typeof message === 'string' && (message.startsWith('DEBUG_FETCH') || message.startsWith('DEBUG_FETCH_STATUS'))) {
+        safeLog(console.warn, '[SF][worker]', message)
+        return;
+      }
+      
+      // Log all message types when debug is enabled to diagnose searchmoves issues
+      if (window.__CP_DEBUG && typeof message === 'string') {
+        if (message.startsWith('info')) {
+          // Log info messages if we have an active evaluation with searchMove
+          if (currentEvaluationCallback && currentEvaluationCallback.searchMove) {
+            const depthMatch = message.match(/depth (\d+)/);
+            const cpMatch = message.match(/score cp (-?\d+)/);
+            if (depthMatch && parseInt(depthMatch[1]) % 4 === 0) {
+              // (debug) searchmoves info logging removed
+            }
+          }
+        } else if (message.startsWith('bestmove')) {
+          console.log('[SF][bestmove received]', {
+            hasCallback: !!currentEvaluationCallback,
+            searchMove: currentEvaluationCallback ? currentEvaluationCallback.searchMove : null,
+            msg: message
+          });
+        }
+      }
+      
+      // Only log first info line to avoid flooding
+      if (typeof message === 'string' && message.startsWith('info') && !stockfishWorker.__loggedFirstInfo) {
+        dbg('[SF] onmessage: first info line received')
+        stockfishWorker.__loggedFirstInfo = true
+      }
       
       // Handle error messages
       if (typeof message === 'string' && message.startsWith('ERROR:')) {
         logError('Stockfish error:', message);
+        dbg('[SF] onmessage: ERROR from worker', message)
         stockfishReady = false;
         showEngineError('Chess engine failed. Puzzle validation may not work correctly.');
         return;
       }
       
       if (message === 'uciok') {
+        dbg('[SF] onmessage: uciok (engine ready)')
         stockfishReady = true;
         hideEngineLoadingSpinner();
         allowMoves = true;
@@ -147,6 +185,8 @@ function initStockfish() {
         
         // Try to configure the engine to use multiple threads
         stockfishWorker.postMessage(`setoption name Threads value ${STOCKFISH_THREADS}`)
+        dbg('[SF] ready:', { threadsRequested: STOCKFISH_THREADS, choice: ENGINE_CHOICE })
+        console.debug('[SF] engine options: Threads=' + STOCKFISH_THREADS)
         
         updateEngineDropdownLabel()
         if (currentPuzzle && currentPuzzle.fen) precomputeBestEval(currentPuzzle.fen)
@@ -155,6 +195,7 @@ function initStockfish() {
         // Only process info lines after the go command has been sent for this evaluation
         if (!currentEvaluationCallback.goCommandSent) {
           if (window.__CP_DEBUG) {
+            console.debug('[SF][stale] ignoring info line before go command sent', {
               evalId: currentEvaluationCallback.evalId,
               message: message.substring(0, 80)
             });
@@ -173,6 +214,7 @@ function initStockfish() {
           const d = depthMatch ? parseInt(depthMatch[1]) : null
           const scoreStr = cpMatch ? cpMatch[1] : (mateMatch ? ('mate ' + mateMatch[1]) : '?')
           if (d && d % 3 === 0) { // Log every 3rd depth
+            console.debug('[SF][searchmoves] info', { 
               searchMove: currentEvaluationCallback.searchMove, 
               depth: d, 
               score: scoreStr, 
@@ -230,7 +272,9 @@ function initStockfish() {
         if (__cb && __cb.isPrecompute) {
           const cpVal = (typeof __cb.latestCp === 'number') ? __cb.latestCp : null
           const pawnsStr = (cpVal !== null) ? (cpVal/100).toFixed(2) : null
+          console.log('[SF][precompute] bestmove', { uci: __cb.bestMove || '(none)', cp: cpVal, pawns: pawnsStr })
         }
+        dbg('[SF] bestmove:', __cb ? (__cb.bestMove || '(none)') : '(none)')
         
         // Evaluation complete
         clearTimeout(evaluationTimeout);
@@ -240,6 +284,7 @@ function initStockfish() {
         
         // Debug log for bestmove resolution
         if (window.__CP_DEBUG) {
+          console.log('[SF][bestmove] resolving evaluation', {
             searchMove: callback ? callback.searchMove : null,
             latestCp: callback ? callback.latestCp : null,
             bestMove: callback ? callback.bestMove : null,
@@ -295,6 +340,7 @@ function initStockfish() {
 
     stockfishWorker.onerror = function(error) {
       logError('Stockfish worker error:', error);
+      dbg('[SF] worker.onerror', error)
       stockfishReady = false;
       showEngineError('Chess engine encountered an error. Please refresh the page.');
       hideEngineLoadingSpinner();
@@ -302,16 +348,20 @@ function initStockfish() {
     
     // Initialize UCI protocol with timeout
     stockfishWorker.postMessage('uci');
+    dbg('[SF] sent: uci')
     
     // If engine doesn't respond within timeout, show error
     setTimeout(() => {
       if (!stockfishReady) {
+        dbg('[SF] init timeout exceeded (showing warning)')
+        try { console.warn('[SF] Engine initialization is taking longer than expected. Check network panel for worker and WASM file loads.'); } catch(e){}
         showEngineError('Chess engine is taking longer than expected to load. Puzzle validation may not work correctly.');
       }
     }, STOCKFISH_INIT_TIMEOUT_MS);
     
   } catch(e) {
     logError('Failed to initialize Stockfish:', e);
+    dbg('[SF] initStockfish(): exception during init', e)
     stockfishReady = false;
     showEngineError('Failed to initialize chess engine. Please refresh the page.');
     hideEngineLoadingSpinner();
@@ -324,8 +374,10 @@ function initStockfish() {
  */
 function switchEngine(choice) {
   const normalized = (choice || '').toLowerCase() === 'full' ? 'full' : 'lite'
+  dbg('[SF] switchEngine(): request', { from: ENGINE_CHOICE, to: normalized })
   if (normalized === ENGINE_CHOICE && stockfishReady) {
     updateEngineDropdownLabel()
+    dbg('[SF] switchEngine(): already on requested engine and ready; no-op')
     return
   }
   // Cancel any ongoing evaluations and precompute
@@ -352,6 +404,7 @@ function switchEngine(choice) {
 
   // Re-init engine
   initStockfish()
+  dbg('[SF] switchEngine(): re-initializing worker')
 
   // If a puzzle is already loaded, kick precompute again
   if (currentPuzzle && currentPuzzle.fen) precomputeBestEval(currentPuzzle.fen)
@@ -434,6 +487,7 @@ function hideEvaluatingSpinner() {
  */
 function precomputeBestEval(startFEN, attempt = 0) {
   try {
+    dbg('[SF] precomputeBestEval(): called', { attempt, ready: stockfishReady })
     // Reset cache if FEN changed
     if (preEvalCache.fen !== startFEN) {
       preEvalCache = { fen: startFEN, bestMoveUci: null, bestMoveCp: null, inFlight: null, startTime: null, canInterrupt: false };
@@ -444,6 +498,7 @@ function precomputeBestEval(startFEN, attempt = 0) {
     // If engine not ready yet, retry shortly (cap attempts)
     if (!stockfishReady) {
       if (attempt < 15) {
+        dbg('[SF] precomputeBestEval(): engine not ready; retry soon', { nextAttempt: attempt + 1 })
         setTimeout(() => precomputeBestEval(startFEN, attempt + 1), 200);
       }
       return;
@@ -452,11 +507,13 @@ function precomputeBestEval(startFEN, attempt = 0) {
     // Kick off evaluation and store promise
     preEvalCache.startTime = Date.now();
     preEvalCache.canInterrupt = false; // Will be set to true after minimum time
+    dbg('[SF] precomputeBestEval(): starting engine analysis', { movetime: EVALUATION_MOVETIME_PRECOMPUTE_MS })
     
     // Set flag to allow interruption after minimum time has elapsed
     setTimeout(() => {
       if (preEvalCache.fen === startFEN && preEvalCache.inFlight) {
         preEvalCache.canInterrupt = true;
+        dbg('[SF] precomputeBestEval(): canInterrupt set true')
       }
     }, EVALUATION_MIN_MOVETIME_MS);
     
@@ -464,6 +521,7 @@ function precomputeBestEval(startFEN, attempt = 0) {
       .then(({ cp, bestMove }) => {
         preEvalCache.bestMoveUci = bestMove || null;
         preEvalCache.bestMoveCp = typeof cp === 'number' ? cp : null;
+        dbg('[SF] precomputeBestEval(): cached', { 
           bestMove, 
           cp: preEvalCache.bestMoveCp,
           pawns: preEvalCache.bestMoveCp !== null ? (preEvalCache.bestMoveCp / 100).toFixed(2) : null,
@@ -475,6 +533,7 @@ function precomputeBestEval(startFEN, attempt = 0) {
         preEvalCache.inFlight = null;
         preEvalCache.startTime = null;
         preEvalCache.canInterrupt = false;
+        dbg('[SF] precomputeBestEval(): finished')
       });
   } catch(e) {
     // ignore precompute errors to avoid impacting UI
@@ -490,14 +549,17 @@ function interruptPrecompute() {
   
   // Only interrupt if minimum time has elapsed
   if (!preEvalCache.canInterrupt) {
+    dbg('[SF] interruptPrecompute(): cannot interrupt yet (minimum time not elapsed)')
     return null;
   }
   
+  dbg('[SF] interruptPrecompute(): stopping engine', { elapsed: Date.now() - (preEvalCache.startTime || Date.now()), hasResult: !!(preEvalCache.bestMoveUci && typeof preEvalCache.bestMoveCp === 'number') })
   
   // Stop the engine
   try {
     stockfishWorker.postMessage('stop');
   } catch(e) {
+    dbg('[SF] interruptPrecompute(): failed to send stop', e)
   }
   
   // Clear the evaluation state so new evaluations can proceed
@@ -514,12 +576,14 @@ function interruptPrecompute() {
   
   // Return whatever result we have so far (may be incomplete)
   if (preEvalCache.bestMoveUci && typeof preEvalCache.bestMoveCp === 'number') {
+    dbg('[SF] interruptPrecompute(): returning partial result')
     return {
       bestMoveUci: preEvalCache.bestMoveUci,
       bestMoveCp: preEvalCache.bestMoveCp
     };
   }
   
+  dbg('[SF] interruptPrecompute(): no partial result available')
   return null;
 }
 
@@ -548,6 +612,7 @@ function evaluatePosition(fen, searchMove = null, movetime = null, isPrecompute 
     
     // Assign unique evaluation ID to prevent race conditions
     const evalId = ++evaluationIdCounter;
+    dbg('[SF] evaluatePosition(): start', { evalId, hasSearchMove: !!searchMove, movetime: actualMovetime, isPrecompute })
     
     evaluationInProgress = true;
     currentEvaluationCallback = {
@@ -564,6 +629,7 @@ function evaluatePosition(fen, searchMove = null, movetime = null, isPrecompute 
     
     // Log evaluation start for debugging
     if (window.__CP_DEBUG) {
+      console.log('[SF][evaluatePosition] starting', {
         evalId: evalId,
         hasSearchMove: !!searchMove,
         searchMove: searchMove,
@@ -582,17 +648,20 @@ function evaluatePosition(fen, searchMove = null, movetime = null, isPrecompute 
         evaluationInProgress = false;
         // If we have any evaluation, use it
         if (callback.latestCp !== null) {
+          dbg('[SF] evaluatePosition(): timeout but have cp; resolving', { cp: callback.latestCp, bestMove: callback.bestMove })
           callback.resolve({ cp: callback.latestCp, bestMove: callback.bestMove || null });
         } else {
           // Timeout without evaluation
           // If this was a fallback attempt, it's a real engine failure
           if (callback.isFallback) {
+            dbg('[SF] evaluatePosition(): fallback timeout — engine failure')
             callback.reject(new Error('Chess engine failed to evaluate position'));
           } else {
             // Primary evaluation timeout — do NOT resolve with neutral 0.
             // Instead, request the engine to stop so it emits a 'bestmove',
             // which our bestmove handler will use to trigger a proper fallback
             // (respecting searchMove if set).
+            dbg('[SF] evaluatePosition(): primary timeout; sending stop to obtain bestmove and trigger fallback')
             try { stockfishWorker.postMessage('stop') } catch(e){}
             // Leave currentEvaluationCallback in place; bestmove handler will proceed.
           }
@@ -605,16 +674,21 @@ function evaluatePosition(fen, searchMove = null, movetime = null, isPrecompute 
     // Send isready as a synchronization barrier to ensure engine has processed position
     // and cleared any stale state from previous evaluations
     stockfishWorker.postMessage('isready');
+    dbg('[SF] evaluatePosition(): sent position + isready', { fen })
     // Request thinking time; we continue capturing the latest cp from info lines
     // If searchMove is specified, restrict search to that move only
     if (searchMove) {
       const cmd = `go movetime ${actualMovetime} searchmoves ${searchMove}`;
       stockfishWorker.postMessage(cmd);
       currentEvaluationCallback.goCommandSent = true; // Mark that we've sent the go command
+      dbg('[SF] evaluatePosition(): sent go movetime with searchmoves', { searchMove, cmd, movetime: actualMovetime })
       // Also log to console for verification
+      dbg('[SF][UCI] position fen ' + fen)
+      dbg('[SF][UCI] ' + cmd)
     } else {
       stockfishWorker.postMessage(`go movetime ${actualMovetime}`);
       currentEvaluationCallback.goCommandSent = true; // Mark that we've sent the go command
+      dbg('[SF] evaluatePosition(): sent go movetime', { movetime: actualMovetime })
     }
   });
 }
@@ -919,6 +993,7 @@ async function loadPuzzle(){
   // Check if we have a previous_fen to animate the opponent's move
   const hasPreviousFen = currentPuzzle.previous_fen && typeof currentPuzzle.previous_fen === 'string'
   
+  
   if (hasPreviousFen) {
     
     // Flip board orientation based on whose turn it will be AFTER the opponent moves
@@ -929,13 +1004,13 @@ async function loadPuzzle(){
       if (turn === 'b') board.orientation('black')
       else board.orientation('white')
     } catch(e){ 
-      // ignore orientation errors
     }
     
     // Show the position BEFORE the opponent's move
     game = new Chess()
     game.load(currentPuzzle.previous_fen)
     board.position(currentPuzzle.previous_fen, false)  // false = no animation for initial setup
+    
     
     // Disable moves during opponent animation
     allowMoves = false
@@ -944,6 +1019,7 @@ async function loadPuzzle(){
     try {
       const tempGame = new Chess(currentPuzzle.previous_fen)
       const legalMoves = tempGame.moves({ verbose: true })
+      
       
       // Find the move that leads to current_fen
       // Compare only the position part of FEN (first 4 fields), ignoring move counters
@@ -960,6 +1036,7 @@ async function loadPuzzle(){
       }
       
       if (opponentMove) {
+        
         // Animate the opponent's move using chessboard.js move() method
         const moveNotation = opponentMove.from + '-' + opponentMove.to
         await new Promise(resolve => {
@@ -1378,6 +1455,7 @@ async function onDrop(source, target){
       
       // Debug: log both UCI moves before comparison
       if (window.__CP_DEBUG) {
+        console.log('[SF][compare moves]', {
           playerMoveUci,
           bestMoveUci: String(bestMoveUci).toLowerCase(),
           isMatch: playerMoveUci === String(bestMoveUci).toLowerCase()
@@ -1388,6 +1466,7 @@ if (bestMoveUci && playerMoveUci === String(bestMoveUci).toLowerCase()) {
   const cp = (typeof baselineCp === 'number') ? baselineCp : 0;
   if (window.__CP_DEBUG) {
     const san = uciToSan(startFEN, playerMoveUci);
+    console.log('[SF][eval] played best move; using precomputed baseline', {
       fen: startFEN,
       sideToMove: isWhiteToMove ? 'white' : 'black',
       move: { uci: playerMoveUci, san },
@@ -1408,6 +1487,7 @@ if (bestMoveUci && playerMoveUci === String(bestMoveUci).toLowerCase()) {
       if (interruptedResult) {
         await new Promise(resolve => setTimeout(resolve, 100));
         if (window.__CP_DEBUG) {
+          console.log('[SF][delay] waited 100ms after interrupt to clear stale engine messages');
         }
       }
       
@@ -1424,6 +1504,7 @@ if (bestMoveUci && playerMoveUci === String(bestMoveUci).toLowerCase()) {
           const playedSan = uciToSan(startFEN, playerMoveUci)
           const initialWin = winLikelihoodJS(baselineCp)
           const moveWin = winLikelihoodJS(playerCp)
+          console.log('[SF][eval] summary', {
             fen: startFEN,
             sideToMove: isWhiteToMove ? 'white' : 'black',
             best: { uci: bestMoveUci, san: bestSan, cp: baselineCp, pawns: format.pawns(baselineCp) },
