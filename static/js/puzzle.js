@@ -298,13 +298,13 @@ function initStockfish() {
           // Sometimes movetime returns bestmove without info lines (simple positions)
           // If this is already a fallback attempt, the engine is not working properly
           if (callback.isFallback) {
-            if (window.__CP_DEBUG) console.debug('Fallback depth search also had no cp - engine failure');
+            dbg('Fallback depth search also had no cp - engine failure');
             callback.reject(new Error('Chess engine failed to evaluate position'));
             return;
           }
           
           // Fall back to a quick depth search to ensure we get a score
-          if (window.__CP_DEBUG) console.debug(`No cp from movetime, retrying with depth ${EVALUATION_FALLBACK_DEPTH}${callback.searchMove ? ' (restricted to searchmove)' : ''}`);
+          dbg(`No cp from movetime, retrying with depth ${EVALUATION_FALLBACK_DEPTH}${callback.searchMove ? ' (restricted to searchmove)' : ''}`);
           
           // Set up for fallback evaluation
           evaluationInProgress = true;
@@ -331,7 +331,7 @@ function initStockfish() {
             // If we can't even send the command, engine has failed
             evaluationInProgress = false;
             currentEvaluationCallback = null;
-            if (window.__CP_DEBUG) console.debug('Fallback command failed - engine error');
+            dbg('Fallback command failed - engine error');
             callback.reject(new Error('Chess engine failed to evaluate position'));
           }
         }
@@ -683,8 +683,8 @@ function evaluatePosition(fen, searchMove = null, movetime = null, isPrecompute 
       currentEvaluationCallback.goCommandSent = true; // Mark that we've sent the go command
       dbg('[SF] evaluatePosition(): sent go movetime with searchmoves', { searchMove, cmd, movetime: actualMovetime })
       // Also log to console for verification
-      if (window.__CP_DEBUG) console.log('[SF][UCI] position fen ' + fen)
-      if (window.__CP_DEBUG) console.log('[SF][UCI] ' + cmd)
+      dbg('[SF][UCI] position fen ' + fen)
+      dbg('[SF][UCI] ' + cmd)
     } else {
       stockfishWorker.postMessage(`go movetime ${actualMovetime}`);
       currentEvaluationCallback.goCommandSent = true; // Mark that we've sent the go command
@@ -1198,12 +1198,12 @@ function handleCheckPuzzleResponse(j, source, target, startFEN, clientEval) {
               const moves = temp.moves({verbose:true})
               for (let m of moves){
                 if (m.san === san){
-                  if (window.__CP_DEBUG) console.debug('matched move in moves list:', m)
+                  dbg('matched move in moves list:', m)
                   try{ revealCorrectMoveSquares(m.from, m.to, m.promotion, m.flags, temp.fen()) } catch(e){ board.position(startFEN) }
                   break
                 }
               }
-              if (window.__CP_DEBUG) console.debug('fallback scan complete, no direct temp.move result')
+              dbg('fallback scan complete, no direct temp.move result')
             }
             
             // Ensure the global game is reset back to the starting position after reveal
@@ -1242,7 +1242,7 @@ async function onDrop(source, target){
   clearHintHighlights()
   
   if (!currentPuzzle){
-    if (window.__CP_DEBUG) console.debug('onDrop called before puzzle loaded')
+    dbg('onDrop called before puzzle loaded')
     return 'snapback'
   }
 
@@ -1608,7 +1608,7 @@ function showPromotionSelector(from, to, cb){
         box.style.transform = 'translate(-50%,-50%)'
       }
     }catch(e){ /* ignore positioning failures and keep centered fallback */ }
-  }catch(e){ if (window.__CP_DEBUG) console.debug('showPromotionSelector failed', e); try{ cb(null) }catch(e){} }
+  }catch(e){ dbg('showPromotionSelector failed', e); try{ cb(null) }catch(e){} }
 }
 
 // Display a simple congratulatory modal for new puzzle-streak records
@@ -1692,7 +1692,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
         // Ask the server for the hint (from-square) so we don't need to expose correct_san
         const r = await fetch('/puzzle_hint', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({id: currentPuzzle.id})})
         if (!r.ok){
-          if (window.__CP_DEBUG) console.debug('puzzle_hint failed', r.status)
+          dbg('puzzle_hint failed', r.status)
           return
         }
         const j = await r.json().catch(e=>null)
@@ -1700,7 +1700,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
   hintUsedForCurrent = true
   // keep the hint button enabled so the user can press it again to re-highlight
         hintHighlightSquare(j.from, 3000)
-      }catch(e){ if (window.__CP_DEBUG) console.debug('Hint failed', e) }
+      }catch(e){ dbg('Hint failed', e) }
     })
   }
 })
@@ -1804,7 +1804,7 @@ function showBadgeToast(badges){
       // remove after hidden
       toastEl.addEventListener('hidden.bs.toast', ()=>{ try{ container.removeChild(toastEl) }catch(e){} })
     })()
-  }catch(e){ if (window.__CP_DEBUG) console.debug('showBadgeToast failed', e) }
+  }catch(e){ dbg('showBadgeToast failed', e) }
 }
 
 // Show a small +XP animation near the ribbon XP element
@@ -2207,7 +2207,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
       boardEl.style.width = '100%'
       // trigger the chessboard library to resize internal elements
       if (board && typeof board.resize === 'function') board.resize()
-    }catch(e){ if (window.__CP_DEBUG) console.debug('resizeBoard failed', e) }
+    }catch(e){ dbg('resizeBoard failed', e) }
   }
   // debounce helper
   let _rb_to = null
