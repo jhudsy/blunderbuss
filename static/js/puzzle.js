@@ -2135,6 +2135,9 @@ window.addEventListener('DOMContentLoaded', ()=>{
   
   // Handle click-to-move logic (accessible to both pointer events and onSnapEnd)
   function handleSquareClick(square, squareEl) {
+    // Block all interactions if moves are disabled (e.g., during animation)
+    if (!allowMoves) return
+    
     const piece = game.get(square)
     const boardEl = $('board')
     
