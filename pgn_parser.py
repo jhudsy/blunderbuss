@@ -139,9 +139,6 @@ def extract_puzzles_from_pgn(pgn_text):
                         skip_puzzle = True
 
                 if not skip_puzzle:
-                    # Capture the FEN BEFORE the move (the position the opponent was in)
-                    previous_fen = board.fen()
-                    
                     # The correct_san should be the BEST move (what the user should find)
                     # This comes from the comment's suggested move (e.g., "Best: Nf3")
                     suggested = meta.get('suggested')
@@ -155,10 +152,25 @@ def extract_puzzles_from_pgn(pgn_text):
                     
                     correct_san = suggested
                     
-                    # Now get the FEN AFTER the blunder move (where the puzzle starts)
-                    board_copy = board.copy()
-                    board_copy.push(move)
-                    fen = board_copy.fen()
+                    # PUZZLE FLOW:
+                    # 1. previous_fen = position BEFORE opponent's last move (e.g., position 18)
+                    # 2. fen = position AFTER opponent's move, BEFORE user's blunder (e.g., position 19)
+                    # 3. The blunder move would lead to position 20 (which we don't store)
+                    #
+                    # We animate: previous_fen -> opponent's move -> fen (decision point)
+                    # User must find correct_san from fen (instead of the blunder)
+                    
+                    # Get the previous position by checking if we have a parent node
+                    if node.parent is not None:
+                        # Get board state from parent node (before opponent's move)
+                        previous_board = node.parent.board()
+                        previous_fen = previous_board.fen()
+                    else:
+                        # No parent (this is the starting position), no previous_fen
+                        previous_fen = None
+                    
+                    # Current board is the decision point (after opponent's move, before user's blunder)
+                    fen = board.fen()
                     # next_san computation removed
 
                     # initial weight: use the magnitude of the eval swing.
@@ -174,7 +186,7 @@ def extract_puzzles_from_pgn(pgn_text):
                         # smaller weight for less dramatic, non-sign-changing swings
                         initial_weight = max(1.0, swing)
                     # attach some common PGN header metadata if available
-                    # determine which side made the move (the side to move on the PREVIOUS board)
+                    # determine which side made the blunder (the side to move at the decision point)
                     side = 'white' if board.turn else 'black'
                     puzzle = {
                         'game_id': game_id,
