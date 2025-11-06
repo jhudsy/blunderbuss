@@ -1048,19 +1048,19 @@ async function loadPuzzle(){
       
       if (opponentMove) {
         dbg('[loadPuzzle] Found opponent move, preparing to animate')
-        dbg('[loadPuzzle] Will animate to FEN:', currentPuzzle.fen)
+        dbg('[loadPuzzle] Will animate move:', opponentMove.from + '-' + opponentMove.to)
         
-        // Animate the opponent's move using chessboard.js
-        // Use board.position() with the target FEN to trigger animation
+        // Animate the opponent's move using chessboard.js move() method
+        const moveNotation = opponentMove.from + '-' + opponentMove.to
         await new Promise(resolve => {
-          dbg('[loadPuzzle] Calling board.position() with animation=true')
-          board.position(currentPuzzle.fen, true) // true = animate
-          dbg('[loadPuzzle] board.position() called, waiting for animation to complete')
-          // Wait for animation to complete (chessboard.js default is 200ms)
+          dbg('[loadPuzzle] Calling board.move() with:', moveNotation)
+          board.move(moveNotation)
+          dbg('[loadPuzzle] board.move() called, waiting for animation to complete')
+          // Wait for animation to complete (chessboard.js 'slow' speed is ~300ms)
           setTimeout(() => {
             dbg('[loadPuzzle] Animation timeout completed')
             resolve()
-          }, 250) // slightly longer than animation for smooth transition
+          }, 350) // slightly longer than animation for smooth transition
         })
         
         dbg('[loadPuzzle] Animation complete, updating game state')
@@ -2071,8 +2071,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
   board = Chessboard('board', {
     position: 'start',
     draggable: true,
-    moveSpeed: 'slow',  // Enable animations with visible speed
-    appearSpeed: 'slow',  // Speed for pieces appearing/disappearing
     onDrop: async function(source, target) {
       // Check if this is a valid drop or a snapback
       const result = await onDrop(source, target)
