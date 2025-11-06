@@ -1003,9 +1003,6 @@ async function loadPuzzle(){
     // Disable moves during opponent animation
     allowMoves = false
     
-    // Show "Opponent is moving..." message
-    setText('info', 'Opponent is moving...')
-    
     // Compute the opponent's move by comparing previous_fen to current fen
     try {
       const tempGame = new Chess(currentPuzzle.previous_fen)
