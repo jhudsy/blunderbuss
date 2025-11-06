@@ -1014,18 +1014,27 @@ async function loadPuzzle(){
       const tempGame = new Chess(currentPuzzle.previous_fen)
       const legalMoves = tempGame.moves({ verbose: true })
       
+      dbg('[loadPuzzle] Looking for opponent move. Previous FEN:', currentPuzzle.previous_fen)
+      dbg('[loadPuzzle] Target FEN:', currentPuzzle.fen)
+      dbg('[loadPuzzle] Legal moves from previous position:', legalMoves.length)
+      
       // Find the move that leads to current_fen
+      // Compare only the position part of FEN (first 4 fields), ignoring move counters
+      const targetFenParts = currentPuzzle.fen.split(' ').slice(0, 4).join(' ')
       let opponentMove = null
       for (const move of legalMoves) {
         tempGame.move(move)
-        if (tempGame.fen() === currentPuzzle.fen) {
+        const reachedFenParts = tempGame.fen().split(' ').slice(0, 4).join(' ')
+        if (reachedFenParts === targetFenParts) {
           opponentMove = move
+          dbg('[loadPuzzle] Found opponent move:', move.san, 'from', move.from, 'to', move.to)
           break
         }
         tempGame.undo()
       }
       
       if (opponentMove) {
+        dbg('[loadPuzzle] Animating opponent move')
         // Animate the opponent's move using chessboard.js
         // Use board.position() with the target FEN to trigger animation
         await new Promise(resolve => {
@@ -1039,6 +1048,7 @@ async function loadPuzzle(){
       } else {
         // Fallback: couldn't determine opponent move, just show current position
         dbg('[loadPuzzle] Could not determine opponent move, falling back to current position')
+        dbg('[loadPuzzle] Tried to match:', targetFenParts)
         game.load(currentPuzzle.fen)
         board.position(currentPuzzle.fen)
       }
