@@ -1000,13 +1000,6 @@ async function loadPuzzle(){
   if (hasPreviousFen) {
     dbg('[loadPuzzle] Entering animation branch')
     
-    // Show the position BEFORE the opponent's move
-    game = new Chess()
-    game.load(currentPuzzle.previous_fen)
-    board.position(currentPuzzle.previous_fen)
-    
-    dbg('[loadPuzzle] Loaded previous_fen, board should show initial position')
-    
     // Flip board orientation based on whose turn it will be AFTER the opponent moves
     // (i.e., the user's turn at the decision point)
     try{
@@ -1018,6 +1011,13 @@ async function loadPuzzle(){
     } catch(e){ 
       dbg('[loadPuzzle] Error setting orientation:', e)
     }
+    
+    // Show the position BEFORE the opponent's move
+    game = new Chess()
+    game.load(currentPuzzle.previous_fen)
+    board.position(currentPuzzle.previous_fen, false)  // false = no animation for initial setup
+    
+    dbg('[loadPuzzle] Loaded previous_fen, board should show initial position')
     
     // Disable moves during opponent animation
     allowMoves = false
