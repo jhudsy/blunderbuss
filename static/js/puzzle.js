@@ -148,7 +148,7 @@ function initStockfish() {
             }
           }
         } else if (message.startsWith('bestmove')) {
-          console.log('[SF][bestmove received]', {
+          dbg('[SF][bestmove received]', {
             hasCallback: !!currentEvaluationCallback,
             searchMove: currentEvaluationCallback ? currentEvaluationCallback.searchMove : null,
             msg: message
@@ -186,7 +186,7 @@ function initStockfish() {
         // Try to configure the engine to use multiple threads
         stockfishWorker.postMessage(`setoption name Threads value ${STOCKFISH_THREADS}`)
         dbg('[SF] ready:', { threadsRequested: STOCKFISH_THREADS, choice: ENGINE_CHOICE })
-        console.debug('[SF] engine options: Threads=' + STOCKFISH_THREADS)
+        dbg('[SF] engine options: Threads=' + STOCKFISH_THREADS)
         
         updateEngineDropdownLabel()
         if (currentPuzzle && currentPuzzle.fen) precomputeBestEval(currentPuzzle.fen)
@@ -194,12 +194,10 @@ function initStockfish() {
         // Ignore stale info lines from previous evaluations
         // Only process info lines after the go command has been sent for this evaluation
         if (!currentEvaluationCallback.goCommandSent) {
-          if (window.__CP_DEBUG) {
-            console.debug('[SF][stale] ignoring info line before go command sent', {
-              evalId: currentEvaluationCallback.evalId,
-              message: message.substring(0, 80)
-            });
-          }
+          dbg('[SF][stale] ignoring info line before go command sent', {
+            evalId: currentEvaluationCallback.evalId,
+            message: message.substring(0, 80)
+          });
           return;
         }
         
@@ -210,19 +208,19 @@ function initStockfish() {
         const pvMatch = message.match(/\bpv\s+(\S+)/);
         
         // Log info lines when searchMove is active (to debug searchmoves issues)
-        if (currentEvaluationCallback.searchMove && window.__CP_DEBUG) {
-          const d = depthMatch ? parseInt(depthMatch[1]) : null
-          const scoreStr = cpMatch ? cpMatch[1] : (mateMatch ? ('mate ' + mateMatch[1]) : '?')
-          if (d && d % 3 === 0) { // Log every 3rd depth
-            console.debug('[SF][searchmoves] info', { 
-              searchMove: currentEvaluationCallback.searchMove, 
-              depth: d, 
-              score: scoreStr, 
-              pv: pvMatch ? pvMatch[1] : '(none)',
-              fullMsg: message.substring(0, 120)
-            })
-          }
-        }
+        //if (currentEvaluationCallback.searchMove && window.__CP_DEBUG) {
+        //  const d = depthMatch ? parseInt(depthMatch[1]) : null
+        //  const scoreStr = cpMatch ? cpMatch[1] : (mateMatch ? ('mate ' + mateMatch[1]) : '?')
+        //  if (d && d % 3 === 0) { // Log every 3rd depth
+        //    dbg('[SF][searchmoves] info', { 
+        //      searchMove: currentEvaluationCallback.searchMove, 
+        //      depth: d, 
+        //      score: scoreStr, 
+        //      pv: pvMatch ? pvMatch[1] : '(none)',
+        //      fullMsg: message.substring(0, 120)
+        //    })
+        //  }
+        //}
         
         // Accept any depth result for fast response (movetime mode)
         if (depthMatch) {
@@ -272,7 +270,7 @@ function initStockfish() {
         if (__cb && __cb.isPrecompute) {
           const cpVal = (typeof __cb.latestCp === 'number') ? __cb.latestCp : null
           const pawnsStr = (cpVal !== null) ? (cpVal/100).toFixed(2) : null
-          console.log('[SF][precompute] bestmove', { uci: __cb.bestMove || '(none)', cp: cpVal, pawns: pawnsStr })
+          dbg('[SF][precompute] bestmove', { uci: __cb.bestMove || '(none)', cp: cpVal, pawns: pawnsStr })
         }
         dbg('[SF] bestmove:', __cb ? (__cb.bestMove || '(none)') : '(none)')
         
@@ -283,14 +281,12 @@ function initStockfish() {
         evaluationInProgress = false;
         
         // Debug log for bestmove resolution
-        if (window.__CP_DEBUG) {
-          console.log('[SF][bestmove] resolving evaluation', {
-            searchMove: callback ? callback.searchMove : null,
-            latestCp: callback ? callback.latestCp : null,
-            bestMove: callback ? callback.bestMove : null,
-            willFallback: callback && callback.latestCp === null && !callback.isFallback
-          });
-        }
+        /*dbg('[SF][bestmove] resolving evaluation', {
+          searchMove: callback ? callback.searchMove : null,
+          latestCp: callback ? callback.latestCp : null,
+          bestMove: callback ? callback.bestMove : null,
+          willFallback: callback && callback.latestCp === null && !callback.isFallback
+        });*/
         
         if (callback.latestCp !== null) {
           callback.resolve({ cp: callback.latestCp, bestMove: callback.bestMove || null });
@@ -354,7 +350,7 @@ function initStockfish() {
     setTimeout(() => {
       if (!stockfishReady) {
         dbg('[SF] init timeout exceeded (showing warning)')
-        try { console.warn('[SF] Engine initialization is taking longer than expected. Check network panel for worker and WASM file loads.'); } catch(e){}
+        try { dbg('[SF] Engine initialization is taking longer than expected. Check network panel for worker and WASM file loads.'); } catch(e){}
         showEngineError('Chess engine is taking longer than expected to load. Puzzle validation may not work correctly.');
       }
     }, STOCKFISH_INIT_TIMEOUT_MS);
@@ -487,7 +483,7 @@ function hideEvaluatingSpinner() {
  */
 function precomputeBestEval(startFEN, attempt = 0) {
   try {
-    dbg('[SF] precomputeBestEval(): called', { attempt, ready: stockfishReady })
+    //dbg('[SF] precomputeBestEval(): called', { attempt, ready: stockfishReady })
     // Reset cache if FEN changed
     if (preEvalCache.fen !== startFEN) {
       preEvalCache = { fen: startFEN, bestMoveUci: null, bestMoveCp: null, inFlight: null, startTime: null, canInterrupt: false };
@@ -507,13 +503,13 @@ function precomputeBestEval(startFEN, attempt = 0) {
     // Kick off evaluation and store promise
     preEvalCache.startTime = Date.now();
     preEvalCache.canInterrupt = false; // Will be set to true after minimum time
-    dbg('[SF] precomputeBestEval(): starting engine analysis', { movetime: EVALUATION_MOVETIME_PRECOMPUTE_MS })
+    //dbg('[SF] precomputeBestEval(): starting engine analysis', { movetime: EVALUATION_MOVETIME_PRECOMPUTE_MS })
     
     // Set flag to allow interruption after minimum time has elapsed
     setTimeout(() => {
       if (preEvalCache.fen === startFEN && preEvalCache.inFlight) {
         preEvalCache.canInterrupt = true;
-        dbg('[SF] precomputeBestEval(): canInterrupt set true')
+        //dbg('[SF] precomputeBestEval(): canInterrupt set true')
       }
     }, EVALUATION_MIN_MOVETIME_MS);
     
@@ -628,16 +624,14 @@ function evaluatePosition(fen, searchMove = null, movetime = null, isPrecompute 
     };
     
     // Log evaluation start for debugging
-    if (window.__CP_DEBUG) {
-      console.log('[SF][evaluatePosition] starting', {
-        evalId: evalId,
-        hasSearchMove: !!searchMove,
-        searchMove: searchMove,
-        movetime: actualMovetime,
-        isPrecompute: isPrecompute,
-        fen: fen.substring(0, 50) + '...'
-      });
-    }
+    dbg('[SF][evaluatePosition] starting', {
+    evalId: evalId,
+    hasSearchMove: !!searchMove,
+    searchMove: searchMove,
+    movetime: actualMovetime,
+    isPrecompute: isPrecompute,
+    fen: fen.substring(0, 50) + '...'
+    });
     
     // Set timeout for evaluation - allow extra time for precompute and a bit over movetime to receive bestmove
   const timeoutDuration = isPrecompute ? (actualMovetime + 500) : EVALUATION_TIMEOUT_MS;
@@ -984,15 +978,113 @@ async function loadPuzzle(){
   // Clear any pending castling animation from previous puzzle
   __castlingPending = null
 
-  game = new Chess()
-  game.load(currentPuzzle.fen)
-  board.position(currentPuzzle.fen)
-  // flip board orientation if it's black to move in the FEN
-  try{
-    const turn = game.turn()
-    if (turn === 'b') board.orientation('black')
-    else board.orientation('white')
-  } catch(e){ /* ignore */ }
+  // Disable hint button until puzzle is fully loaded and ready
+  try {
+    const hintBtn = $('hint')
+    if (hintBtn) hintBtn.disabled = true
+  } catch(e) {}
+
+  // Check if we have a previous_fen to animate the opponent's move
+  const hasPreviousFen = currentPuzzle.previous_fen && typeof currentPuzzle.previous_fen === 'string'
+  
+  
+  if (hasPreviousFen) {
+    
+    // Flip board orientation based on whose turn it will be AFTER the opponent moves
+    // (i.e., the user's turn at the decision point)
+    try{
+      const tempGameForOrientation = new Chess(currentPuzzle.fen)
+      const turn = tempGameForOrientation.turn()
+      if (turn === 'b') board.orientation('black')
+      else board.orientation('white')
+    } catch(e){ 
+    }
+    
+    // Show the position BEFORE the opponent's move
+    game = new Chess()
+    game.load(currentPuzzle.previous_fen)
+    board.position(currentPuzzle.previous_fen, false)  // false = no animation for initial setup
+    
+    
+    // Disable moves during opponent animation
+    allowMoves = false
+    
+    // Compute the opponent's move by comparing previous_fen to current fen
+    try {
+      const tempGame = new Chess(currentPuzzle.previous_fen)
+      const legalMoves = tempGame.moves({ verbose: true })
+      
+      
+      // Find the move that leads to current_fen
+      // Compare only the position part of FEN (first 4 fields), ignoring move counters
+      const targetFenParts = currentPuzzle.fen.split(' ').slice(0, 4).join(' ')
+      let opponentMove = null
+      for (const move of legalMoves) {
+        tempGame.move(move)
+        const reachedFenParts = tempGame.fen().split(' ').slice(0, 4).join(' ')
+        if (reachedFenParts === targetFenParts) {
+          opponentMove = move
+          break
+        }
+        tempGame.undo()
+      }
+      
+      if (opponentMove) {
+        
+        // Animate the opponent's move using chessboard.js move() method
+        const moveNotation = opponentMove.from + '-' + opponentMove.to
+        await new Promise(resolve => {
+          // Brief pause before starting animation
+          setTimeout(() => {
+            // Set slow speed for opponent move animation
+            if (typeof board.moveSpeed === 'function') {
+              board.moveSpeed('slow')
+            }
+            board.move(moveNotation)
+            // Wait for slow animation to complete (~300ms) plus a bit extra
+            setTimeout(() => {
+              // Reset to fast speed for user moves
+              if (typeof board.moveSpeed === 'function') {
+                board.moveSpeed('fast')
+              }
+              resolve()
+            }, 400) // slow animation duration + buffer
+          }, 500) // 500ms pause before animation starts
+        })
+        
+        // Update game state to current position after animation
+        game.load(currentPuzzle.fen)
+      } else {
+        // Fallback: couldn't determine opponent move, just show current position
+        game.load(currentPuzzle.fen)
+        board.position(currentPuzzle.fen)
+      }
+    } catch (e) {
+      // Error computing opponent move, fall back to showing current position
+      game.load(currentPuzzle.fen)
+      board.position(currentPuzzle.fen)
+    }
+    
+    // Now enable solving
+    allowMoves = true
+    setText('info', 'Make the correct move.')
+    
+  } else {
+    // No previous_fen: use original behavior (show current position immediately)
+    game = new Chess()
+    game.load(currentPuzzle.fen)
+    board.position(currentPuzzle.fen)
+    
+    // flip board orientation if it's black to move in the FEN
+    try{
+      const turn = game.turn()
+      if (turn === 'b') board.orientation('black')
+      else board.orientation('white')
+    } catch(e){ /* ignore */ }
+    
+    allowMoves = true
+    setText('info', 'Make the correct move.')
+  }
 
 
   // populate metadata if available
@@ -1037,7 +1129,6 @@ async function loadPuzzle(){
     else metaEl.innerHTML = rows.join('')
   }
 
-  setText('info', 'Make the correct move.')
   // hide any previously revealed correct move
   const cmc = $('correctMoveContainer')
   if (cmc) { cmc.style.display = 'none'; $('correctMoveText').textContent = '' }
@@ -1051,9 +1142,6 @@ async function loadPuzzle(){
   
   // Reset hint state
   hintUsedForCurrent = false
-  
-  // Allow moves for the newly loaded puzzle
-  allowMoves = true
   
   try{
     const hintBtn = $('hint')
@@ -1069,6 +1157,7 @@ async function loadPuzzle(){
   refreshRibbonState();
 
   // Precompute the best move evaluation for responsiveness while the user thinks
+  // Start this during or after the opponent move animation for better performance
   try { precomputeBestEval(currentPuzzle.fen) } catch(e) { /* ignore */ }
 }
 
@@ -1091,16 +1180,14 @@ function handleCheckPuzzleResponse(j, source, target, startFEN, clientEval) {
   const resolvedMoveCp = (typeof j.move_cp === 'number') ? j.move_cp : (clientEval && typeof clientEval.moveCp === 'number' ? clientEval.moveCp : null)
 
   // Log evaluation details for debugging
-  if (window.__CP_DEBUG) {
-    console.debug('Evaluation result:', {
-      initial_cp: resolvedInitialCp,
-      move_cp: resolvedMoveCp,
-      initial_win: j.initial_win,
-      move_win: j.move_win,
-      win_change: j.win_change,
-      correct: j.correct
-    });
-  }
+  dbg('Evaluation result:', {
+  initial_cp: resolvedInitialCp,
+  move_cp: resolvedMoveCp,
+  initial_win: j.initial_win,
+  move_win: j.move_win,
+  win_change: j.win_change,
+  correct: j.correct
+  });
   
   // Only lock board interactions if answer is correct OR max attempts reached
   if (!hasAttemptsLeft) {
@@ -1314,9 +1401,7 @@ async function onDrop(source, target){
             bestMoveUci = preEvalCache.bestMoveUci;
           } else if (interruptedResult && interruptedResult.bestMoveUci) {
             bestMoveUci = interruptedResult.bestMoveUci;
-            if (window.__CP_DEBUG) {
-              console.debug('Using interrupted precomputation result:', interruptedResult);
-            }
+            dbg('Using interrupted precomputation result:', interruptedResult);
           } else if (preEvalCache.inFlight) {
             // Allow the precomputation to finish naturally
             await preEvalCache.inFlight;
@@ -1359,19 +1444,17 @@ async function onDrop(source, target){
       const playerMoveUci = (result.from + result.to + (result.promotion || '')).toLowerCase();
       
       // Debug: log both UCI moves before comparison
-      if (window.__CP_DEBUG) {
-        console.log('[SF][compare moves]', {
-          playerMoveUci,
-          bestMoveUci: String(bestMoveUci).toLowerCase(),
-          isMatch: playerMoveUci === String(bestMoveUci).toLowerCase()
-        });
-      }
+      dbg('[SF][compare moves]', {
+      playerMoveUci,
+      bestMoveUci: String(bestMoveUci).toLowerCase(),
+      isMatch: playerMoveUci === String(bestMoveUci).toLowerCase()
+      });
       // 3. If player's move matches best move, avoid any further evaluation and use baseline
 if (bestMoveUci && playerMoveUci === String(bestMoveUci).toLowerCase()) {
   const cp = (typeof baselineCp === 'number') ? baselineCp : 0;
   if (window.__CP_DEBUG) {
     const san = uciToSan(startFEN, playerMoveUci);
-    console.log('[SF][eval] played best move; using precomputed baseline', {
+    dbg('[SF][eval] played best move; using precomputed baseline', {
       fen: startFEN,
       sideToMove: isWhiteToMove ? 'white' : 'black',
       move: { uci: playerMoveUci, san },
@@ -1391,9 +1474,7 @@ if (bestMoveUci && playerMoveUci === String(bestMoveUci).toLowerCase()) {
       // If we interrupted precompute, add a small delay to allow engine to flush stale info lines
       if (interruptedResult) {
         await new Promise(resolve => setTimeout(resolve, 100));
-        if (window.__CP_DEBUG) {
-          console.log('[SF][delay] waited 100ms after interrupt to clear stale engine messages');
-        }
+        dbg('[SF][delay] waited 100ms after interrupt to clear stale engine messages');
       }
       
       // Evaluate the starting position with searchmoves restricted to player's move
@@ -1409,7 +1490,7 @@ if (bestMoveUci && playerMoveUci === String(bestMoveUci).toLowerCase()) {
           const playedSan = uciToSan(startFEN, playerMoveUci)
           const initialWin = winLikelihoodJS(baselineCp)
           const moveWin = winLikelihoodJS(playerCp)
-          console.log('[SF][eval] summary', {
+          dbg('[SF][eval] summary', {
             fen: startFEN,
             sideToMove: isWhiteToMove ? 'white' : 'black',
             best: { uci: bestMoveUci, san: bestSan, cp: baselineCp, pawns: format.pawns(baselineCp) },
@@ -1688,6 +1769,8 @@ window.addEventListener('DOMContentLoaded', ()=>{
   if (hintBtn){
     hintBtn.addEventListener('click', async ()=>{
       try{
+        // Block hint if moves are disabled or button is disabled
+        if (!allowMoves || hintBtn.disabled) return
         if (!currentPuzzle) return
         // Ask the server for the hint (from-square) so we don't need to expose correct_san
         const r = await fetch('/puzzle_hint', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({id: currentPuzzle.id})})
@@ -2069,6 +2152,9 @@ window.addEventListener('DOMContentLoaded', ()=>{
   
   // Handle click-to-move logic (accessible to both pointer events and onSnapEnd)
   function handleSquareClick(square, squareEl) {
+    // Block all interactions if moves are disabled (e.g., during animation)
+    if (!allowMoves) return
+    
     const piece = game.get(square)
     const boardEl = $('board')
     

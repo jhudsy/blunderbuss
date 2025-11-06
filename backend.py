@@ -860,7 +860,7 @@ def get_puzzle():
         'move_number': getattr(chosen, 'move_number', None),
     }
     # include optional metadata fields if present on the Puzzle (seeded from PGN)
-    for fld in ('white','black','date','time_control','time_control_type','pre_eval','post_eval','severity'):
+    for fld in ('white','black','date','time_control','time_control_type','pre_eval','post_eval','severity','previous_fen'):
         val = getattr(chosen, fld, None)
         if val is not None:
             resp[fld] = val

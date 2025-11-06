@@ -47,14 +47,21 @@ def import_puzzles_for_user(username, pgn, match_username=True):
         u._import_total = len(to_insert)
         u._import_done = 0
         for p in to_insert:
-            logger.debug('Importer: inserting puzzle game_id=%s move=%s for user=%s', p.get('game_id'), p.get('move_number'), username)
+            prev_fen_val = p.get('previous_fen')
+            logger.info('Importer: inserting puzzle game_id=%s move=%s for user=%s, previous_fen=%s (type=%s)', 
+                       p.get('game_id'), p.get('move_number'), username, 
+                       str(prev_fen_val)[:60] if prev_fen_val else 'None',
+                       type(prev_fen_val).__name__)
             # avoid inserting the same game_id+move_number twice for the same user
             existing = Puzzle.get(user=u, game_id=p['game_id'], move_number=p['move_number'])
             if existing:
                 logger.debug('Importer: skipping duplicate puzzle for user=%s game_id=%s move=%s (already exists)', username, p.get('game_id'), p.get('move_number'))
                 u._import_done += 1
                 continue
-            Puzzle(user=u, game_id=p['game_id'], move_number=p['move_number'], fen=p['fen'], correct_san=p['correct_san'], weight=p.get('initial_weight', 1.0), white=p.get('white'), black=p.get('black'), date=p.get('date'), time_control=p.get('time_control'), time_control_type=p.get('time_control_type'), pre_eval=p.get('pre_eval'), post_eval=p.get('post_eval'), tag=p.get('tag'), severity=p.get('tag'))
+            created_puzzle = Puzzle(user=u, game_id=p['game_id'], move_number=p['move_number'], fen=p['fen'], previous_fen=p.get('previous_fen'), correct_san=p['correct_san'], weight=p.get('initial_weight', 1.0), white=p.get('white'), black=p.get('black'), date=p.get('date'), time_control=p.get('time_control'), time_control_type=p.get('time_control_type'), pre_eval=p.get('pre_eval'), post_eval=p.get('post_eval'), tag=p.get('tag'), severity=p.get('tag'))
+            logger.info('Importer: created puzzle with id=%s, previous_fen=%s', 
+                       created_puzzle.id if hasattr(created_puzzle, 'id') else 'unknown',
+                       str(created_puzzle.previous_fen)[:60] if created_puzzle.previous_fen else 'None')
             u._import_done += 1
 
         # enforce per-user maximum puzzles

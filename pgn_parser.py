@@ -139,16 +139,41 @@ def extract_puzzles_from_pgn(pgn_text):
                         skip_puzzle = True
 
                 if not skip_puzzle:
-                    fen = board.fen()
-                    # Determine the correct SAN: prefer a suggested SAN from the
-                    # comment (human/editor may include the "best" move), otherwise
-                    # fall back to the SAN of the actual move played (the blunder).
+                    # The correct_san should be the BEST move (what the user should find)
+                    # This comes from the comment's suggested move (e.g., "Best: Nf3")
                     suggested = meta.get('suggested')
-                    if suggested:
-                        san = suggested
+                    if not suggested:
+                        # If there's no suggested best move in the comment, we can't
+                        # create a meaningful puzzle - skip this position
+                        logger.debug('Skipping puzzle at game_id=%s move=%s: no suggested best move in comment', game_id, board.fullmove_number)
+                        board.push(move)
+                        node = next_node
+                        continue
+                    
+                    correct_san = suggested
+                    
+                    # PUZZLE FLOW:
+                    # 1. previous_fen = position BEFORE opponent's last move (e.g., position 18)
+                    # 2. fen = position AFTER opponent's move, BEFORE user's blunder (e.g., position 19)
+                    # 3. The blunder move would lead to position 20 (which we don't store)
+                    #
+                    # We animate: previous_fen -> opponent's move -> fen (decision point)
+                    # User must find correct_san from fen (instead of the blunder)
+                    
+                    # Get the previous position by checking if we have a parent node
+                    if node.parent is not None:
+                        # Get board state from parent node (before opponent's move)
+                        previous_board = node.parent.board()
+                        previous_fen = previous_board.fen()
+                        logger.debug('Puzzle at move %s: has parent, previous_fen=%s', board.fullmove_number, previous_fen[:50])
                     else:
-                        san = board.san(move)
-                    # compute next SAN if available
+                        # No parent (this is the starting position), no previous_fen
+                        previous_fen = None
+                        logger.debug('Puzzle at move %s: no parent node', board.fullmove_number)
+                    
+                    # Current board is the decision point (after opponent's move, before user's blunder)
+                    fen = board.fen()
+                    logger.debug('Puzzle at move %s: fen=%s, previous_fen=%s', board.fullmove_number, fen[:50], str(previous_fen)[:50] if previous_fen else 'None')
                     # next_san computation removed
 
                     # initial weight: use the magnitude of the eval swing.
@@ -164,13 +189,14 @@ def extract_puzzles_from_pgn(pgn_text):
                         # smaller weight for less dramatic, non-sign-changing swings
                         initial_weight = max(1.0, swing)
                     # attach some common PGN header metadata if available
-                    # determine which side made the move (the side to move on this board)
+                    # determine which side made the blunder (the side to move at the decision point)
                     side = 'white' if board.turn else 'black'
                     puzzle = {
                         'game_id': game_id,
                         'move_number': board.fullmove_number,
                         'fen': fen,
-                        'correct_san': san,
+                        'previous_fen': previous_fen,
+                        'correct_san': correct_san,
                         'pre_eval': pre,
                         'post_eval': post,
                         'tag': meta.get('tag'),
@@ -204,7 +230,7 @@ def extract_puzzles_from_pgn(pgn_text):
                         except Exception:
                             # ignore parsing errors and leave time_control_type absent
                             pass
-                    logger.debug('Found puzzle game_id=%s move=%s pre=%s post=%s tag=%s san=%s', game_id, board.fullmove_number, pre, post, meta.get('tag'), san)
+                    logger.debug('Found puzzle game_id=%s move=%s pre=%s post=%s tag=%s correct_san=%s', game_id, board.fullmove_number, pre, post, meta.get('tag'), correct_san)
                     games.append(puzzle)
             board.push(move)
             # prev_san bookkeeping removed
