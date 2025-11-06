@@ -1027,9 +1027,10 @@ async function loadPuzzle(){
       
       if (opponentMove) {
         // Animate the opponent's move using chessboard.js
-        // Wait for animation to complete (default animation speed is 200ms)
+        // Use board.position() with the target FEN to trigger animation
         await new Promise(resolve => {
-          board.move(`${opponentMove.from}-${opponentMove.to}`)
+          board.position(currentPuzzle.fen, true) // true = animate
+          // Wait for animation to complete (chessboard.js default is 200ms)
           setTimeout(resolve, 250) // slightly longer than animation for smooth transition
         })
         

@@ -141,10 +141,6 @@ def extract_puzzles_from_pgn(pgn_text):
                 if not skip_puzzle:
                     # Capture the FEN BEFORE the move (the position the opponent was in)
                     previous_fen = board.fen()
-                    # Now get the FEN AFTER the move (where the puzzle starts)
-                    board_copy = board.copy()
-                    board_copy.push(move)
-                    fen = board_copy.fen()
                     # Determine the correct SAN: prefer a suggested SAN from the
                     # comment (human/editor may include the "best" move), otherwise
                     # fall back to the SAN of the actual move played (the blunder).
@@ -152,8 +148,11 @@ def extract_puzzles_from_pgn(pgn_text):
                     if suggested:
                         san = suggested
                     else:
-                        san = board_copy.san_and_push(move)
-                        board_copy.pop()  # undo the san_and_push
+                        san = board.san(move)
+                    # Now get the FEN AFTER the move (where the puzzle starts)
+                    board_copy = board.copy()
+                    board_copy.push(move)
+                    fen = board_copy.fen()
                     # next_san computation removed
 
                     # initial weight: use the magnitude of the eval swing.
