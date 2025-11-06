@@ -38,7 +38,6 @@ celerybeat-schedule
 # Environment / secrets
 .env
 secrets/
-secrets.env
 
 # Logs
 logs/

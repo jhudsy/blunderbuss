@@ -136,7 +136,23 @@ on a Linux server and have the stack start automatically on boot using systemd.
 
 1) Prepare an environment file
 
-  - Copy `.env.example` to `.env` and update secrets (SECRET_KEY, ENCRYPTION_KEY) and Postgres/Redis settings.
+  Generate a `.env` file at the repository root using the interactive script:
+  
+  ```bash
+  deploy/create_production_environment.sh
+  ```
+  
+  This will prompt you for all necessary configuration values (domain, database
+  credentials, OAuth keys, etc.) and generate secure random secrets. The script
+  creates `.env` with permissions set to 600 and provides usage instructions.
+  
+  Alternatively, copy and edit the example manually:
+  
+  ```bash
+  cp .env.example .env
+  # Edit .env and update all secrets and configuration
+  chmod 600 .env
+  ```
 
 2) Build and test the stack locally
 
@@ -262,7 +278,9 @@ Environment validation & CI
   Type=oneshot
   RemainAfterExit=yes
   WorkingDirectory=/path/to/chesspuzzle
-  EnvironmentFile=/path/to/chesspuzzle/.env
+  # The .env file in the repository root is automatically read by docker compose
+  # You can optionally specify EnvironmentFile here to make variables available to systemd commands
+  EnvironmentFile=-/path/to/chesspuzzle/.env
   # Optional pre-start hook: ensure host volume directory exists and has correct ownership
   # Replace /var/lib/chesspuzzle/data and 1000:1000 with appropriate host path and uid:gid
   ExecStartPre=/usr/bin/env sh -c '/path/to/chesspuzzle/scripts/prepare_host_volume.sh /var/lib/chesspuzzle/data 1000 1000'
@@ -274,6 +292,7 @@ Environment validation & CI
   ```
 
   Replace `/path/to/chesspuzzle` with the absolute path to the checked-out repository.
+  The `.env` file at the repository root is automatically read by `docker compose`.
 
   4) Enable and start the systemd service
 
@@ -289,13 +308,24 @@ This repository includes `docker-compose.prod.yml`, which runs `web`, `worker`,
 `redis`, `postgres`, an `nginx` reverse proxy, and a `certbot` renewal service.
 To use it:
 
-1. Edit `.env` and set `DOMAIN` and `LETSENCRYPT_EMAIL` (and other secrets).
+1. Generate or edit the `.env` file with your domain and secrets:
+  ```bash
+  # Option A: Use the interactive generator (recommended)
+  deploy/create_production_environment.sh
+  
+  # Option B: Copy and edit manually
+  cp .env.example .env
+  # Edit .env to set DOMAIN, LETSENCRYPT_EMAIL, and all other secrets
+  chmod 600 .env
+  ```
+
 2. Obtain initial certificates (one-time):
   ```bash
   docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot \
     certbot certonly --webroot -w /var/www/certbot \
     --email "$LETSENCRYPT_EMAIL" --agree-tos --no-eff-email -d "$DOMAIN"
   ```
+  
 3. Start the production stack:
   ```bash
   docker compose -f docker-compose.prod.yml up -d
@@ -338,13 +368,20 @@ Notes:
 
 Quick production setup checklist
 -------------------------------
-- Copy the example secrets file and edit or generate real values:
+- Generate a production environment file using the interactive generator:
   ```bash
-  cp deploy/secrets.env.example deploy/secrets.env
-  # OR use the interactive generator shipped with the repo:
-  deploy/generate_secrets.sh /home/deploy/chesspuzzle/secrets.env
+  deploy/create_production_environment.sh
   ```
-- Ensure `secrets.env` is readable only by the deploy user (chmod 600) and not committed.
+  This creates a `.env` file at the repository root with secure random secrets.
+  The file is automatically used by `docker compose` and has permissions set to 600.
+  
+  Alternatively, copy the example and edit manually:
+  ```bash
+  cp .env.example .env
+  # Edit .env and fill in all required values
+  chmod 600 .env
+  ```
+
 - Prepare host volumes (see `scripts/prepare_host_volume.sh`) and ensure ownership matches container UID.
 - Obtain initial certificates (see above) then start the stack:
   ```bash

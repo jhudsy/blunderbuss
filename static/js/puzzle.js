@@ -1730,7 +1730,7 @@ function showSeeOnLichessLink(puzzle){
   const fullMove = parseInt(puzzle.move_number, 10)
   const side = (puzzle.side || 'white').toLowerCase()
   if (!isFinite(fullMove)) return
-  const move = ((fullMove - 1) * 2) + (side === 'white' ? 1 : 2)
+  const move = ((fullMove - 1) * 2) + (side === 'white' ? 1 : 2) -1
   if (!gameId || !move) return
   let container = $('seeOnLichessContainer')
   if (!container){
