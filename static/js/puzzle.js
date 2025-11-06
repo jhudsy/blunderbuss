@@ -113,7 +113,6 @@ function initStockfish() {
       safeLog(console.info, '[SF] crossOriginIsolated =', (typeof crossOriginIsolated !== 'undefined' ? crossOriginIsolated : '(undefined)'))
       showEngineError('Chess engine requires cross-origin isolation (COOP/COEP). Please use HTTPS and ensure server sends proper headers.');
       dbg('[SF] initStockfish(): SharedArrayBuffer not available or not cross-origin isolated')
-      logIsolationDiagnostics().catch(() => {})
       return;
     }
     
@@ -175,7 +174,6 @@ function initStockfish() {
       if (message === 'uciok') {
         dbg('[SF] onmessage: uciok (engine ready)')
         stockfishReady = true;
-        hideEngineError();
         hideEngineLoadingSpinner();
         allowMoves = true;
         
@@ -370,25 +368,6 @@ function initStockfish() {
   }
 }
 
-// When isolation is missing, fetch a few same-origin URLs and print relevant headers
-async function logIsolationDiagnostics(){
-  const urls = [
-    window.location.href,
-    '/static/js/engine-worker.js',
-    '/static/vendor/stockfish/stockfish-17.1-lite-51f59da.js',
-    '/static/vendor/stockfish/stockfish-17.1-lite-51f59da.wasm'
-  ]
-  for (const u of urls){
-    try{
-      const r = await fetch(u, { cache: 'no-store', credentials: 'same-origin' })
-      const wanted = ['cross-origin-opener-policy','cross-origin-embedder-policy','cross-origin-resource-policy','content-type']
-      const h = {}
-      wanted.forEach(k=>{ const v = r.headers.get(k); if (v) h[k]=v })
-      console.warn('[SF] header check', { url: u, status: r.status, ...h })
-    }catch(e){ console.error('[SF] header check failed', u, e) }
-  }
-}
-
 /**
  * Switch engine at runtime. Terminates current worker, clears state,
  * persists selection to cookie, shows spinner, and reinitializes.
@@ -439,16 +418,6 @@ function showEngineError(message) {
   if (infoEl) {
     infoEl.textContent = message;
     infoEl.style.color = '#dc3545'; // Bootstrap danger color
-  }
-}
-
-/**
- * Hide engine error message
- */
-function hideEngineError() {
-  const infoEl = $('info');
-  if (infoEl && infoEl.style.color === 'rgb(220, 53, 69)') {
-    infoEl.style.color = '';
   }
 }
 
@@ -1792,11 +1761,6 @@ function showSeeOnLichessLink(puzzle){
   } else {
     link.href = url
   }
-}
-
-function highlightSquare(square, color){
-  const el = document.querySelector('.square-' + square)
-  if (el) el.style.background = color
 }
 
 // Show a bootstrap toast listing awarded badges
