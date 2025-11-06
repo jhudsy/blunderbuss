@@ -984,15 +984,87 @@ async function loadPuzzle(){
   // Clear any pending castling animation from previous puzzle
   __castlingPending = null
 
-  game = new Chess()
-  game.load(currentPuzzle.fen)
-  board.position(currentPuzzle.fen)
-  // flip board orientation if it's black to move in the FEN
-  try{
-    const turn = game.turn()
-    if (turn === 'b') board.orientation('black')
-    else board.orientation('white')
-  } catch(e){ /* ignore */ }
+  // Check if we have a previous_fen to animate the opponent's move
+  const hasPreviousFen = currentPuzzle.previous_fen && typeof currentPuzzle.previous_fen === 'string'
+  
+  if (hasPreviousFen) {
+    // Show the position BEFORE the opponent's move
+    game = new Chess()
+    game.load(currentPuzzle.previous_fen)
+    board.position(currentPuzzle.previous_fen)
+    
+    // Flip board orientation based on whose turn it is in the PREVIOUS position
+    try{
+      const turn = game.turn()
+      if (turn === 'b') board.orientation('black')
+      else board.orientation('white')
+    } catch(e){ /* ignore */ }
+    
+    // Disable moves during opponent animation
+    allowMoves = false
+    
+    // Show "Opponent is moving..." message
+    setText('info', 'Opponent is moving...')
+    
+    // Compute the opponent's move by comparing previous_fen to current fen
+    try {
+      const tempGame = new Chess(currentPuzzle.previous_fen)
+      const legalMoves = tempGame.moves({ verbose: true })
+      
+      // Find the move that leads to current_fen
+      let opponentMove = null
+      for (const move of legalMoves) {
+        tempGame.move(move)
+        if (tempGame.fen() === currentPuzzle.fen) {
+          opponentMove = move
+          break
+        }
+        tempGame.undo()
+      }
+      
+      if (opponentMove) {
+        // Animate the opponent's move using chessboard.js
+        // Wait for animation to complete (default animation speed is 200ms)
+        await new Promise(resolve => {
+          board.move(`${opponentMove.from}-${opponentMove.to}`)
+          setTimeout(resolve, 250) // slightly longer than animation for smooth transition
+        })
+        
+        // Update game state to current position after animation
+        game.load(currentPuzzle.fen)
+      } else {
+        // Fallback: couldn't determine opponent move, just show current position
+        dbg('[loadPuzzle] Could not determine opponent move, falling back to current position')
+        game.load(currentPuzzle.fen)
+        board.position(currentPuzzle.fen)
+      }
+    } catch (e) {
+      // Error computing opponent move, fall back to showing current position
+      dbg('[loadPuzzle] Error animating opponent move:', e)
+      game.load(currentPuzzle.fen)
+      board.position(currentPuzzle.fen)
+    }
+    
+    // Now enable solving
+    allowMoves = true
+    setText('info', 'Make the correct move.')
+    
+  } else {
+    // No previous_fen: use original behavior (show current position immediately)
+    game = new Chess()
+    game.load(currentPuzzle.fen)
+    board.position(currentPuzzle.fen)
+    
+    // flip board orientation if it's black to move in the FEN
+    try{
+      const turn = game.turn()
+      if (turn === 'b') board.orientation('black')
+      else board.orientation('white')
+    } catch(e){ /* ignore */ }
+    
+    allowMoves = true
+    setText('info', 'Make the correct move.')
+  }
 
 
   // populate metadata if available
@@ -1037,7 +1109,6 @@ async function loadPuzzle(){
     else metaEl.innerHTML = rows.join('')
   }
 
-  setText('info', 'Make the correct move.')
   // hide any previously revealed correct move
   const cmc = $('correctMoveContainer')
   if (cmc) { cmc.style.display = 'none'; $('correctMoveText').textContent = '' }
@@ -1051,9 +1122,6 @@ async function loadPuzzle(){
   
   // Reset hint state
   hintUsedForCurrent = false
-  
-  // Allow moves for the newly loaded puzzle
-  allowMoves = true
   
   try{
     const hintBtn = $('hint')
@@ -1069,6 +1137,7 @@ async function loadPuzzle(){
   refreshRibbonState();
 
   // Precompute the best move evaluation for responsiveness while the user thinks
+  // Start this during or after the opponent move animation for better performance
   try { precomputeBestEval(currentPuzzle.fen) } catch(e) { /* ignore */ }
 }
 

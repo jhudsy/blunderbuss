@@ -54,7 +54,7 @@ def import_puzzles_for_user(username, pgn, match_username=True):
                 logger.debug('Importer: skipping duplicate puzzle for user=%s game_id=%s move=%s (already exists)', username, p.get('game_id'), p.get('move_number'))
                 u._import_done += 1
                 continue
-            Puzzle(user=u, game_id=p['game_id'], move_number=p['move_number'], fen=p['fen'], correct_san=p['correct_san'], weight=p.get('initial_weight', 1.0), white=p.get('white'), black=p.get('black'), date=p.get('date'), time_control=p.get('time_control'), time_control_type=p.get('time_control_type'), pre_eval=p.get('pre_eval'), post_eval=p.get('post_eval'), tag=p.get('tag'), severity=p.get('tag'))
+            Puzzle(user=u, game_id=p['game_id'], move_number=p['move_number'], fen=p['fen'], previous_fen=p.get('previous_fen'), correct_san=p['correct_san'], weight=p.get('initial_weight', 1.0), white=p.get('white'), black=p.get('black'), date=p.get('date'), time_control=p.get('time_control'), time_control_type=p.get('time_control_type'), pre_eval=p.get('pre_eval'), post_eval=p.get('post_eval'), tag=p.get('tag'), severity=p.get('tag'))
             u._import_done += 1
 
         # enforce per-user maximum puzzles

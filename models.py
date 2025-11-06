@@ -224,6 +224,11 @@ class Puzzle(db.Entity):
     time_control = Optional(str)
     # computed classification derived from TimeControl header (e.g. 'Bullet','Blitz','Rapid','Classical')
     time_control_type = Optional(str)
+    # previous_fen stores the board position BEFORE the opponent's move that led
+    # to the current puzzle position. This allows the frontend to display the
+    # position before the blunder, animate the opponent's move, and then let the
+    # user solve from the resulting position. Nullable for backwards compatibility.
+    previous_fen = Optional(str, nullable=True)
 
 
 

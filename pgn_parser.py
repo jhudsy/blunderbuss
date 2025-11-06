@@ -139,7 +139,12 @@ def extract_puzzles_from_pgn(pgn_text):
                         skip_puzzle = True
 
                 if not skip_puzzle:
-                    fen = board.fen()
+                    # Capture the FEN BEFORE the move (the position the opponent was in)
+                    previous_fen = board.fen()
+                    # Now get the FEN AFTER the move (where the puzzle starts)
+                    board_copy = board.copy()
+                    board_copy.push(move)
+                    fen = board_copy.fen()
                     # Determine the correct SAN: prefer a suggested SAN from the
                     # comment (human/editor may include the "best" move), otherwise
                     # fall back to the SAN of the actual move played (the blunder).
@@ -147,8 +152,8 @@ def extract_puzzles_from_pgn(pgn_text):
                     if suggested:
                         san = suggested
                     else:
-                        san = board.san(move)
-                    # compute next SAN if available
+                        san = board_copy.san_and_push(move)
+                        board_copy.pop()  # undo the san_and_push
                     # next_san computation removed
 
                     # initial weight: use the magnitude of the eval swing.
@@ -164,12 +169,13 @@ def extract_puzzles_from_pgn(pgn_text):
                         # smaller weight for less dramatic, non-sign-changing swings
                         initial_weight = max(1.0, swing)
                     # attach some common PGN header metadata if available
-                    # determine which side made the move (the side to move on this board)
+                    # determine which side made the move (the side to move on the PREVIOUS board)
                     side = 'white' if board.turn else 'black'
                     puzzle = {
                         'game_id': game_id,
                         'move_number': board.fullmove_number,
                         'fen': fen,
+                        'previous_fen': previous_fen,
                         'correct_san': san,
                         'pre_eval': pre,
                         'post_eval': post,
