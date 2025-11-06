@@ -2173,7 +2173,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
     if (!boardEl) return
     
     let pointerDownSquare = null
-    let pointerDownTime = null
     // isDragInProgress is now a global variable shared with onDragStart
     
     // Use capture phase (true) to intercept events before chessboard.js
@@ -2190,7 +2189,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
       
       if (squareEl && squareEl.classList.contains('square-55d63')) {
         pointerDownSquare = squareEl.getAttribute('data-square')
-        pointerDownTime = Date.now()
         isDragInProgress = false
       }
     }, true) // Use capture phase
@@ -2204,7 +2202,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
       // If a drag is in progress, chessboard.js is handling it
       if (isDragInProgress) {
         pointerDownSquare = null
-        pointerDownTime = null
         isDragInProgress = false
         return
       }
@@ -2228,7 +2225,6 @@ window.addEventListener('DOMContentLoaded', ()=>{
       }
       
       pointerDownSquare = null
-      pointerDownTime = null
       isDragInProgress = false
     }, true) // Use capture phase
   }
