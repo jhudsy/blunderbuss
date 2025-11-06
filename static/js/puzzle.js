@@ -118,11 +118,14 @@ function initStockfish() {
     
     showEngineLoadingSpinner();
 
-    // Use unified worker wrapper with engine parameter
-    const workerScript = `/static/js/engine-worker-unified.js?engine=${ENGINE_CHOICE}`;
+    // Select worker script: load the engine's own worker JS directly so it resolves
+    // its WASM relative to itself (avoids wrapper path inference issues)
+    const workerScript = ENGINE_CHOICE === 'full'
+      ? '/static/vendor/stockfish/stockfish-17.1-8e4d048.js'
+      : '/static/vendor/stockfish/stockfish-17.1-lite-51f59da.js'
     dbg('[SF] initStockfish(): creating worker', { choice: ENGINE_CHOICE, workerScript })
 
-    // Create worker with engine type parameter
+    // Use dedicated worker wrapper that loads the selected Stockfish WASM
     stockfishWorker = new Worker(workerScript);
     dbg('[SF] initStockfish(): worker created')
 
