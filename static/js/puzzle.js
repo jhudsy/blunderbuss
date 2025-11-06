@@ -993,18 +993,31 @@ async function loadPuzzle(){
   // Check if we have a previous_fen to animate the opponent's move
   const hasPreviousFen = currentPuzzle.previous_fen && typeof currentPuzzle.previous_fen === 'string'
   
+  dbg('[loadPuzzle] hasPreviousFen:', hasPreviousFen)
+  dbg('[loadPuzzle] currentPuzzle.previous_fen:', currentPuzzle.previous_fen)
+  dbg('[loadPuzzle] currentPuzzle.fen:', currentPuzzle.fen)
+  
   if (hasPreviousFen) {
+    dbg('[loadPuzzle] Entering animation branch')
+    
     // Show the position BEFORE the opponent's move
     game = new Chess()
     game.load(currentPuzzle.previous_fen)
     board.position(currentPuzzle.previous_fen)
     
-    // Flip board orientation based on whose turn it is in the PREVIOUS position
+    dbg('[loadPuzzle] Loaded previous_fen, board should show initial position')
+    
+    // Flip board orientation based on whose turn it will be AFTER the opponent moves
+    // (i.e., the user's turn at the decision point)
     try{
-      const turn = game.turn()
+      const tempGameForOrientation = new Chess(currentPuzzle.fen)
+      const turn = tempGameForOrientation.turn()
+      dbg('[loadPuzzle] Setting board orientation for turn:', turn)
       if (turn === 'b') board.orientation('black')
       else board.orientation('white')
-    } catch(e){ /* ignore */ }
+    } catch(e){ 
+      dbg('[loadPuzzle] Error setting orientation:', e)
+    }
     
     // Disable moves during opponent animation
     allowMoves = false
@@ -1034,15 +1047,23 @@ async function loadPuzzle(){
       }
       
       if (opponentMove) {
-        dbg('[loadPuzzle] Animating opponent move')
+        dbg('[loadPuzzle] Found opponent move, preparing to animate')
+        dbg('[loadPuzzle] Will animate to FEN:', currentPuzzle.fen)
+        
         // Animate the opponent's move using chessboard.js
         // Use board.position() with the target FEN to trigger animation
         await new Promise(resolve => {
+          dbg('[loadPuzzle] Calling board.position() with animation=true')
           board.position(currentPuzzle.fen, true) // true = animate
+          dbg('[loadPuzzle] board.position() called, waiting for animation to complete')
           // Wait for animation to complete (chessboard.js default is 200ms)
-          setTimeout(resolve, 250) // slightly longer than animation for smooth transition
+          setTimeout(() => {
+            dbg('[loadPuzzle] Animation timeout completed')
+            resolve()
+          }, 250) // slightly longer than animation for smooth transition
         })
         
+        dbg('[loadPuzzle] Animation complete, updating game state')
         // Update game state to current position after animation
         game.load(currentPuzzle.fen)
       } else {
