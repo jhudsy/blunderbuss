@@ -63,7 +63,7 @@ def import_games_task(self, username, perftypes, days):
         since_ms = int((datetime.now(timezone.utc) - timedelta(days=MAX_DAYS)).timestamp() * 1000)
     
     # Read the user's access token from the DB rather than passing it via the broker
-    with db_session:
+    with db_session(optimistic=False):
         u = User.get(username=username)
         token = getattr(u, 'access_token', None) if u else None
 
@@ -95,7 +95,7 @@ def import_games_task(self, username, perftypes, days):
     logger.debug('Parsed %d puzzles for user=%s', len(puzzles), username)
     imported_count = 0
     try:
-        with db_session:
+        with db_session(optimistic=False):
             u = User.get(username=username)
             if not u:
                 u = User(username=username)
@@ -106,7 +106,7 @@ def import_games_task(self, username, perftypes, days):
         # perform imports; keep DB writes short-living inside db_session blocks
         for p in puzzles:
             try:
-                with db_session:
+                with db_session(optimistic=False):
                     u = User.get(username=username)
                     if not u:
                         u = User(username=username)
@@ -156,7 +156,7 @@ def import_games_task(self, username, perftypes, days):
                 logger.exception('Error importing puzzle for user=%s entry=%r', username, p)
                 continue
         # finalization inside db_session
-        with db_session:
+        with db_session(optimistic=False):
             u = User.get(username=username)
             if not u:
                 u = User(username=username)
@@ -188,7 +188,7 @@ def import_games_task(self, username, perftypes, days):
         # Fatal error: mark user import as failed and record a short message
         logger.exception('Import failed for user=%s: %s', username, e)
         try:
-            with db_session:
+            with db_session(optimistic=False):
                 u = User.get(username=username)
                 if not u:
                     u = User(username=username)
